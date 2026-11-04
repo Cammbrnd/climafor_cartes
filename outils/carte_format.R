@@ -67,10 +67,12 @@ carte_lire_couche <- function(fichier, n, n_annees, stock) {
 }
 
 #' grille.json : une maille = un polygone, id = rang 0..n-1.
-carte_ecrire_grille <- function(dossier, lon, lat, cote = 8000) {
+carte_ecrire_grille <- function(dossier, lon, lat, cote = 8000, l2e = NULL) {
   n <- length(lon)
   feats <- vapply(seq_len(n), function(i) {
-    r <- carte_carre(lon[i], lat[i], cote)
+    # Grille native connue (Lambert II etendu, en metres) : carres exacts ; sinon on les
+    # construit autour du centre en Lambert-93 (bords approches).
+    r <- if (is.null(l2e)) carte_carre(lon[i], lat[i], cote) else carte_carre_l2e(l2e$x[i], l2e$y[i], cote)
     sprintf('{"type":"Feature","properties":{"id":%d},"geometry":{"type":"Polygon","coordinates":[[%s]]}}',
             i - 1L, paste(sprintf("[%s,%s]", format(r[, 1], nsmall = 4, trim = TRUE),
                                   format(r[, 2], nsmall = 4, trim = TRUE)), collapse = ","))

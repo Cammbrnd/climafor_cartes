@@ -164,11 +164,13 @@ carte_domaines <- function(valeurs, normale, pente) {
 #'   refuse de publier : une carte trouee vaut moins que la version precedente.
 #' @param part_min_annee une annee finale dont la part de valeurs renseignees tombe
 #'   sous cette fraction de la meilleure annee est retiree du jeu.
+#' @param l2e list(x, y) : centres des mailles en Lambert II etendu (m), si la grille native
+#'   est connue (source sim) ; les carres sont alors exacts.
 #' @return liste (dossier, n, annees, echecs, annees_retirees, taille_octets).
 carte_assembler <- function(parts, lon, lat, annees, source, dossier,
                             couches = CARTE_COUCHES, taux_echec_max = 0.01,
                             genere_le = format(Sys.Date()), annee_partielle = NULL,
-                            part_min_annee = 0.95) {
+                            part_min_annee = 0.95, l2e = NULL) {
   if (is.character(parts)) parts <- lapply(parts, readRDS)
   n <- length(lon); na <- length(annees)
   dir.create(dossier, recursive = TRUE, showWarnings = FALSE)
@@ -235,7 +237,7 @@ carte_assembler <- function(parts, lon, lat, annees, source, dossier,
       lecture = substr(paste(ind$lecture, collapse = " "), 1, 1500),
       note = note)
   }
-  carte_ecrire_grille(dossier, lon, lat)
+  carte_ecrire_grille(dossier, lon, lat, l2e = l2e)
   carte_ecrire_meta(dossier, list(
     schema = CONFIG$carte$schema, annees = annees, n_mailles = n,
     grille = "grille.json", reference = ctx$ref_label, genere_le = genere_le,

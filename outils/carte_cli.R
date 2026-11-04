@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 # A lancer depuis la RACINE du projet :
 #
-#   Rscript outils/carte_cli.R fragment  source=position|demo mailles=<csv|demo:32> \
+#   Rscript outils/carte_cli.R fragment  source=sim|position|demo mailles=<sim|csv|demo:32> \
 #           annee_debut=1959 annee_fin=2025 fragment=1 fragments=20 sortie=parts
 #   Rscript outils/carte_cli.R assembler source_texte="..." mailles=<csv|demo:32> \
 #           annee_debut=1959 annee_fin=2025 parts=parts sortie=public
@@ -39,7 +39,7 @@ entier <- function(nom, defaut = NULL) {
 
 suppressMessages(source("global.R"))
 for (f in c("outils/carte_geo.R", "outils/carte_format.R", "outils/carte_precalcul.R",
-            "outils/carte_demo.R", "outils/carte_sources.R")) source(f)
+            "outils/carte_demo.R", "outils/carte_sim.R", "outils/carte_sources.R")) source(f)
 
 annees_demandees <- function() {
   fin <- if (nzchar(opt$annee_fin %||% "")) entier("annee_fin") else as.integer(format(Sys.Date(), "%Y")) - 1L
@@ -60,7 +60,16 @@ if (commande == "fragment") {
   lire <- switch(opt$source,
     demo     = carte_demo_source(annees),
     position = carte_source_position(annees, pause_s = as.numeric(opt$pause %||% 0.5)),
-    stop("source : demo ou position", call. = FALSE))
+    sim      = {
+      # CARTE_SIM_LOCAL : dossier de fichiers QUOT_SIM2_AAAA.csv.gz deja presents (tests).
+      local <- Sys.getenv("CARTE_SIM_LOCAL", "")
+      carte_source_sim(annees, m, indices,
+        fournisseur = if (nzchar(local)) carte_sim_fournisseur_local(local) else carte_sim_fournisseur_http(),
+        supprimer = !nzchar(local),
+        parametres_api = if (nzchar(Sys.getenv("CARTE_SIM_PARAMETRES", ""))) strsplit(Sys.getenv("CARTE_SIM_PARAMETRES"), ",")[[1]]
+                         else safran_parametres_utiles()$api)
+    },
+    stop("source : demo, position ou sim", call. = FALSE))
   cat(sprintf("Fragment %d/%d : %d mailles, annees %d-%d, source %s\n", k, nf, length(indices),
               min(annees), max(annees), opt$source))
   dir.create(opt$sortie, recursive = TRUE, showWarnings = FALSE)
@@ -75,7 +84,8 @@ if (commande == "fragment") {
   fichiers <- list.files(opt$parts, pattern = "^part_[0-9]+\\.rds$", full.names = TRUE, recursive = TRUE)
   if (!length(fichiers)) stop("Aucun fragment dans ", opt$parts, call. = FALSE)
   cat(sprintf("%d fragment(s) a reunir.\n", length(fichiers)))
-  r <- carte_assembler(fichiers, m$lon, m$lat, annees, opt$source_texte, opt$sortie)
+  l2e <- if (all(c("lambx", "lamby") %in% names(m))) list(x = m$lambx * 100, y = m$lamby * 100) else NULL
+  r <- carte_assembler(fichiers, m$lon, m$lat, annees, opt$source_texte, opt$sortie, l2e = l2e)
   cat(sprintf("Jeu ecrit dans %s : %d mailles, %d-%d, %d Ko, %d maille(s) sans donnees.\n",
               r$dossier, r$n, min(r$annees), max(r$annees), r$taille_octets %/% 1024, length(r$echecs)))
   if (length(r$annees_retirees)) {

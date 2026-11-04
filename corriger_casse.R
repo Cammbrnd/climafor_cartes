@@ -46,6 +46,7 @@ attendus <- c(
   "outils/carte_format.R",
   "outils/carte_geo.R",
   "outils/carte_precalcul.R",
+  "outils/carte_sim.R",
   "outils/carte_sources.R",
   "outils/carte_veille.R",
   "outils/construire_modele_docx.py",

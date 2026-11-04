@@ -21,7 +21,7 @@ refus18 <- function(expr, motif) {
   !is.na(m) && !grepl("could not find function|object '.*' not found", m) && grepl(motif, m)
 }
 for (f in c("outils/carte_geo.R", "outils/carte_format.R", "outils/carte_precalcul.R",
-            "outils/carte_demo.R", "outils/carte_sources.R")) source(chemin_ci(f))
+            "outils/carte_demo.R", "outils/carte_sim.R", "outils/carte_sources.R")) source(chemin_ci(f))
 
 
 # ==============================================================================
@@ -532,3 +532,142 @@ verifier(!any(grepl("cron:.*\\*/[0-9]", tout18)) && any(grepl("cron:", wf18$veil
 verifier(any(grepl("donnees_grille/mailles_safran.csv", wf18$construire, fixed = TRUE)) &&
            file.exists(chemin_ci("donnees_grille/LISEZMOI.md")),
          "le fichier de mailles attendu par le workflow est documente")
+
+
+# ==============================================================================
+groupe("v1.8 — source « sim » (fichiers en masse de Meteo-France)")
+# ==============================================================================
+
+# Un jeu SIM FICTIF au format observe (14 colonnes utiles + Q en intrus), 110 mailles de la
+# grille native (pas de 8 km), 'annees' annees completes. Aucun reseau.
+sim_fabriquer18 <- function(dossier, annees) {
+  dir.create(dossier, showWarnings = FALSE, recursive = TRUE)
+  g <- expand.grid(i = 0:9, j = 0:10)
+  lx <- 5000L + 80L * g$i; ly <- 18000L + 80L * g$j            # hectometres
+  writeLines(c("LAMBX (hm);LAMBY (hm);LAT_DG;LON_DG",
+               sprintf("%d;%d;%s;%s", lx, ly, "43,5", "1,4")), file.path(dossier, "coordonnees.csv"))
+  for (a in annees) {
+    dd <- seq(as.Date(sprintf("%d-01-01", a)), as.Date(sprintf("%d-12-31", a)), by = "day")
+    nd <- length(dd); d <- seq_len(nd)
+    sorties <- lapply(seq_along(lx), function(c) {
+      t <- round(11 + 9 * sin(2 * pi * (d - 110) / 365) + 0.05 * (c %% 7) + 0.1 * ((a * 7 + d * 3 + c) %% 11), 1)
+      data.frame(LAMBX = lx[c], LAMBY = ly[c], DATE = as.integer(format(dd, "%Y%m%d")),
+        PRENEI = round(ifelse(t < 1 & d %% 3 == 0, 1.2, 0), 1),
+        PRELIQ = round(ifelse((d * c + a) %% 4 == 0, ((d + c) %% 13) * 0.7, 0), 1),
+        T = t, FF = round(2 + (d %% 6) * 0.4, 1), Q = 9.4,
+        HU = round(65 + 15 * sin(2 * pi * d / 365) + (c %% 5), 1),
+        ETP = round(pmax(0.2, 2.2 + 2 * sin(2 * pi * (d - 80) / 365)), 1),
+        SWI = round(0.45 + 0.3 * sin(2 * pi * (d - 30) / 365) + 0.001 * (c %% 20), 3),
+        RESR_NEIGE = round(ifelse(t < 0, 12.3, 0), 1),
+        HTEURNEIGE = round(ifelse(t < 0, 0.05 * (d %% 7), 0), 3),
+        TINF_H = round(t - 4 - 0.1 * (d %% 5), 1), TSUP_H = round(t + 5 + 0.1 * (c %% 4), 1))
+    })
+    f <- file.path(dossier, sprintf("QUOT_SIM2_%d.csv", a))
+    utils::write.table(do.call(rbind, sorties), f, sep = ";", quote = FALSE, row.names = FALSE)
+    system2("gzip", c("-f", shQuote(f)))
+  }
+  invisible(dossier)
+}
+dos_sim18 <- tempfile("sim"); sim_annees18 <- 2003:2022
+sim_fabriquer18(dos_sim18, sim_annees18)
+tous_api18 <- vapply(CONFIG$variables, function(v) v$api, "")
+
+m_sim18 <- carte_sim_mailles(file.path(dos_sim18, "coordonnees.csv"))
+verifier(nrow(m_sim18) == 110L && all(c("lon", "lat", "lambx", "lamby") %in% names(m_sim18)),
+         "la grille native se lit : 110 mailles, avec leurs coordonnees d'origine")
+v_l2e18 <- carte_vers_l2e(m_sim18$lon, m_sim18$lat)
+verifier(max(abs(v_l2e18$x - m_sim18$lambx * 100), abs(v_l2e18$y - m_sim18$lamby * 100)) < 0.5,
+         "le centre en lon/lat de chaque maille retombe sur ses coordonnees d'origine (50 cm)")
+verifier(refus18(carte_sim_mailles(file.path(dos_sim18, "absent.csv")), "introuvable"),
+         "un fichier de coordonnees absent est refuse")
+
+lire18sim <- carte_source_sim(2018:2022, m_sim18, c(1L, 57L, 110L), carte_sim_fournisseur_local(dos_sim18),
+                              supprimer = FALSE, parametres_api = tous_api18)
+d57 <- lire18sim(57L, m_sim18$lon[57], m_sim18$lat[57])
+verifier(is.data.frame(d57) && nrow(d57) == sum(ifelse((2018:2022 %% 4 == 0 & 2018:2022 %% 100 != 0) | 2018:2022 %% 400 == 0, 366, 365)),
+         "le tableau d'une maille couvre tous les jours des annees chargees")
+verifier(all(c("date", "annee", "mois", "jour", "doy", "p_tot", "vpd", names(CONFIG$variables)) %in% names(d57)),
+         "le tableau a les colonnes que safran_charger() donne a l'application")
+verifier(is.null(lire18sim(2L, 2, 47)), "une maille hors du fragment n'est pas servie")
+
+# Les valeurs sont EXACTEMENT celles du fichier (a l'echelle pres, sans perte).
+brut18 <- utils::read.csv(gzfile(file.path(dos_sim18, "QUOT_SIM2_2020.csv.gz")), sep = ";")
+b57 <- brut18[brut18$LAMBX == m_sim18$lambx[57] & brut18$LAMBY == m_sim18$lamby[57], ]
+a57 <- d57[d57$annee == 2020, ]
+verifier(identical(a57$t_moy, b57$T) && identical(a57$swi, b57$SWI) && identical(a57$ff, b57$FF) &&
+           identical(a57$t_min, b57$TINF_H) && identical(a57$p_liq, b57$PRELIQ) && identical(a57$neig_h, b57$HTEURNEIGE),
+         "les valeurs relues sont identiques au fichier, decimale pour decimale")
+
+# Parite avec l'application : une variable que GeoSAS n'expose pas reste vide, comme dans l'analyse.
+sans_neige18 <- carte_source_sim(2020:2021, m_sim18, 57L, carte_sim_fournisseur_local(dos_sim18),
+                                 supprimer = FALSE, parametres_api = setdiff(tous_api18, c("HTEURNEIGE_Q", "RESR_NEIGE_Q")))
+dn18 <- sans_neige18(57L, m_sim18$lon[57], m_sim18$lat[57])
+verifier(all(is.na(dn18$neig_h)) && all(is.na(dn18$neig_e)) && !anyNA(dn18$t_moy),
+         "une variable non exposee par GeoSAS reste vide, comme dans l'analyse d'une maille")
+
+# Les indicateurs de l'application s'appliquent tels quels a ce tableau.
+ctx_sim18 <- carte_ctx(2018:2022)
+r_sim18 <- carte_calculer_maille(d57, ctx_sim18, 2018:2022)
+verifier(all(is.finite(r_sim18$tmp$valeurs)) && length(r_sim18) == length(CARTE_COUCHES),
+         "le calcul de la carte s'applique au tableau issu des fichiers SIM")
+
+# Gardes de lecture : refus plutot que valeur fausse.
+f_mauvais18 <- function(modif) {
+  d <- tempfile("simbad"); dir.create(d)
+  l <- readLines(gzfile(file.path(dos_sim18, "QUOT_SIM2_2022.csv.gz")))
+  l <- modif(l); f <- file.path(d, "QUOT_SIM2_2022.csv"); writeLines(l, f); system2("gzip", c("-f", shQuote(f))); d
+}
+verifier(refus18(carte_source_sim(2022L, m_sim18, 1L, carte_sim_fournisseur_local(
+  f_mauvais18(function(l) { l[3] <- sub("^([0-9]+;[0-9]+;[0-9]+;[^;]*;[^;]*);[^;]*", "\\1;-9999", l[3]); l })),
+  supprimer = FALSE, parametres_api = tous_api18), "hors de"),
+  "un code d'absence (-9999) est refuse, pas lu comme une temperature")
+verifier(refus18(carte_source_sim(2022L, m_sim18, 1L, carte_sim_fournisseur_local(
+  f_mauvais18(function(l) { l[3] <- sub("^([0-9]+;[0-9]+;[0-9]+;[^;]*;[^;]*);[^;]*", "\\1;12.3456", l[3]); l })),
+  supprimer = FALSE, parametres_api = tous_api18), "decimales"),
+  "une valeur avec plus de decimales que l'echelle est refusee, pas arrondie")
+d_an18 <- tempfile("simannee"); dir.create(d_an18)
+file.copy(file.path(dos_sim18, "QUOT_SIM2_2022.csv.gz"), file.path(d_an18, "QUOT_SIM2_2021.csv.gz"))
+verifier(refus18(carte_source_sim(2021L, m_sim18, 1L, carte_sim_fournisseur_local(d_an18), supprimer = FALSE,
+                                  parametres_api = tous_api18), "contient l'annee"),
+         "un fichier dont le contenu n'est pas l'annee annoncee est refuse")
+d_inc18 <- f_mauvais18(function(l) l[-(2:20)])       # la premiere maille perd 19 jours
+inc18 <- carte_source_sim(2022L, m_sim18, c(1L, 2L), carte_sim_fournisseur_local(d_inc18), supprimer = FALSE,
+                          parametres_api = tous_api18)
+verifier(is.null(inc18(1L, 0, 0)) && !is.null(inc18(2L, 0, 0)),
+         "une maille aux jours manquants est vide pour l'annee, les autres ne changent pas")
+verifier(refus18(carte_sim_fournisseur_local(dos_sim18)(1900), "introuvable"), "un fichier annuel absent est refuse")
+verifier(refus18(carte_source_sim(2020L, m_sim18[, c("lon", "lat")], 1L, carte_sim_fournisseur_local(dos_sim18)),
+                 "lambx"), "la source sim exige la grille native")
+verifier(refus18(carte_sim_fournisseur_http()(1800), "invalide"), "une annee absurde n'est jamais demandee au reseau")
+verifier(identical(sub("/[^/]*$", "", SIM_URL_COORD), SIM_URL_BASE) && grepl("^https://", SIM_URL_BASE),
+         "les fichiers SIM ne se lisent qu'en https, sur l'hote de Meteo-France")
+
+# Chaine complete par la ligne de commande : fragments -> assemblage -> verification.
+cli18e <- function(env, ...) {
+  system2(file.path(R.home("bin"), "Rscript"), c(shQuote(chemin_ci("outils/carte_cli.R")), ...),
+          stdout = FALSE, stderr = FALSE, env = env)
+}
+env_sim18 <- c(paste0("CARTE_SIM_LOCAL=", dos_sim18), paste0("CARTE_SIM_PARAMETRES=", paste(tous_api18, collapse = ",")))
+base_sim18 <- tempfile("clisim"); dir.create(base_sim18)
+m_arg18 <- paste0("mailles=sim:", file.path(dos_sim18, "coordonnees.csv"))
+y_arg18 <- c("annee_debut=2003", "annee_fin=2022")
+c1 <- cli18e(env_sim18, "fragment", "source=sim", m_arg18, y_arg18, "fragment=1", "fragments=2", paste0("sortie=", base_sim18, "/parts"))
+c2 <- cli18e(env_sim18, "fragment", "source=sim", m_arg18, y_arg18, "fragment=2", "fragments=2", paste0("sortie=", base_sim18, "/parts"))
+verifier(c1 == 0L && c2 == 0L && length(list.files(file.path(base_sim18, "parts"), pattern = "^part_00[12]\\.rds$")) == 2L,
+         "deux fragments se calculent depuis des fichiers SIM")
+c3 <- cli18e(env_sim18, "assembler", shQuote("source_texte=SIM (essai)"), m_arg18, y_arg18,
+             paste0("parts=", base_sim18, "/parts"), paste0("sortie=", base_sim18, "/public"))
+verifier(c3 == 0L && cli18e(character(0), "verifier", paste0("dossier=", base_sim18, "/public")) == 0L,
+         "le jeu assemble depuis des fichiers SIM est valide")
+grille_sim18 <- paste(readLines(file.path(base_sim18, "public", "grille.json"), warn = FALSE), collapse = "")
+carre18 <- carte_carre_l2e(m_sim18$lambx[1] * 100, m_sim18$lamby[1] * 100)
+attendu18 <- sprintf("[%s,%s]", format(carre18[1, 1], nsmall = 4, trim = TRUE), format(carre18[1, 2], nsmall = 4, trim = TRUE))
+verifier(grepl(attendu18, grille_sim18, fixed = TRUE),
+         "la grille publiee dessine les mailles dans leur repere natif (carres exacts)")
+# La valeur publiee pour une maille est celle que calcule directement l'application sur son tableau.
+pt18 <- readRDS(file.path(base_sim18, "parts", "part_001.rds"))
+src_ref18 <- carte_source_sim(2003:2022, m_sim18, pt18$indices[1], carte_sim_fournisseur_local(dos_sim18),
+                              supprimer = FALSE, parametres_api = tous_api18)
+dir18 <- carte_calculer_maille(src_ref18(pt18$indices[1], 0, 0), carte_ctx(2003:2022), 2003:2022)
+verifier(identical(unname(dir18$tmp$valeurs), unname(pt18$valeurs$tmp[, 1])),
+         "valeur de la carte == valeur du calcul direct sur le tableau SIM de la maille (a l'identique)")

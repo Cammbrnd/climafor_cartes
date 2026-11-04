@@ -138,6 +138,24 @@ carte_sim_fournisseur_local <- function(dossier) {
   as.integer(r)
 }
 
+# Lecture des seules colonnes utiles d'un .csv.gz : data.table::fread si le paquet est la
+# (~4 s par fichier de 3,6 millions de lignes), sinon read.csv en sautant les autres
+# colonnes (environ dix fois plus lent, mais sans dependance).
+.sim_lire_csv <- function(fichier, colonnes) {
+  cmd <- sprintf("gzip -dc %s 2>/dev/null", shQuote(fichier))
+  if (requireNamespace("data.table", quietly = TRUE)) {
+    return(data.table::fread(cmd = cmd, sep = ";", select = colonnes, showProgress = FALSE,
+                             data.table = FALSE))
+  }
+  con <- pipe(cmd); entete <- tryCatch(readLines(con, n = 1L), finally = close(con))
+  ent <- strsplit(entete, ";", fixed = TRUE)[[1]]
+  if (!all(colonnes %in% ent)) {
+    stop(sprintf("Fichier SIM : colonne(s) absente(s) : %s", paste(setdiff(colonnes, ent), collapse = ", ")), call. = FALSE)
+  }
+  cc <- stats::setNames(ifelse(ent %in% colonnes, "numeric", "NULL"), ent)
+  utils::read.csv(pipe(cmd), sep = ";", colClasses = cc, stringsAsFactors = FALSE)
+}
+
 #' Lit un fichier annuel et garde les mailles demandees.
 #'
 #' @param fichier .csv.gz du fichier SIM.
@@ -145,14 +163,8 @@ carte_sim_fournisseur_local <- function(dossier) {
 #' @return list(dates, vars) : dates (Date, une par jour du fichier) et, par colonne du
 #'   fichier, une matrice d'entiers jours x mailles (NA = absent).
 carte_sim_lire_annee <- function(fichier, cles) {
-  if (!requireNamespace("data.table", quietly = TRUE)) {
-    stop("Le paquet data.table est requis pour lire les fichiers SIM.", call. = FALSE)
-  }
   csv <- unname(carte_sim_colonnes())
-  d <- data.table::fread(cmd = sprintf("gzip -dc %s", shQuote(fichier)), sep = ";",
-                         select = c("LAMBX", "LAMBY", "DATE", csv), showProgress = FALSE,
-                         data.table = FALSE)
-  annee <- NA_integer_
+  d <- .sim_lire_csv(fichier, c("LAMBX", "LAMBY", "DATE", csv))
   m <- match(d$LAMBX * 100000 + d$LAMBY, cles)
   d <- d[!is.na(m), , drop = FALSE]; m <- m[!is.na(m)]
   if (!nrow(d)) stop("Fichier SIM : aucune des mailles demandees.", call. = FALSE)

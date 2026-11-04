@@ -116,7 +116,7 @@ if (!is.na(u_an)) {
 }
 
 COLONNES <- c("LAMBX", "LAMBY", "DATE", "T", "TINF_H", "TSUP_H", "PRELIQ", "PRENEI", "ETP",
-              "SWI", "HTEURNEIGE", "RESR_NEIGE", "FF", "HU")
+              "SWI", "HTEURNEIGE", "RESR_NEIGE", "FF", "HU", "EVAP", "PE")
 # Lecture d'un fichier annuel : data.table::fread si present (rapide), sinon repli lent.
 lire_annee <- function(f) {
   if (requireNamespace("data.table", quietly = TRUE)) {
@@ -152,6 +152,21 @@ titre("4. Quatre mailles : le fichier SIM est-il identique a « position » ?")
 # ------------------------------------------------------------------------------
 # Correspondance variable API -> colonne du fichier : on retire le suffixe _Q.
 api_vers_csv <- function(x) sub("_Q$", "", x)
+# Quand une variable differe : a quoi ressemble-t-elle ? (autres colonnes, decalage de jours)
+diagnostiquer <- function(v_api, sel, dates_api) {
+  cat("      Diagnostic de l'ecart (colonne du fichier, decalage de jours -> ecart max) :\n")
+  for (nm in c("ETP", "EVAP", "PE")) for (dec in -2:2) {
+    v <- sel[[nm]][match(format(dates_api + dec, "%Y%m%d"), as.character(sel$DATE))]
+    ok <- is.finite(v) & is.finite(v_api)
+    if (sum(ok) > 300) cat(sprintf("        %-5s %+d j : %.6f (%d jours)\n", nm, dec, max(abs(v[ok] - v_api[ok])), sum(ok)))
+  }
+  j7 <- which(format(dates_api, "%m") == "07")[1:8]
+  cat("      8 jours de juillet :  date | API | ETP | EVAP | PE\n")
+  for (k in j7) {
+    r <- sel[match(format(dates_api[k], "%Y%m%d"), as.character(sel$DATE)), ]
+    cat(sprintf("        %s | %s | %s | %s | %s\n", dates_api[k], format(v_api[k]), r$ETP, r$EVAP, r$PE))
+  }
+}
 if (is.null(sim) || is.null(coord)) {
   cat("Fichier annuel ou coordonnees indisponibles : comparaison sautee.\n")
 } else {
@@ -213,9 +228,10 @@ if (is.null(sim) || is.null(coord)) {
       etendue <- if (any(is.finite(v_csv))) diff(range(v_csv, na.rm = TRUE)) else 0
       cat(sprintf("   %-14s %4d jours | ecart max %-9s | NA differents : %d | etendue des valeurs : %s\n",
                   p, length(v_api), format(round(dif, 6)), nna, format(round(etendue, 3))))
-      n_tot <- n_tot + 1L; if (dif < 1e-6 && nna == 0) ok_tot <- ok_tot + 1L
+      n_tot <- n_tot + 1L; if (dif < 1e-5 && nna == 0) ok_tot <- ok_tot + 1L
+      if (dif >= 1e-5 && nom == "Toulouse") diagnostiquer(v_api, sel, dates_api)
     }
-    cat(sprintf("   => %d variable(s) sur %d IDENTIQUES\n", ok_tot, n_tot))
+    cat(sprintf("   => %d variable(s) sur %d identiques (ecart < 1e-5 : le service renvoie des flottants simple precision)\n", ok_tot, n_tot))
   }
 }
 
