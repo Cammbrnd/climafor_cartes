@@ -160,7 +160,13 @@ if (is.null(sim) || is.null(coord)) {
   cibles <- list(Toulouse = c(1.444, 43.605), Paris = c(2.35, 48.85), Briancon = c(6.64, 44.9),
                  `Ouessant (maille d'angle)` = c(-4.96, 48.38))
   url_col <- sub("/position/?$", "", CONFIG$api$edr_base)
-  params <- cfg_params_api()
+  # Comme l'application : on ne demande que les variables que la collection expose
+  # (en demander une qu'elle n'expose pas donne « erreur de syntaxe »).
+  neg <- safran_parametres_utiles()
+  cat(sprintf("Variables demandees a « position » : %s\n", paste(neg$api, collapse = ", ")))
+  cat(sprintf("Variables NON exposees par la collection (source %s) : %s\n", neg$source,
+              if (length(neg$absents)) paste(neg$absents, collapse = ", ") else "aucune"))
+  params <- neg$api
   for (nom in names(cibles)) {
     cb <- cibles[[nom]]
     k <- which.min((coord$LAT - cb[2])^2 + ((coord$LON - cb[1]) * cos(cb[2] * pi / 180))^2)
