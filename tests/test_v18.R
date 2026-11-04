@@ -85,6 +85,29 @@ lc18 <- carte_vers_l93(c18[1:4, 1], c18[1:4, 2])
 cotes18 <- sqrt(diff(c(lc18$x, lc18$x[1]))^2 + diff(c(lc18$y, lc18$y[1]))^2)
 verifier(all(abs(cotes18 - 8000) < 25), "les quatre cotes d'une maille mesurent 8 km (a l'arrondi pres)")
 
+# Grille NATIVE (Lambert II etendu, EPSG:27572) : les fichiers SIM donnent LAMBX/LAMBY en hm.
+# Reference : centres de mailles renvoyes par le service (x, y de « position », WGS84) et
+# leurs coordonnees Lambert II etendu calculees avec PROJ (pyproj) ; ils tombent sur la
+# grille x = 4000 + 8000 i, y = 1000 + 8000 j.
+ref_l2e <- rbind(c(1.19942, 43.56497, 508000.1, 1840999.7), c(1.29829, 43.56597, 516000.1, 1841000.2),
+                 c(1.39716, 43.56687, 523999.7, 1840999.6), c(1.49604, 43.56769, 532000.0, 1841000.2),
+                 c(1.20227, 43.42119, 507999.7, 1824999.5), c(1.59678, 43.42462, 539999.7, 1824999.5),
+                 c(1.19511, 43.78067, 508000.2, 1864999.9), c(1.59211, 43.78412, 540000.2, 1864999.6),
+                 c(1.39598, 43.63877, 524000.1, 1848999.8), c(1.39479, 43.71067, 523999.8, 1856999.6))
+l2e18 <- carte_vers_l2e(ref_l2e[, 1], ref_l2e[, 2])
+verifier(max(abs(l2e18$x - ref_l2e[, 3]), abs(l2e18$y - ref_l2e[, 4])) < 0.5,
+         "Lambert II etendu : retrouve PROJ a 50 cm pres (10 centres de mailles reels)")
+ecart_grille18 <- function(v, origine) ((v - origine + 4000) %% 8000) - 4000   # distance a la grille, en m
+verifier(max(abs(ecart_grille18(l2e18$x, 4000)), abs(ecart_grille18(l2e18$y, 1000))) <= 1,
+         "les centres renvoyes par le service tombent sur la grille de 8 km (a 1 m pres)")
+bl18 <- carte_depuis_l2e(l2e18$x, l2e18$y)
+verifier(max(abs(bl18$lon - ref_l2e[, 1]), abs(bl18$lat - ref_l2e[, 2])) < 1e-7, "Lambert II etendu : aller-retour exact")
+cl18 <- carte_carre_l2e(516000, 1841000)
+vl18 <- carte_vers_l2e(cl18[1:4, 1], cl18[1:4, 2])
+verifier(all(abs(sqrt(diff(c(vl18$x, vl18$x[1]))^2 + diff(c(vl18$y, vl18$y[1]))^2) - 8000) < 25) &&
+           all(abs(c(vl18$x, vl18$y) - c(516000 + c(-4000, 4000, 4000, -4000), 1841000 + c(-4000, -4000, 4000, 4000))) < 20),
+         "une maille native est un carre de 8 km, exactement a sa place (bords a 20 m, arrondi a 4 decimales)")
+
 
 # ==============================================================================
 groupe("v1.8 — format binaire")

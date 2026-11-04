@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       etape:
-        description: "zone = le service accepte-t-il les requetes par zone ? | grille = le cube renvoie-t-il les valeurs des mailles ?"
+        description: "zone = requetes par zone ? | grille = le cube renvoie-t-il les valeurs des mailles ? | sim = fichiers SIM en masse identiques a « position » ?"
         type: choice
-        options: [zone, grille]
+        options: [zone, grille, sim]
         default: zone
 
 permissions:
@@ -45,6 +45,7 @@ jobs:
         run: |
           case "$ETAPE" in
             grille) script=outils/carte_diagnostic_grille.R ;;
+            sim)    script=outils/carte_diagnostic_sim.R ;;
             *)      script=outils/carte_diagnostic_zone.R ;;
           esac
           Rscript -e "source('$script')" 2>&1 | tee diagnostic_geosas.txt
