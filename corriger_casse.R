@@ -43,6 +43,7 @@ attendus <- c(
   "outils/carte_diagnostic_zone.R",
   "outils/carte_diagnostic_grille.R",
   "outils/carte_diagnostic_sim.R",
+  "outils/carte_diagnostic_coord.R",
   "outils/carte_format.R",
   "outils/carte_geo.R",
   "outils/carte_precalcul.R",
