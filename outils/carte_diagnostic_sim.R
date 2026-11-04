@@ -15,13 +15,14 @@
 #   3. pour UNE maille, les valeurs du fichier sont-elles IDENTIQUES a « position » ?
 #   4. le centre renvoye par « position » retombe-t-il sur LAMBX/LAMBY (conversion Lambert II etendu) ?
 #
-# Il ne telecharge jamais un fichier annuel en entier : 16 Mo au plus, puis arret.
+# Il telecharge UN fichier annuel (~140 Mo, 200 Mo au plus) et le lit : c'est aussi la
+# mesure du cout reel de la lecture pour le calcul de la carte.
 # Lancement : source("outils/carte_diagnostic_sim.R") depuis la racine du projet, ou
 # workflow « Diagnostic GeoSAS » (etape « sim »).
 # ==============================================================================
 
 ANNEE   <- 2020
-MAX_MO  <- 16        # octets lus au plus dans un fichier annuel
+MAX_MO  <- 200       # octets recus au plus (un fichier annuel fait ~140 Mo)
 PAUSE   <- 1
 ID_JEU  <- "6569b27598256cc583c917a7"
 
@@ -87,7 +88,7 @@ if (!is.na(u_coord)) {
     cat(sprintf("%d lignes, %.1f Mo\n", length(lignes), nchar(txt, "bytes") / 1e6))
     cat(paste0("   ", substr(head(lignes, 4), 1, 200)), sep = "\n")
     sep <- if (grepl(";", lignes[1], fixed = TRUE)) ";" else ","
-    coord <- tryCatch(utils::read.csv(text = txt, sep = sep, stringsAsFactors = FALSE),
+    coord <- tryCatch(utils::read.csv(text = txt, sep = sep, dec = ",", stringsAsFactors = FALSE),
                       error = function(e) NULL)
     if (!is.null(coord)) {
       cat("\nColonnes : ", paste(names(coord), collapse = " | "), "\n", sep = "")
@@ -99,81 +100,88 @@ if (!is.na(u_coord)) {
 }
 
 # ------------------------------------------------------------------------------
-titre(sprintf("3. Debit et contenu du debut de QUOT_SIM2_%d (%d Mo au plus)", ANNEE, MAX_MO))
+titre(sprintf("3. Telechargement et lecture complets de QUOT_SIM2_%d", ANNEE))
 # ------------------------------------------------------------------------------
 u_an <- url_de(paste0("QUOT_SIM2_", ANNEE))
 fichier <- tempfile(fileext = ".csv.gz")
 if (!is.na(u_an)) {
-  t0 <- Sys.time(); lus <- 0
-  con <- file(fichier, "wb")
-  r <- tryCatch(httr2::req_perform_connection(httr2::req_timeout(
-    httr2::req_user_agent(httr2::request(u_an), UA), 180)), error = function(e) {
-      cat("ECHEC : ", conditionMessage(e), "\n", sep = ""); NULL })
-  if (!is.null(r)) {
-    while (!httr2::resp_stream_is_complete(r) && lus < MAX_MO * 1048576) {
-      b <- httr2::resp_stream_raw(r, kb = 512)
-      if (!length(b)) break
-      writeBin(b, con); lus <- lus + length(b)
-    }
-    close(r)
-  }
-  close(con)
+  options(timeout = 900, HTTPUserAgent = UA)
+  t0 <- Sys.time()
+  ok_dl <- tryCatch(utils::download.file(u_an, fichier, mode = "wb", quiet = TRUE, method = "libcurl") == 0,
+                    error = function(e) { cat("ECHEC : ", conditionMessage(e), "\n", sep = ""); FALSE },
+                    warning = function(w) { cat("AVERTISSEMENT : ", conditionMessage(w), "\n", sep = ""); FALSE })
   dt <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
-  cat(sprintf("%.1f Mo lus en %.1f s : %.1f Mo/s\n", lus / 1e6, dt, lus / 1e6 / max(dt, 0.001)))
+  lus <- if (file.exists(fichier)) file.size(fichier) else 0
+  cat(sprintf("%.1f Mo recus en %.1f s : %.1f Mo/s\n", lus / 1e6, dt, lus / 1e6 / max(dt, 0.001)))
 }
 
-# Lignes decompressees (un fichier tronque donne les premieres lignes, puis une erreur).
-lire_debut <- function(f, n = 400000) {
-  l <- suppressWarnings(system(sprintf("gzip -dc %s 2>/dev/null | head -n %d", shQuote(f), n), intern = TRUE))
-  if (length(l) < 2) return(NULL)
-  d <- tryCatch(utils::read.csv(text = paste(l[-length(l)], collapse = "\n"), sep = ";",
-                                stringsAsFactors = FALSE), error = function(e) NULL)
-  d
+COLONNES <- c("LAMBX", "LAMBY", "DATE", "T", "TINF_H", "TSUP_H", "PRELIQ", "PRENEI", "ETP",
+              "SWI", "HTEURNEIGE", "RESR_NEIGE", "FF", "HU")
+# Lecture d'un fichier annuel : data.table::fread si present (rapide), sinon repli lent.
+lire_annee <- function(f) {
+  if (requireNamespace("data.table", quietly = TRUE)) {
+    data.table::fread(cmd = sprintf("gzip -dc %s", shQuote(f)), sep = ";", select = COLONNES,
+                      showProgress = FALSE, data.table = FALSE)
+  } else {
+    cat("   (data.table absent : lecture de repli, lente)\n")
+    utils::read.csv(pipe(sprintf("gzip -dc %s", shQuote(f))), sep = ";", stringsAsFactors = FALSE)[, COLONNES]
+  }
 }
-d <- if (file.exists(fichier) && file.size(fichier) > 1000) lire_debut(fichier) else NULL
-if (!is.null(d)) {
-  cat(sprintf("\n%d lignes lues | colonnes : %s\n", nrow(d), paste(names(d), collapse = " ")))
-  cc <- unique(d[, c("LAMBX", "LAMBY")])
-  cat(sprintf("Mailles dans cet extrait : %d (premiere : LAMBX %d, LAMBY %d)\n",
-              nrow(cc), cc$LAMBX[1], cc$LAMBY[1]))
-  cat(sprintf("Dates de la premiere maille : %s -> %s (%d jours)\n",
-              min(d$DATE[d$LAMBX == cc$LAMBX[1] & d$LAMBY == cc$LAMBY[1]]),
-              max(d$DATE[d$LAMBX == cc$LAMBX[1] & d$LAMBY == cc$LAMBY[1]]),
-              sum(d$LAMBX == cc$LAMBX[1] & d$LAMBY == cc$LAMBY[1])))
-}
+sim <- NULL
+if (file.exists(fichier) && file.size(fichier) > 1000) {
+  t0 <- Sys.time()
+  sim <- tryCatch(lire_annee(fichier), error = function(e) { cat("ECHEC lecture : ", conditionMessage(e), "\n"); NULL })
+  if (!is.null(sim)) {
+    cat(sprintf("Lecture (14 colonnes) : %.1f s | %d lignes | %.0f Mo en memoire\n",
+                as.numeric(difftime(Sys.time(), t0, units = "secs")), nrow(sim),
+                as.numeric(object.size(sim)) / 1e6))
+    cle <- sim$LAMBX * 100000 + sim$LAMBY
+    cc <- sim[!duplicated(cle), c("LAMBX", "LAMBY")]
+    cat(sprintf("Mailles distinctes : %d | jours par maille : %s\n", nrow(cc),
+                paste(unique(range(tabulate(match(cle, cle[!duplicated(cle)])))), collapse = " a ")))
+    if (!is.null(coord)) {
+      kf <- paste(coord[[1]], coord[[2]]); ks <- paste(cc$LAMBX, cc$LAMBY)
+      cat(sprintf("Mailles du fichier de coordonnees absentes du fichier annuel : %d | l'inverse : %d\n",
+                  sum(!kf %in% ks), sum(!ks %in% kf)))
+    }
+  }
+} else cat("Fichier annuel absent : etapes 3 (lecture) et 4 sautees.\n")
 
 # ------------------------------------------------------------------------------
-titre("4. Une maille : le fichier SIM est-il identique a « position » ?")
+titre("4. Quatre mailles : le fichier SIM est-il identique a « position » ?")
 # ------------------------------------------------------------------------------
 # Correspondance variable API -> colonne du fichier : on retire le suffixe _Q.
 api_vers_csv <- function(x) sub("_Q$", "", x)
-if (is.null(d)) {
-  cat("Pas d'extrait lisible : comparaison sautee.\n")
+if (is.null(sim) || is.null(coord)) {
+  cat("Fichier annuel ou coordonnees indisponibles : comparaison sautee.\n")
 } else {
-  # Les 3 premieres mailles de l'extrait, en coordonnees natives (hm -> m).
+  names(coord)[1:4] <- c("LAMBX", "LAMBY", "LAT", "LON")
+  # Villes cibles -> maille la plus proche d'apres le fichier des coordonnees (NTF, degres).
+  cibles <- list(Toulouse = c(1.444, 43.605), Paris = c(2.35, 48.85), Briancon = c(6.64, 44.9),
+                 `Ouessant (maille d'angle)` = c(-4.96, 48.38))
   url_col <- sub("/position/?$", "", CONFIG$api$edr_base)
   params <- cfg_params_api()
-  for (k in seq_len(min(3, nrow(cc)))) {
-    mx <- cc$LAMBX[k] * 100; my <- cc$LAMBY[k] * 100
-    sel <- d[d$LAMBX == cc$LAMBX[k] & d$LAMBY == cc$LAMBY[k], ]
-    cat(sprintf("\n-- maille %d : LAMBX %d, LAMBY %d (x = %d m, y = %d m), %d jours\n",
-                k, cc$LAMBX[k], cc$LAMBY[k], mx, my, nrow(sel)))
-    dmin <- as.Date(as.character(min(sel$DATE)), "%Y%m%d"); dmax <- as.Date(as.character(max(sel$DATE)), "%Y%m%d")
-    ll <- carte_depuis_l2e(mx, my)       # centre de la maille en lon/lat WGS84
-    cat(sprintf("   centre en lon/lat : %.5f, %.5f\n", ll$lon, ll$lat))
+  for (nom in names(cibles)) {
+    cb <- cibles[[nom]]
+    k <- which.min((coord$LAT - cb[2])^2 + ((coord$LON - cb[1]) * cos(cb[2] * pi / 180))^2)
+    mx <- coord$LAMBX[k] * 100; my <- coord$LAMBY[k] * 100
+    sel <- sim[sim$LAMBX == coord$LAMBX[k] & sim$LAMBY == coord$LAMBY[k], ]
+    sel <- sel[order(sel$DATE), ]
+    ll <- carte_depuis_l2e(mx, my)
+    cat(sprintf("\n-- %s : LAMBX %d, LAMBY %d (x = %d m, y = %d m), %d jours\n   centre en lon/lat : %.5f, %.5f\n",
+                nom, coord$LAMBX[k], coord$LAMBY[k], mx, my, nrow(sel), ll$lon, ll$lat))
     req <- requete_avec_params(paste0(url_col, "/position"), list(
       coords = sprintf("POINT(%s %s)", fmt_coord(ll$lon), fmt_coord(ll$lat)),
       `parameter-name` = paste(params, collapse = ","), crs = CONFIG$api$edr_crs,
-      datetime = sprintf("%s/%s", dmin, dmax), f = CONFIG$api$edr_format), 120)
+      datetime = sprintf("%d-01-01/%d-12-31", ANNEE, ANNEE), f = CONFIG$api$edr_format), 120)
     req <- httr2::req_error(httr2::req_user_agent(req, UA), is_error = function(r) FALSE)
-    cat("   URL : ", substr(req$url, 1, 200), "\n", sep = "")
     r <- tryCatch(httr2::req_perform(req), error = function(e) {
       cat("   ECHEC RESEAU : ", conditionMessage(e), "\n", sep = ""); NULL })
     Sys.sleep(PAUSE)
     if (is.null(r)) next
     cat(sprintf("   statut %d, %d octets\n", httr2::resp_status(r), length(httr2::resp_body_raw(r))))
-    if (httr2::resp_status(r) >= 400 || length(httr2::resp_body_raw(r)) < 200) {
-      cat("   Corps : ", substr(httr2::resp_body_string(r), 1, 300), "\n", sep = ""); next
+    if (httr2::resp_status(r) >= 400 || length(httr2::resp_body_raw(r)) < 1000) {
+      cat("   Corps : ", substr(gsub("\\s+", " ", httr2::resp_body_string(r)), 1, 400), "\n", sep = ""); next
     }
     j <- httr2::resp_body_json(r, simplifyVector = FALSE)
     ax <- j$domain$axes
@@ -191,13 +199,14 @@ if (is.null(d)) {
       v_api <- as_num_json(j$ranges[[p]]$values)
       col <- api_vers_csv(p)
       if (!col %in% names(sel)) { cat(sprintf("   %-14s absent du fichier SIM\n", p)); next }
-      v_csv <- sel[[col]][match(format(dates_api, "%Y%m%d"), as.character(sel$DATE))]
       if (!length(v_api)) { cat(sprintf("   %-14s absent de la reponse API\n", p)); next }
+      v_csv <- sel[[col]][match(format(dates_api, "%Y%m%d"), as.character(sel$DATE))]
       m <- !(is.na(v_api) & is.na(v_csv))
       dif <- if (any(m)) max(abs(v_api[m] - v_csv[m]), na.rm = TRUE) else 0
       nna <- sum(is.na(v_api) != is.na(v_csv))
-      cat(sprintf("   %-14s %4d jours | ecart max %-8s | NA differents : %d\n", p, length(v_api),
-                  format(round(dif, 6)), nna))
+      etendue <- if (any(is.finite(v_csv))) diff(range(v_csv, na.rm = TRUE)) else 0
+      cat(sprintf("   %-14s %4d jours | ecart max %-9s | NA differents : %d | etendue des valeurs : %s\n",
+                  p, length(v_api), format(round(dif, 6)), nna, format(round(etendue, 3))))
       n_tot <- n_tot + 1L; if (dif < 1e-6 && nna == 0) ok_tot <- ok_tot + 1L
     }
     cat(sprintf("   => %d variable(s) sur %d IDENTIQUES\n", ok_tot, n_tot))

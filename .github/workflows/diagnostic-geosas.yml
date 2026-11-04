@@ -37,6 +37,7 @@ jobs:
             any::httr2
             any::jsonlite
             any::shiny
+            any::data.table
           dependencies: '"hard"'
 
       - name: Diagnostic
