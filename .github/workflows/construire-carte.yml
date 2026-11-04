@@ -44,7 +44,7 @@ permissions:
 
 jobs:
   preparer:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       fragments: ${{ steps.liste.outputs.fragments }}
     steps:
@@ -59,7 +59,7 @@ jobs:
 
   fragment:
     needs: preparer
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 355
     strategy:
       fail-fast: false
@@ -95,7 +95,7 @@ jobs:
 
   assembler:
     needs: fragment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -149,7 +149,7 @@ jobs:
     # Jamais pour la source « demo » : des donnees fictives ne vont pas sur l'adresse publique.
     if: ${{ inputs.source != 'demo' }}
     needs: assembler
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write

@@ -501,6 +501,8 @@ verifier(any(grepl("if: \\$\\{\\{ inputs.source != 'demo' \\}\\}", wf18$construi
 verifier(any(grepl("concurrency:", wf18$construire, fixed = TRUE)) && any(grepl("max-parallel:", wf18$construire, fixed = TRUE)),
          "un seul calcul a la fois et un nombre borne de fragments simultanes (le service est menage)")
 verifier(all(grepl("timeout-minutes", sapply(wf18, paste, collapse = "\n"))), "chaque workflow borne la duree de ses jobs")
+verifier(!any(grepl("runs-on:\\s*ubuntu-latest", tout18)) && any(grepl("runs-on:\\s*ubuntu-24\\.04", tout18)),
+         "les workflows fixent l'image du runner (ubuntu-latest est passe a 26.04 : l'installation de R s'y fige)")
 verifier(!any(grepl("cron:.*\\*/[0-9]", tout18)) && any(grepl("cron:", wf18$veille, fixed = TRUE)) &&
            !any(grepl("cron:", wf18$construire, fixed = TRUE)),
          "seule la veille est planifiee (mensuelle) ; le calcul complet ne part jamais seul")
