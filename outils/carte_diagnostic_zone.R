@@ -89,6 +89,10 @@ essai <- function(etiquette, suffixe, params, timeout = 120) {
   st <- httr2::resp_status(rep)
   octets <- length(httr2::resp_body_raw(rep))
   cat(sprintf("   statut %d  |  %.1f s  |  %.0f Ko\n", st, dt, octets / 1024))
+  if (st < 400 && octets < 200) {     # constate : area repond 200 avec un corps vide
+    cat("   >> Reponse VIDE malgre le statut ", st, " (inutilisable).\n", sep = "")
+    return(list(ok = FALSE, statut = st, secondes = dt, octets = octets))
+  }
   if (st >= 400) {
     cat("   Corps : ", substr(httr2::resp_body_string(rep), 1, 400), "\n", sep = "")
     return(list(ok = FALSE, statut = st, secondes = dt, octets = octets))
@@ -102,7 +106,35 @@ essai <- function(etiquette, suffixe, params, timeout = 120) {
   r <- resumer_coveragejson(j)
   cat(sprintf("   %s | domaine %s | axes %s\n   mailles : %s | pas de temps : %s\n",
               r$type, r$domaine, r$axes, r$positions, r$pas_de_temps))
-  c(list(ok = TRUE, statut = st, secondes = dt, octets = octets), r)
+  c(list(ok = TRUE, statut = st, secondes = dt, octets = octets, json = j), r)
+}
+
+# Decrit un axe CoverageJSON : valeurs explicites ou axe regulier (debut/fin/nombre).
+decrire_axe <- function(a) {
+  if (is.null(a)) return("absent")
+  if (!is.null(a$values)) {
+    v <- unlist(a$values)
+    pas <- if (is.numeric(v) && length(v) > 1) sprintf(" | pas %.5f", (v[length(v)] - v[1]) / (length(v) - 1)) else ""
+    return(sprintf("%d valeurs : %s ... %s%s", length(v), format(v[1]), format(v[length(v)]), pas))
+  }
+  n <- as.numeric(a$num %||% NA)
+  pas <- if (!is.na(n) && n > 1) sprintf(" | pas %.5f", (as.numeric(a$stop) - as.numeric(a$start)) / (n - 1)) else ""
+  sprintf("regulier : %s ... %s (%s valeurs)%s", a$start, a$stop, a$num, pas)
+}
+
+# Ce que la reponse dit de sa grille : axes x/y, systeme de coordonnees, parametres.
+decrire_grille <- function(j) {
+  dom <- j$domain %||% j$coverages[[1]]$domain
+  if (is.null(dom)) return(invisible(NULL))
+  cat("   Axe x : ", decrire_axe(dom$axes$x), "\n", sep = "")
+  cat("   Axe y : ", decrire_axe(dom$axes$y), "\n", sep = "")
+  for (r in dom$referencing %||% list()) {
+    cat("   Reference : ", paste(unlist(r$coordinates), collapse = ","), " -> ",
+        r$system$id %||% r$system$type %||% "?", "\n", sep = "")
+  }
+  rg <- j$ranges %||% j$coverages[[1]]$ranges
+  cat("   Parametres recus : ", paste(names(rg), collapse = ", "), "\n", sep = "")
+  invisible(NULL)
 }
 
 zone_wkt <- function(cote) {
@@ -149,11 +181,17 @@ r_area <- essai("area (polygone 0,4 deg)", "area",
                 c(list(coords = zone_wkt(0.4)), base))
 r_cube <- essai("cube (bbox 0,4 deg)", "cube",
                 c(list(bbox = zone_bbox(0.4)), base))
+if (isTRUE(r_cube$ok)) {
+  cat("\nGrille renvoyee par le cube (les mailles reelles ? coordonnees natives ?) :\n")
+  decrire_grille(r_cube$json)
+}
 
 # ------------------------------------------------------------------------------
 titre("3. Montee en charge (une annee entiere, un parametre)")
 # ------------------------------------------------------------------------------
-retenu <- if (isTRUE(r_area$ok)) "area" else if (isTRUE(r_cube$ok)) "cube" else NULL
+# Le cube est prefere : il renvoie une vraie grille (area ne renvoie qu'une serie,
+# et des corps vides au-dela de ~1 deg).
+retenu <- if (isTRUE(r_cube$ok)) "cube" else if (isTRUE(r_area$ok)) "area" else NULL
 tab <- NULL
 if (is.null(retenu)) {
   cat("Ni area ni cube n'ont repondu correctement : etape sautee.\n")
@@ -177,6 +215,26 @@ if (is.null(retenu)) {
     cat(sprintf(paste0("\nOrdre de grandeur (derniere taille reussie) : %.1f mailles par seconde.\n",
                        "Pour 9 892 mailles, un parametre, une annee : environ %.0f s si cela se maintient.\n"),
                 d$mailles / d$secondes, 9892 / (d$mailles / d$secondes)))
+  }
+
+  # --- 3b. Plusieurs parametres dans une seule requete ? (boite de 1 deg, annee 2020)
+  titre("3b. Plusieurs parametres en une requete (cube 1 deg, annee 2020)")
+  tout <- c("T_Q", "PRELIQ_Q", "ETP_Q")
+  r3 <- essai("cube 1 deg, 3 parametres", "cube",
+              c(list(bbox = zone_bbox(1)),
+                modifyList(annee, list(`parameter-name` = paste(tout, collapse = ",")))),
+              timeout = 180)
+  if (isTRUE(r3$ok)) decrire_grille(r3$json)
+
+  # --- 3c. Plusieurs annees en une requete ? (boite de 1 deg, 2000-2020, un parametre)
+  titre("3c. Periode longue (cube 1 deg, 2000-2020, un parametre)")
+  r4 <- essai("cube 1 deg, 21 ans", "cube",
+              c(list(bbox = zone_bbox(1)),
+                modifyList(annee, list(datetime = "2000-01-01/2020-12-31"))),
+              timeout = 240)
+  if (isTRUE(r4$ok)) {
+    cat(sprintf("   => %.0f mailles x %s jours en %.1f s (%.0f Ko)\n",
+                r4$positions, r4$pas_de_temps, r4$secondes, r4$octets / 1024))
   }
 }
 
