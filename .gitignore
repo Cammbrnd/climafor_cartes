@@ -6,3 +6,5 @@ donnees_carte/
 parts/
 public/
 essai/
+__pycache__/
+*.pyc
