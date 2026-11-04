@@ -683,6 +683,10 @@ carre18 <- carte_carre_l2e(m_sim18$lambx[1] * 100, m_sim18$lamby[1] * 100)
 attendu18 <- sprintf("[%s,%s]", format(carre18[1, 1], nsmall = 4, trim = TRUE), format(carre18[1, 2], nsmall = 4, trim = TRUE))
 verifier(grepl(attendu18, grille_sim18, fixed = TRUE),
          "la grille publiee dessine les mailles dans leur repere natif (carres exacts)")
+meta_sim18 <- jsonlite::fromJSON(file.path(base_sim18, "public", "meta.json"), simplifyVector = FALSE)
+note_petp18 <- Filter(function(k) identical(k$cle, "petp"), meta_sim18$couches)[[1]]$note
+verifier(grepl("fenêtre d'avril à octobre", note_petp18, fixed = TRUE) && grepl("ETP", note_petp18, fixed = TRUE),
+         "la note de la couche P - ETP dit la fenetre (« d'avril ») et l'ecart d'ETP de la source sim")
 # La valeur publiee pour une maille est celle que calcule directement l'application sur son tableau.
 pt18 <- readRDS(file.path(base_sim18, "parts", "part_001.rds"))
 src_ref18 <- carte_source_sim(2003:2022, m_sim18, pt18$indices[1], carte_sim_fournisseur_local(dos_sim18),

@@ -227,7 +227,9 @@ carte_assembler <- function(parts, lon, lat, annees, source, dossier,
                         agr$signif[[cle]], agr$valeurs[[cle]])
     ind <- INDICATEURS[[k$source]]
     note <- if (k$source == "petp") {
-      paste(sprintf("Calculé sur la fenêtre de %s à %s.", MOIS_LONG[ctx$fenetre[1]], MOIS_LONG[ctx$fenetre[2]]),
+      m1 <- MOIS_LONG[ctx$fenetre[1]]
+      de1 <- if (grepl("^[aeiouyàâéèêîôû]", m1, ignore.case = TRUE)) paste0("d'", m1) else paste0("de ", m1)   # d'avril, d'août, d'octobre
+      paste(sprintf("Calculé sur la fenêtre %s à %s.", de1, MOIS_LONG[ctx$fenetre[2]]),
             note_etp)
     } else ""
     meta_couches[[length(meta_couches) + 1L]] <- list(
