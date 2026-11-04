@@ -111,6 +111,70 @@ SCRIPT_PAGE = r"""
   window.addEventListener("error", function (e) { log("Erreur : " + (e.message || e.type)); });
   window.addEventListener("unhandledrejection", function (e) { log("Promesse rejetée : " + (e.reason && e.reason.message || e.reason)); });
 
+
+  // -- Tests complementaires : isolent ce qui bloque quand les mailles ne se dessinent pas ----------
+  function testsComplementaires(carte) {
+    var ml = window.maplibregl;
+    var boite = document.querySelector('[data-ap="mini"]');
+    log("--- Tests complémentaires (petites cartes de 300×160 px sous le diagnostic) ---");
+    function testRaf() {
+      return new Promise(function (ok) {
+        var n = 0, t0 = performance.now(), fini = false;
+        function fin(t) { if (!fini) { fini = true; log(t); ok(); } }
+        (function f() { n++; if (performance.now() - t0 < 2000) requestAnimationFrame(f); else fin("A. images par seconde du navigateur : " + (n / 2).toFixed(0) + " | page " + document.visibilityState + " | focus " + document.hasFocus()); })();
+        setTimeout(function () { fin("A. BLOQUÉ : " + n + " image(s) seulement en 4 s | page " + document.visibilityState); }, 4000);
+      });
+    }
+    function mini(nom, grille, couche, attenteMax, apres) {
+      return new Promise(function (ok) {
+        var div = document.createElement("div"); div.className = "ap-mini"; boite.appendChild(div);
+        var t0 = performance.now(), fini = false, m = null, rendusMini = 0;
+        function fin(t) { if (fini) return; fini = true; try { m && m.remove(); } catch (e) {} div.remove(); log(nom + " : " + t); ok(); }
+        try {
+          m = new ml.Map({ container: div, style: { version: 8, sources: {}, layers: [{ id: "f", type: "background", paint: { "background-color": "#eef1f4" } }] },
+                           center: [2.5, 46.5], zoom: 4, interactive: false, attributionControl: false, fadeDuration: 0 });
+        } catch (e) { return fin("création impossible (" + (e && e.message) + ")"); }
+        m.on("render", function () { rendusMini++; });
+        m.on("error", function (e) { log(nom + " — erreur MapLibre : " + (e && e.error && e.error.message)); });
+        m.once("load", function () {
+          var tFond = Math.round(performance.now() - t0);
+          if (!grille) return fin("carte vide prête en " + tFond + " ms (" + rendusMini + " rendus)");
+          var t1 = performance.now();
+          try { m.addSource("g", { type: "geojson", data: grille, promoteId: "id" }); m.addLayer(couche); }
+          catch (e) { return fin("ajout impossible (" + (e && e.message) + ")"); }
+          (function attendre() {
+            var dt = performance.now() - t1;
+            if (m.isSourceLoaded("g")) {
+              var extra = "";
+              if (apres) { var t2 = performance.now(); apres(m); extra = " | " + grille.features.length + " setFeatureState en " + Math.round(performance.now() - t2) + " ms"; }
+              setTimeout(function () {
+                var n = 0; try { n = m.queryRenderedFeatures({ layers: [couche.id] }).length; } catch (e) {}
+                fin("mailles prêtes en " + Math.round(dt) + " ms" + extra + " | dessinées : " + n + " | " + rendusMini + " rendus");
+              }, 1500);
+            } else if (dt > attenteMax) fin("PAS PRÊTE après " + Math.round(dt / 1000) + " s | " + rendusMini + " rendus");
+            else setTimeout(attendre, 200);
+          })();
+        });
+        setTimeout(function () { fin("« load » jamais reçu après " + Math.round((attenteMax + 5000) / 1000) + " s | " + rendusMini + " rendus"); }, attenteMax + 5000);
+      });
+    }
+    var G = carte.donneesGrille;
+    var sous = function (n) { return { type: "FeatureCollection", features: G.features.slice(0, n) }; };
+    var simple = { id: "c", type: "fill", source: "g", paint: { "fill-color": "#cc3333", "fill-opacity": 0.8 } };
+    var appli = { id: "c", type: "fill", source: "g", paint: {
+      "fill-color": ["case", ["==", ["feature-state", "ok"], 1], ["interpolate", ["linear"], ["coalesce", ["feature-state", "x"], 0], 0, "#ffffb2", 1, "#bd0026"], "rgba(0,0,0,0)"],
+      "fill-opacity": ["case", ["==", ["feature-state", "sig"], 0], 0.35, 0.82], "fill-outline-color": "rgba(0,0,0,0.10)" } };
+    testRaf()
+      .then(function () { return mini("B. carte vide", null, null, 5000); })
+      .then(function () { return mini("C. 1 maille, couleur simple", sous(1), simple, 8000); })
+      .then(function () { return mini("D. 500 mailles, couleur simple", sous(500), simple, 10000); })
+      .then(function () { return mini("E. toutes les mailles, couleur simple", G, simple, 25000); })
+      .then(function () { return mini("F. toutes les mailles, comme l'application", G, appli, 25000, function (m) {
+        for (var i = 0; i < G.features.length; i++) m.setFeatureState({ source: "g", id: i }, { x: (i % 100) / 100, ok: 1, sig: 1 }); }); })
+      .then(function () { log("--- Fin des tests complémentaires ---"); })
+      .catch(function (e) { log("Tests complémentaires interrompus : " + (e && e.message)); });
+  }
+
   window.CarteClimaFor.demarrer({ racine: "carte-racine", entree: "carte-clic", base: base, tuiles: TUILES, schema: 1 })
     .then(function (carte) {
       log("Fichiers lus : " + carte.meta.n + " mailles, " + carte.meta.couches.length + " indicateurs, " +
@@ -124,7 +188,8 @@ SCRIPT_PAGE = r"""
       var cv = carte.map.getCanvas();
       cv.addEventListener("webglcontextlost", function () { log("!! Contexte WebGL PERDU (la carte graphique a abandonné le dessin)"); });
       cv.addEventListener("webglcontextrestored", function () { log("Contexte WebGL restauré"); });
-      var t0 = Date.now();
+      var t0 = Date.now(), rendus = 0;
+      carte.map.on("render", function () { rendus++; });
       var instantane = function (quand) {
         try {
           var m = carte.map, n = m.queryRenderedFeatures({ layers: ["cellules"] }).length;
@@ -132,7 +197,7 @@ SCRIPT_PAGE = r"""
           log("[" + quand + "] mailles dessinées : " + n + " | carte au repos : " + (m.loaded() ? "oui" : "non") +
               " | mailles prêtes : " + (m.isSourceLoaded("cellules") ? "oui" : "non") +
               " | zoom " + m.getZoom().toFixed(2) + " | cadre " + Math.round(cl.width) + "×" + Math.round(cl.height) +
-              " | canevas " + cv.width + "×" + cv.height);
+              " | canevas " + cv.width + "×" + cv.height + " | rendus " + rendus + " | page " + document.visibilityState);
         } catch (e) { log("[" + quand + "] impossible à relever : " + (e && e.message)); }
       };
       [3, 6, 12, 25, 45].forEach(function (s) { setTimeout(function () { instantane(s + " s"); }, s * 1000); });
@@ -143,6 +208,7 @@ SCRIPT_PAGE = r"""
       b.type = "button"; b.className = "cf-btn cf-btn--sec"; b.textContent = "Relever maintenant";
       b.addEventListener("click", function () { instantane("à " + Math.round((Date.now() - t0) / 1000) + " s"); });
       pre.parentNode.appendChild(b);
+      setTimeout(function () { testsComplementaires(carte); }, 8000);
     })
     .catch(function (e) {
       log("Chargement : ÉCHEC — " + (e && e.message));
@@ -202,6 +268,8 @@ def construire(base_defaut=BASE_DEFAUT, dossier_donnees=None):
   .ap-bandeau {{ margin-top: var(--e-4); }}
   .ap-bandeau[hidden] {{ display: none; }}
   .ap-diag {{ margin-top: var(--e-4); }}
+  .ap-minis {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }}
+  .ap-mini {{ width: 300px; height: 160px; border: 1px solid var(--cf-bordure); }}
   .ap-diag pre {{ white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--t-xs); }}
 </style>
 </head>
@@ -236,6 +304,7 @@ def construire(base_defaut=BASE_DEFAUT, dossier_donnees=None):
       <summary>Diagnostic technique de cet aperçu</summary>
       <div class="cf-details__corps"><pre data-ap="diag-texte"></pre></div>
      </details>
+     <div class="ap-minis" data-ap="mini"></div>
     </div>
    </div>
   </div>
