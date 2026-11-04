@@ -9,6 +9,12 @@ name: Diagnostic GeoSAS
 
 on:
   workflow_dispatch:
+    inputs:
+      etape:
+        description: "zone = le service accepte-t-il les requetes par zone ? | grille = le cube renvoie-t-il les valeurs des mailles ?"
+        type: choice
+        options: [zone, grille]
+        default: zone
 
 permissions:
   contents: read
@@ -34,7 +40,14 @@ jobs:
           dependencies: '"hard"'
 
       - name: Diagnostic
-        run: Rscript -e 'source("outils/carte_diagnostic_zone.R")' 2>&1 | tee diagnostic_geosas.txt
+        env:
+          ETAPE: ${{ inputs.etape }}
+        run: |
+          case "$ETAPE" in
+            grille) script=outils/carte_diagnostic_grille.R ;;
+            *)      script=outils/carte_diagnostic_zone.R ;;
+          esac
+          Rscript -e "source('$script')" 2>&1 | tee diagnostic_geosas.txt
 
       - uses: actions/upload-artifact@v4
         with:
