@@ -91,6 +91,15 @@ SCRIPT_PAGE = r"""
   var gl = false;
   try { var c = document.createElement("canvas"); gl = !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) {}
   log("WebGL : " + (gl ? "oui" : "NON — la carte ne peut pas s'afficher"));
+  try {
+    var c2 = document.createElement("canvas"), g2 = c2.getContext("webgl2") || c2.getContext("webgl");
+    var ext = g2 && g2.getExtension("WEBGL_debug_renderer_info");
+    log("Version WebGL : " + (g2 ? (typeof WebGL2RenderingContext !== "undefined" && g2 instanceof WebGL2RenderingContext ? "2" : "1") : "-") +
+        " | carte graphique : " + (ext ? g2.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "inconnue") +
+        " | texture max : " + (g2 ? g2.getParameter(g2.MAX_TEXTURE_SIZE) : "-"));
+  } catch (e) { log("Infos WebGL : " + (e && e.message)); }
+  log("Écran : " + window.innerWidth + "×" + window.innerHeight + " px, densité " + window.devicePixelRatio +
+      " | MapLibre " + (window.maplibregl && window.maplibregl.getVersion ? window.maplibregl.getVersion() : "?"));
   log("DecompressionStream : " + (typeof DecompressionStream !== "undefined" ? "oui" : "NON"));
   var diagnostic = { worker: "en cours" };
   try {
@@ -112,17 +121,28 @@ SCRIPT_PAGE = r"""
         if (/tile|geopf|AJAXError|Failed to fetch/i.test(m)) { tuilesKO++; return; }   // fond IGN : compte a part
         log("MapLibre : " + m);
       });
-      var compter = function (quand) {
+      var cv = carte.map.getCanvas();
+      cv.addEventListener("webglcontextlost", function () { log("!! Contexte WebGL PERDU (la carte graphique a abandonné le dessin)"); });
+      cv.addEventListener("webglcontextrestored", function () { log("Contexte WebGL restauré"); });
+      var t0 = Date.now();
+      var instantane = function (quand) {
         try {
-          var n = carte.map.queryRenderedFeatures({ layers: ["cellules"] }).length;
-          log("Mailles dessinées (" + quand + ") : " + n);
-        } catch (e) { log("Mailles dessinées : impossible à compter (" + (e && e.message) + ")"); }
+          var m = carte.map, n = m.queryRenderedFeatures({ layers: ["cellules"] }).length;
+          var cl = m.getContainer().getBoundingClientRect();
+          log("[" + quand + "] mailles dessinées : " + n + " | carte au repos : " + (m.loaded() ? "oui" : "non") +
+              " | mailles prêtes : " + (m.isSourceLoaded("cellules") ? "oui" : "non") +
+              " | zoom " + m.getZoom().toFixed(2) + " | cadre " + Math.round(cl.width) + "×" + Math.round(cl.height) +
+              " | canevas " + cv.width + "×" + cv.height);
+        } catch (e) { log("[" + quand + "] impossible à relever : " + (e && e.message)); }
       };
-      carte.map.once("idle", function () { compter("carte au repos"); });
+      [3, 6, 12, 25, 45].forEach(function (s) { setTimeout(function () { instantane(s + " s"); }, s * 1000); });
       setTimeout(function () {
-        compter("après 6 s");
         log("Fond de carte IGN : " + (tuilesKO ? tuilesKO + " tuile(s) non chargée(s) — fond gris, sans conséquence sur les mailles" : "aucune erreur"));
       }, 6000);
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "cf-btn cf-btn--sec"; b.textContent = "Relever maintenant";
+      b.addEventListener("click", function () { instantane("à " + Math.round((Date.now() - t0) / 1000) + " s"); });
+      pre.parentNode.appendChild(b);
     })
     .catch(function (e) {
       log("Chargement : ÉCHEC — " + (e && e.message));
