@@ -79,9 +79,21 @@ carte_sim_mailles <- function(src = SIM_URL_COORD) {
   g <- carte_depuis_l2e(x * 100, y * 100)
   m <- data.frame(lon = round(g$lon, 6), lat = round(g$lat, 6),
                   lambx = as.integer(x), lamby = as.integer(y))
-  if (any(m$lat < PARTAGE_BORNES$lat[1] | m$lat > PARTAGE_BORNES$lat[2] |
-          m$lon < PARTAGE_BORNES$lon[1] | m$lon > PARTAGE_BORNES$lon[2])) {
-    stop("Fichier de coordonnees SIM : mailles hors du territoire attendu.", call. = FALSE)
+  # Le domaine SAFRAN deborde un peu de la France (frontiere suisse/autrichienne : 4 mailles
+  # a lon 10,00-10,04 en novembre 2026, mesurees par le diagnostic « coord »). L'application
+  # refuse toute position hors de PARTAGE_BORNES : ces mailles ne pourraient pas etre analysees
+  # au clic. On les ecarte, a condition qu'elles restent rares ; au-dela, le fichier est suspect.
+  hors <- m$lat < PARTAGE_BORNES$lat[1] | m$lat > PARTAGE_BORNES$lat[2] |
+    m$lon < PARTAGE_BORNES$lon[1] | m$lon > PARTAGE_BORNES$lon[2]
+  if (sum(hors) > 0.01 * nrow(m)) {
+    stop(sprintf("Fichier de coordonnees SIM : %d mailles sur %d hors du territoire attendu.",
+                 sum(hors), nrow(m)), call. = FALSE)
+  }
+  if (any(hors)) {
+    message(sprintf("Grille SIM : %d maille(s) ecartee(s), hors des bornes de l'application (lon %.3f a %.3f, lat %.3f a %.3f).",
+                    sum(hors), min(m$lon[hors]), max(m$lon[hors]), min(m$lat[hors]), max(m$lat[hors])))
+    m <- m[!hors, , drop = FALSE]
+    rownames(m) <- NULL
   }
   m
 }

@@ -581,6 +581,25 @@ verifier(max(abs(v_l2e18$x - m_sim18$lambx * 100), abs(v_l2e18$y - m_sim18$lamby
 verifier(refus18(carte_sim_mailles(file.path(dos_sim18, "absent.csv")), "introuvable"),
          "un fichier de coordonnees absent est refuse")
 
+# Quelques mailles du domaine SAFRAN depassent la borne de l'application (4 mailles a lon 10,00-10,04,
+# constat reel) : elles sont ecartees, avec un message. Si elles sont nombreuses, le fichier est refuse.
+coord_hors18 <- function(n_hors) {
+  f <- tempfile(fileext = ".csv")
+  lx <- c(5000L + 80L * rep(0:9, 11), if (n_hors == 1L) 11800L else 6000L + 80L * seq_len(n_hors))
+  ly <- c(18000L + 80L * rep(0:10, each = 10), rep(if (n_hors == 1L) 22970L else 29000L, n_hors))
+  writeLines(c("LAMBX (hm);LAMBY (hm);LAT_DG;LON_DG", sprintf("%d;%d;47,4;10,03", lx, ly)), f)
+  f
+}
+f_hors18 <- coord_hors18(1L)
+msg_hors18 <- character(0)
+m_hors18 <- withCallingHandlers(carte_sim_mailles(f_hors18),
+  message = function(e) { msg_hors18 <<- c(msg_hors18, conditionMessage(e)); invokeRestart("muffleMessage") })
+verifier(nrow(m_hors18) == 110L && !anyDuplicated(m_hors18$lambx * 100000L + m_hors18$lamby) &&
+           all(m_hors18$lon <= PARTAGE_BORNES$lon[2]) && any(grepl("ecartee", msg_hors18)),
+         "une maille du domaine SAFRAN hors des bornes de l'application est ecartee, avec un message")
+verifier(refus18(carte_sim_mailles(coord_hors18(30L)), "hors du territoire"),
+         "si les mailles hors bornes sont nombreuses (> 1 %), le fichier de coordonnees est refuse")
+
 lire18sim <- carte_source_sim(2018:2022, m_sim18, c(1L, 57L, 110L), carte_sim_fournisseur_local(dos_sim18),
                               supprimer = FALSE, parametres_api = tous_api18)
 d57 <- lire18sim(57L, m_sim18$lon[57], m_sim18$lat[57])
