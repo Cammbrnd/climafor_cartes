@@ -1,0 +1,42 @@
+# Diagnostic GeoSAS — a lancer a la main (onglet Actions > Diagnostic GeoSAS > Run workflow).
+#
+# Repond a UNE question avant tout gros calcul : le service GeoSAS accepte-t-il les
+# requetes par zone (area / cube) ? Le script envoie une quinzaine de petites
+# requetes espacees d'une seconde et affiche, pour chacune, statut, duree, poids et
+# nombre de mailles recues. Il ne modifie rien et ne publie rien.
+# Le resultat est dans le journal du job (et joint en artefact).
+name: Diagnostic GeoSAS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # Le diagnostic n'a besoin que de ces paquets : pas des 10 de l'application.
+          packages: |
+            any::httr2
+            any::jsonlite
+            any::shiny
+          dependencies: '"hard"'
+
+      - name: Diagnostic
+        run: Rscript -e 'source("outils/carte_diagnostic_zone.R")' 2>&1 | tee diagnostic_geosas.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-geosas
+          path: diagnostic_geosas.txt

@@ -1,0 +1,521 @@
+---
+title: "Bilan météorologique et climatique"
+lang: fr
+toc-title: "Sommaire"
+params:
+  donnees: !r data.frame()
+  resultats: !r list()
+  ctx: !r list()
+  lieu: !r list()
+  indicateurs: !r character()
+  niveau: "ingenieur"
+  contexte: ""
+  interactif: false
+# Ce bloc ne sert qu'au tricotage manuel depuis RStudio : en production,
+# src/utils_rapport.R (rendre_rapport) passe explicitement son propre
+# output_format a render(), qui prend le pas sur ce qui est declare ici. Les deux sont maintenus
+# IDENTIQUES a dessein, faute de quoi le document tricote a la main ne
+# ressemblerait pas a celui que produit l'application.
+#
+# toc_float est volontairement absent : il depend de Bootstrap, que le rapport
+# ne charge pas (theme = NULL). Les combiner leve « You must use a theme when
+# specifying the toc_float option ». Le sommaire est statique et rendu collant
+# par styles_rapport.css.
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    self_contained: true
+    theme: null
+    highlight: null
+    mathjax: null
+    fig_retina: 1
+    css: styles_rapport.css
+  word_document:
+    toc: true
+    pandoc_args: "--columns=400"
+---
+
+```{r reglages, include=FALSE}
+# ==============================================================================
+# Modele de rapport — il ne recalcule rien.
+# Toutes les valeurs proviennent des indicateurs deja calcules par l'application
+# et transmis via `params$resultats` : le document ne peut donc pas diverger de
+# ce que l'utilisateur a vu a l'ecran.
+# ==============================================================================
+# Resolution des images : 110 dpi (150 en v11). A la largeur de lecture d'un
+# document (9 pouces), la difference ne se voit pas, et le fichier perd pres de
+# la moitie de son poids (CONFIG$rapport$dpi).
+knitr::opts_chunk$set(
+  echo = FALSE, warning = FALSE, message = FALSE,
+  fig.width = 9, fig.height = 4.8, dpi = CONFIG$rapport$dpi, fig.align = "center",
+  # html_document double la resolution par defaut (fig.retina = 2) : des images
+  # de 1980 px de large pour un document lu a 900 px. A 1 : le poids est divise
+  # par trois et rien ne change a la lecture.
+  fig.retina = 1
+)
+
+don   <- params$donnees
+res   <- params$resultats
+ctx   <- params$ctx
+lieu  <- params$lieu
+ids   <- params$indicateurs
+
+# Un niveau inconnu LEVE UNE ERREUR au lieu de retomber en silence sur un autre
+# niveau : le rapport produit est celui qui a ete demande, ou il n'y en a pas.
+niveau <- valider_niveau(params$niveau)
+
+# Texte venu de l'exterieur (nom de commune ou de station, texte saisi) :
+# insere comme TEXTE, jamais comme du balisage.
+e <- echapper_md
+
+# Source des donnees : une station Meteo-France ou la grille SAFRAN. Une station
+# ne fournit pas tout : les indicateurs sans donnees ne sont pas traces, et le
+# rapport le dit au lieu de les omettre en silence.
+est_station <- identical(attr(don, "source"), "station")
+st_info <- attr(don, "station")
+qualite_serie <- if (est_station) tryCatch(mf_qualite_serie(don, ctx), error = function(e) {
+  journaliser_erreur("Qualite de la serie (rapport)", e); NULL })
+non_calcules <- data.frame(titre = character(0), manque = character(0))
+if (est_station) {
+  m <- indicateurs_indisponibles(don, ids)
+  vides <- setdiff(ids[vapply(ids, function(i) !NROW(res[[i]]), logical(1))], m$id)
+  if (length(vides)) {
+    m <- rbind(m, data.frame(id = vides,
+                             titre = vapply(INDICATEURS[vides], function(i) i$titre, character(1)),
+                             manque = "aucune année assez complète", stringsAsFactors = FALSE))
+  }
+  non_calcules <- m
+  ids <- setdiff(ids, m$id)
+}
+
+# Le niveau de detail pilote l'ensemble du document. Les niveaux sont ordonnes
+# (decideur < ingenieur < technique) : « au moins technique » se lit partout
+# de la meme facon.
+montrer_methode  <- niveau_au_moins(niveau, "technique")
+montrer_tableaux <- niveau_au_moins(niveau, "technique")
+# La synthese decideur se limite aux indicateurs les plus parlants
+if (!niveau_au_moins(niveau, "ingenieur")) {
+  ids <- intersect(ids, c("tmp", "pre", "petp", "bh", "ombro", "can", "dry"))
+}
+
+# ==============================================================================
+# GRAPHIQUES INTERACTIFS — SEULEMENT EN HTML
+# ------------------------------------------------------------------------------
+# Un widget plotly n'a aucun sens dans un .docx : il n'y a pas de navigateur
+# pour l'executer. La sortie Word reste donc toujours en images, quel que soit
+# le reglage choisi par l'utilisateur.
+# ==============================================================================
+sortie_html <- knitr::is_html_output()
+interactif  <- isTRUE(params$interactif) && sortie_html
+
+#' Emet un widget htmlwidget depuis un chunk `results='asis'`.
+#'
+#' POURQUOI CETTE FONCTION EXISTE
+#' ------------------------------
+#' knitr collecte les dependances JavaScript d'un widget (plotly.js, ici) quand
+#' celui-ci est RENVOYE par un chunk. Dans une boucle `results='asis'`, on ne
+#' renvoie rien : on ecrit avec cat(). Les dependances seraient donc perdues, et
+#' le rapport s'ouvrirait sur des emplacements vides — sans le moindre message
+#' d'erreur, puisque le HTML lui-meme est correct.
+#' On les reinjecte donc explicitement dans les metadonnees de knitr.
+emettre_widget <- function(w) {
+  sortie <- knitr::knit_print(w)
+  meta <- attr(sortie, "knit_meta")
+  if (!is.null(meta)) knitr::knit_meta_add(list(meta))
+  cat(sortie)
+  cat("\n\n")
+}
+```
+
+```{r amorce_plotly, include=FALSE, eval=interactif}
+# Ceinture et bretelles. Ce widget minuscule est renvoye par le chemin normal
+# d'un chunk, ce qui enregistre plotly.js a coup sur. Il est ensuite masque par
+# la feuille de style. Si `emettre_widget` suffisait seule, ce bloc serait
+# inutile ; il coute une balise vide et garantit que le rapport ne peut pas
+# sortir sans sa bibliotheque JavaScript.
+plotly::plot_ly(height = 1) |> plotly::config(displayModeBar = FALSE)
+```
+
+```{r logos, results='asis'}
+# En-tete institutionnel du document.
+#
+# Les images sont inserees en BASE64 plutot que par un chemin relatif : le
+# rapport HTML est genere en `self_contained`, il doit pouvoir etre envoye par
+# courriel et ouvert n'importe ou sans dossier d'images a cote. Le rendu se
+# fait par ailleurs dans un repertoire temporaire, ou un chemin relatif au
+# projet ne resoudrait pas. Pour la sortie Word, knitr embarque de toute facon
+# les images dans le fichier .docx.
+#
+# Si les fichiers sont absents, le bloc est simplement omis : un logo manquant
+# ne doit jamais empecher la production du rapport.
+inserer_logo <- function(fichier, hauteur) {
+  chemin <- file.path("images", fichier)
+  if (!file.exists(chemin)) return("")
+  sprintf('<img src="data:image/png;base64,%s" style="height:%dpx;width:auto;vertical-align:middle;margin-right:24px">',
+          base64enc::base64encode(chemin), hauteur)
+}
+
+# En sortie Word, les logos sont portes par l'EN-TETE du modele de reference
+# (rapport/modele_dsfr.docx) : ils se repetent alors sur chaque page, ce qu'un
+# bloc HTML insere dans le corps ne saurait faire.
+logos <- if (knitr::is_html_output())
+  paste0(inserer_logo("republique_francaise.png", 70),
+         inserer_logo("logo_dsf.png", 48)) else ""
+if (nzchar(logos)) {
+  cat('<div style="margin-bottom:24px;border-bottom:1px solid #DDDDDD;padding-bottom:16px">',
+      logos, '</div>\n\n', sep = "")
+}
+```
+
+```{r entete, results='asis'}
+cat(sprintf("## %s\n\n", e(lieu$nom %||% "Point d'analyse")))
+
+cat(sprintf(
+  paste0("**Coordonnées** %s N, %s E (WGS 84) &nbsp;•&nbsp; ",
+         "**Période de référence** %s &nbsp;•&nbsp; **Année comparée** %d\n\n"),
+  fmt_fr(lieu$lat, 4), fmt_fr(lieu$lon, 4), ctx$ref_label, ctx$courante))
+
+cat(sprintf(
+  paste0("**Série exploitée** %d à %d &nbsp;•&nbsp; **Dernière donnée** %s ",
+         "&nbsp;•&nbsp; **Édité le** %s\n\n"),
+  min(don$annee), max(don$annee),
+  format(attr(don, "derniere_mesure") %||% max(don$date), "%d/%m/%Y"),
+  format(Sys.Date(), "%d/%m/%Y")))
+
+if (est_station) {
+  cat(sprintf(
+    paste0("**Source** station Météo-France **%s** (n° %s), à %s du point, ",
+           "altitude %s &nbsp;•&nbsp; **Qualité de la série** %s\n\n"),
+    e(st_info$nom), e(st_info$id), mf_km(st_info$distance_km %||% NA_real_),
+    if (is.finite(st_info$alt)) sprintf("%.0f m", st_info$alt) else "inconnue",
+    if (is.null(qualite_serie)) "non évaluée" else tolower(qualite_serie$libelle)))
+} else {
+  alt_pt <- attr(don, "altitude_point")
+  cat(sprintf("**Source** réanalyse SAFRAN-ISBA, maille de 8 km%s\n\n",
+              if (!is.null(alt_pt) && is.finite(alt_pt))
+                sprintf(" &nbsp;•&nbsp; **Altitude du point** %.0f m", alt_pt) else ""))
+}
+
+# Le texte de contexte est celui qu'un utilisateur a tape : traite comme du
+# texte (balises et liens neutralises), borne en longueur, et signale s'il a ete
+# tronque.
+contexte <- nettoyer_contexte(params$contexte)
+if (nzchar(contexte$texte)) {
+  cat("### Contexte de la demande\n\n", contexte$texte, "\n\n", sep = "")
+  if (contexte$tronque) {
+    cat(sprintf("_Texte tronqué à %d caractères._\n\n", CONFIG$rapport$contexte_max))
+  }
+}
+```
+
+```{r qualite_station, results='asis'}
+if (est_station && !is.null(qualite_serie) && length(qualite_serie$alertes)) {
+  cat("> **Qualité de la série.** ",
+      e(paste(qualite_serie$alertes, collapse = " ")), "\n\n", sep = "")
+}
+```
+
+## Ce qu'il faut retenir
+
+```{r messages_cles, results='asis'}
+# Les messages cles sont produits par les fonctions `resume` du registre :
+# ajouter un indicateur au registre l'ajoute automatiquement ici.
+textes <- lapply(ids, function(cle) {
+  commentaire_indicateur(INDICATEURS[[cle]], resultat_indicateur(res, cle), ctx)
+})
+en_echec <- ids[vapply(textes, function(t) !is.null(attr(t, "erreur")), logical(1))]
+messages <- Filter(nzchar, vapply(textes, as.character, character(1)))
+
+if (length(messages)) {
+  cat(paste0("- ", messages, collapse = "\n"), "\n\n")
+} else {
+  cat("_Aucun message clé n'a pu être produit sur cette sélection._\n\n")
+}
+# Un commentaire qui echoue ne doit pas ressembler a « rien a signaler ».
+if (length(en_echec)) {
+  cat("> **Commentaire non produit** pour : ",
+      paste(vapply(en_echec, function(i) INDICATEURS[[i]]$titre, character(1)),
+            collapse = ", "),
+      " (erreur de calcul consignée ; le graphique et le tableau restent valables).\n\n",
+      sep = "")
+}
+```
+
+```{r points_attention, results='asis'}
+# Ce qui change la lecture des chiffres ci-dessus et que le lecteur d'un rapport
+# transmis ne verra pas autrement : annee comparee incomplete, jours sans mesure.
+syn <- synthese_securisee(don, ctx)
+pts <- character(0)
+if (!is.null(attr(syn, "erreur"))) {
+  pts <- c(pts, paste(
+    "La **synthèse chiffrée n'a pas pu être calculée** (erreur consignée) : les",
+    "mises en garde sur l'année incomplète et les jours sans mesure ne peuvent",
+    "pas être affichées ici. Lire les chiffres avec prudence."))
+}
+if (nrow(syn)) {
+  fin <- attr(syn, "derniere_date")
+  if (length(fin) && !is.na(fin) && fin < as.Date(sprintf("%d-12-29", ctx$courante))) {
+    pts <- c(pts, sprintf(
+      "L'année %d est **incomplète** (données jusqu'au %s). Les comparaisons sont faites à période égale : la normale est tronquée à la même date. Cette année n'entre ni dans la normale, ni dans les tendances.",
+      ctx$courante, format(fin, "%d/%m/%Y")))
+  }
+  mq <- attr(syn, "manquants")
+  if (!is.null(mq) && any(mq > 0)) {
+    pts <- c(pts, sprintf(
+      "Jours sans mesure dans l'année comparée : %s. Ils ne sont pas compensés : les cumuls et les comptages sont sous-estimés d'autant.",
+      paste(c(if (mq[["temperature"]] > 0) sprintf("%d en température", mq[["temperature"]]),
+              if (mq[["pluie"]] > 0) sprintf("%d en précipitations", mq[["pluie"]])),
+            collapse = ", ")))
+  }
+}
+if (length(pts)) {
+  cat("> **À savoir avant de lire les chiffres.**\n>\n",
+      paste0("> - ", pts, collapse = "\n"), "\n\n", sep = "")
+}
+```
+
+```{r synthese_tableau}
+if (nrow(syn)) {
+  # Mise en forme : chaque ligne porte son propre format d'affichage (nombre de
+  # decimales), avec la virgule decimale francaise et le vrai signe moins.
+  decimales <- function(formats) {
+    d <- suppressWarnings(as.integer(sub("^%\\.(\\d+)f$", "\\1", formats)))
+    ifelse(is.na(d), 1L, d)
+  }
+  fmt <- function(valeurs, formats, signe = FALSE) {
+    out <- mapply(function(v, d) fmt_fr(v, d, signe = signe), valeurs, decimales(formats),
+                  USE.NAMES = FALSE)
+    ifelse(out == "n.d.", "—", out)
+  }
+  ecart_txt <- fmt(syn$ecart, syn$format, signe = TRUE)
+  tab <- data.frame(
+    Indicateur       = syn$indicateur,
+    `Année comparée` = fmt(syn$valeur, syn$format),
+    Normale          = fmt(syn$normale, syn$format),
+    `Écart`          = ecart_txt,
+    `Unité`          = syn$unite,
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
+  knitr::kable(tab, align = c("l", "r", "r", "r", "l"),
+               caption = sprintf(
+                 "Comparaison à période égale entre %d et la normale %s",
+                 ctx$courante, ctx$ref_label))
+}
+```
+
+```{r avertissement_precipitations, results='asis'}
+if (est_station) {
+  cat(paste(
+    "> **Précipitations.** Les cumuls sont les hauteurs d'eau mesurées au",
+    "pluviomètre de la station (pluie et précipitations solides recueillies, sans",
+    "distinction). La séparation pluie / neige n'est pas disponible avec une",
+    "station.\n\n"))
+} else {
+  cat(paste(
+    "> **Précipitations.** Les cumuls indiqués additionnent la phase liquide et la",
+    "phase solide, cette dernière exprimée en équivalent en eau. C'est la seule",
+    "lecture correcte du total : en montagne, la neige représente couramment le",
+    "quart à la moitié des apports annuels.\n\n"))
+}
+```
+
+## Indicateurs
+
+```{r graphiques, results='asis', fig.height=4.8}
+for (cle in ids) {
+  ind <- INDICATEURS[[cle]]
+  if (is.null(ind)) next
+  # Un resultat vide garde ses attributs (raison, message) : voir resultat_indicateur().
+  dat <- resultat_indicateur(res, cle)
+
+  cat(sprintf("\n\n### %s\n\n", ind$titre))
+
+  # Graphique. Interactif en HTML si l'utilisateur l'a demande ET si l'entree
+  # du registre s'y prete — les traces a double axe restent des images, voir la
+  # section 8 de src/utils_plot.R.
+  g <- tryCatch(ind$plot(dat, ctx, mobile = FALSE), error = function(err) {
+    journaliser_erreur(sprintf("Graphique '%s' (rapport)", cle), err); NULL })
+  if (is.null(g)) {
+    # Un graphique qui echoue est dit, pas omis : le lecteur ne doit pas croire
+    # que l'indicateur n'existe pas.
+    cat("_Ce graphique n'a pas pu être produit._\n\n")
+  } else {
+    if (interactif && !identical(ind$interactif, FALSE)) {
+      st <- graphe_sous_titre(g)
+      notes <- graphe_notes(g)
+      emettre_widget(graphe_interactif(g, mobile = FALSE))
+      # ggplotly perd le sous-titre et les notes : on les replace sous le
+      # graphique.
+      if (!is.null(st)) cat("\n\n_", e(st), "_\n\n", sep = "")
+      if (length(notes)) cat(paste0("- ", e(notes), collapse = "\n"), "\n\n", sep = "")
+    } else {
+      # En image, les notes sont dans le graphique : repliees pour tenir dans la
+      # page.
+      print(graphe_notes_repliees(graphe_sous_titre_replie(g, largeur = 125), largeur = 125))
+    }
+  }
+
+  # Commentaire automatique
+  if (!is.null(ind$resume)) {
+    txt <- commentaire_indicateur(ind, dat, ctx)
+    if (nzchar(txt)) cat("\n\n", txt, "\n\n", sep = "")
+    if (!is.null(attr(txt, "erreur"))) {
+      cat("\n\n> _Le commentaire automatique de cet indicateur n'a pas pu être produit._\n\n")
+    }
+  }
+
+  # Lecture forestiere : toujours presente, c'est la valeur ajoutee du rapport
+  cat("\n\n**Lecture.** ", ind$lecture, "\n\n", sep = "")
+
+  # Methode : seulement pour le dossier technique
+  if (montrer_methode) {
+    cat("\n\n**Méthode.** ", ind$methode, "\n\n", sep = "")
+  }
+
+  # Tableau de valeurs : seulement pour le dossier technique. Un tableau de 60
+  # lignes est illisible : on ne garde que les 15 dernieres.
+  if (montrer_tableaux) {
+    sous <- valeurs_formatees(dat, ind, ctx, limite = 15L, dernieres = TRUE)
+    if (!is.null(sous)) {
+      al <- ifelse(vapply(sous, function(x) all(grepl("^[-−+0-9, ]*$", x)), logical(1)), "r", "l")
+      print(knitr::kable(sous, row.names = FALSE, align = al,
+                         caption = paste("Valeurs —", ind$titre)))
+      cat("\n\n")
+    }
+  }
+}
+```
+
+## Sources et limites
+
+```{r sources_texte, results='asis'}
+if (est_station) {
+  cat(sprintf(paste(
+    "Les données sont les **observations quotidiennes de la station Météo-France",
+    "%s** (données climatologiques de base, licence Etalab 2.0), choisie comme la",
+    "station la plus pertinente autour du point selon la distance, l'écart",
+    "d'altitude, les variables mesurées et la fraîcheur des données. Une année",
+    "n'est utilisée pour un indicateur que si au moins %.0f %% de ses jours sont",
+    "renseignés pour les variables qu'il emploie : une année lacunaire est",
+    "**absente** des graphiques, jamais comptée comme zéro. L'évapotranspiration",
+    "n'est pas mesurée : elle est estimée par la formule de Hargreaves-Samani à",
+    "partir des températures. Les communes et le géocodage proviennent de l'**API",
+    "Géo** de l'État.\n\n"),
+    st_info$nom, 100 * CONFIG$stations$seuil_annee))
+  if (nrow(non_calcules)) {
+    cat("**Indicateurs non calculés avec cette station** : ",
+        paste0(non_calcules$titre, " (", non_calcules$manque, ")", collapse = " ; "),
+        ". La grille SAFRAN les fournit.\n\n", sep = "")
+  }
+} else {
+  cat(paste(
+    "Les données proviennent de la réanalyse **SAFRAN-ISBA (SIM2)** de Météo-France,",
+    "interrogée au point via l'API OGC EDR opérée par **GeoSAS (INRAE)**. Cette",
+    "réanalyse couvre la France métropolitaine depuis 1958 sur une grille de 8 km,",
+    "au pas de temps journalier. Les communes et le géocodage proviennent de l'**API",
+    "Géo** de l'État.\n\n"))
+}
+```
+
+Quatre limites doivent accompagner toute utilisation de ce bilan.
+
+```{r limite_maille, results='asis'}
+if (est_station) {
+  cat(paste(
+    "La **station n'est pas la parcelle**. Elle est à quelques kilomètres du point",
+    "et son altitude peut différer : en vallée encaissée, sur une crête ou en",
+    "versant sud raide, les conditions réelles s'écartent des mesures. Ce document",
+    "décrit le climat de la station, pas celui d'une station forestière.\n\n"))
+} else {
+  cat(paste(
+    "La **maille de 8 km lisse le relief**. En vallée encaissée, sur une crête ou en",
+    "versant sud raide, les conditions réelles s'écartent sensiblement de la valeur",
+    "de maille. Ce document décrit un climat local, pas une station forestière.\n\n"))
+}
+```
+
+```{r limite_sol, results='asis'}
+if (est_station) {
+  cat(paste(
+    "**Aucune humidité du sol n'est fournie par une station.** La réserve utile",
+    "réelle de la parcelle — profondeur, charge en cailloux, texture — module",
+    "fortement le stress hydrique effectif. Un sondage à la tarière reste",
+    "indispensable avant toute décision de renouvellement.\n\n"))
+} else {
+  cat(paste(
+    "Le **sol simulé est un sol standard**. La réserve utile réelle de la parcelle —",
+    "profondeur, charge en cailloux, texture — module fortement le stress hydrique",
+    "effectif. Un sondage à la tarière reste indispensable avant toute décision de",
+    "renouvellement.\n\n"))
+}
+```
+
+```{r limite_etp, results='asis'}
+etp_src <- attr(don, "etp_source")
+cat(paste(
+  "L'**ETP est une demande évaporative de référence**, calée sur un couvert",
+  "herbacé. Les valeurs de P − ETP se lisent en relatif, entre années et entre",
+  "stations, davantage qu'en valeur absolue.",
+  if (!is.null(etp_src)) sprintf("ETP utilisée ici : %s.", e(etp_src)),
+  if (est_station) paste(
+    "L'ETP d'une station (Hargreaves-Samani, à partir des seules températures)",
+    "n'est pas comparable à celle de SAFRAN (Penman-Monteith, avec vent et",
+    "humidité) : ne comparez pas les valeurs de P − ETP d'une source à l'autre."),
+  "\n\n"))
+```
+
+Enfin, une **normale décrit un climat passé, pas une trajectoire**. Pour
+anticiper, ce diagnostic se complète des projections régionalisées (DRIAS,
+Climadiag Forêt).
+
+## Paramètres de l'analyse
+
+```{r annexe_parametres, results='asis'}
+# De quoi refaire l'analyse a l'identique : source, periode, seuils modifies,
+# versions du logiciel et des paquets.
+pa <- parametres_analyse(ctx, don)
+lignes <- c(
+  "Application"                 = pa$application,
+  "Date d'édition"              = format(pa$date, "%d/%m/%Y"),
+  "Source des données"          = pa$source,
+  "Dernière donnée"             = if (!is.na(pa$derniere_date)) format(pa$derniere_date, "%d/%m/%Y") else "inconnue",
+  "Période de référence"        = pa$reference,
+  "Année comparée"              = as.character(pa$courante),
+  "Années affichées"            = pa$affichage,
+  "Fenêtre mensuelle (P − ETP)" = pa$fenetre,
+  "ETP"                         = pa$etp %||% "non précisée",
+  if (!is.null(pa$definition_tmoy))
+    c("Température moyenne" = pa$definition_tmoy),
+  if (is.finite(pa$seuil_annee_station))
+    c("Année utilisable (station)" = sprintf("au moins %.0f %% des jours renseignés", pa$seuil_annee_station)),
+  "Tendance"                    = pa$tendance,
+  "Coloration des écarts"       = pa$ecart_neutre,
+  "Seuils modifiés"             = pa$seuils_modifies
+)
+print(knitr::kable(data.frame(`Paramètre` = names(lignes), Valeur = unname(lignes),
+                              check.names = FALSE, stringsAsFactors = FALSE),
+                   caption = "Paramètres retenus pour cette analyse"))
+cat("\n\n")
+
+if (montrer_tableaux) {
+  ts <- pa$seuils
+  ts$Valeur <- format(ts$Valeur, decimal.mark = ",", trim = TRUE)
+  ts$`Valeur par défaut` <- format(ts$`Valeur par défaut`, decimal.mark = ",", trim = TRUE)
+  ts$`Modifié` <- ifelse(ts$`Modifié`, "oui", "")
+  print(knitr::kable(ts, align = c("l", "l", "r", "r", "c"),
+                     caption = "Seuils appliqués aux indicateurs"))
+  cat("\n\n")
+}
+
+v <- pa$versions
+cat(sprintf("_Logiciels : R %s ; %s._\n\n", v[["R"]],
+            paste(sprintf("%s %s", names(v)[-1], v[-1]), collapse = " ; ")))
+```
+
+```{r pied, results='asis'}
+cat(sprintf(
+  "\n\n---\n\n_%s version %s — %s. Données Météo-France sous licence Etalab 2.0. Extraction du %s._\n",
+  CONFIG$app$nom, CONFIG$app$version, CONFIG$app$organisme,
+  format(Sys.Date(), "%d/%m/%Y")))
+```

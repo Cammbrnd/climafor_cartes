@@ -1,0 +1,26 @@
+Package: climafor
+Title: ClimaFor, bilan meteorologique et climatique pour la gestion forestiere
+Version: 1.8.0
+Description: Application R/Shiny qui produit, pour un point de France
+    metropolitaine, un bilan climatique (station Meteo-France ou reanalyse
+    SAFRAN-ISBA) avec vingt-quatre indicateurs forestiers, des tendances et des
+    rapports. Ce fichier ne sert qu'a DECLARER les dependances (renv, lecture
+    humaine) : l'application n'est pas un paquet R.
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports:
+    shiny,
+    htmltools,
+    ggplot2,
+    leaflet,
+    plotly,
+    httr2 (>= 1.0.0),
+    jsonlite,
+    curl,
+    rmarkdown,
+    knitr,
+    base64enc
+Suggests:
+    covr,
+    renv,
+    rsconnect

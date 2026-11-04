@@ -1,0 +1,172 @@
+# Construire la carte — calcule les indicateurs de chaque maille SAFRAN, puis publie
+# les fichiers sur GitHub Pages (https://<compte>.github.io/<depot>/).
+#
+# A LANCER A LA MAIN la premiere fois (Actions > Construire la carte > Run workflow),
+# APRES avoir lu « Avant le premier calcul » dans le README : la source « position »
+# envoie environ 660 000 requetes a GeoSAS.
+#
+# Le calcul est reparti en FRAGMENTS (un job chacun, 6 h maximum par job) puis assemble.
+# La source « demo » fabrique des donnees FICTIVES pour tester la chaine : elle ne
+# publie JAMAIS sur Pages (le jeu reste en artefact, 7 jours).
+name: Construire la carte
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Source des series journalieres"
+        type: choice
+        options: [position, demo]
+        default: position
+      mailles:
+        description: "Fichier de mailles (CSV lon,lat) ou demo:<pas_km>"
+        default: donnees_grille/mailles_safran.csv
+      annee_debut:
+        description: "Premiere annee"
+        default: "1959"
+      annee_fin:
+        description: "Derniere annee (vide = annee precedente)"
+        default: ""
+      fragments:
+        description: "Nombre de fragments (jobs)"
+        default: "20"
+      en_parallele:
+        description: "Fragments simultanes (menage le service : 4 recommande)"
+        default: "4"
+
+# Un seul calcul a la fois : deux calculs simultanes doubleraient la charge sur GeoSAS.
+concurrency:
+  group: construire-carte
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preparer:
+    runs-on: ubuntu-latest
+    outputs:
+      fragments: ${{ steps.liste.outputs.fragments }}
+    steps:
+      - id: liste
+        env:
+          N: ${{ inputs.fragments }}
+        run: |
+          if ! [[ "$N" =~ ^[0-9]+$ ]] || [ "$N" -lt 1 ] || [ "$N" -gt 256 ]; then
+            echo "fragments doit etre un entier entre 1 et 256 (recu : $N)"; exit 1
+          fi
+          echo "fragments=$(seq -s, 1 "$N" | sed 's/^/[/; s/$/]/')" >> "$GITHUB_OUTPUT"
+
+  fragment:
+    needs: preparer
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.en_parallele) }}
+      matrix:
+        fragment: ${{ fromJSON(needs.preparer.outputs.fragments) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+
+      - name: Calculer le fragment
+        env:
+          SOURCE: ${{ inputs.source }}
+          MAILLES: ${{ inputs.mailles }}
+          DEBUT: ${{ inputs.annee_debut }}
+          FIN: ${{ inputs.annee_fin }}
+          NF: ${{ inputs.fragments }}
+        run: |
+          Rscript outils/carte_cli.R fragment source="$SOURCE" mailles="$MAILLES" \
+            annee_debut="$DEBUT" annee_fin="$FIN" \
+            fragment=${{ matrix.fragment }} fragments="$NF" sortie=parts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fragment-${{ matrix.fragment }}
+          path: parts/
+          retention-days: 3
+
+  assembler:
+    needs: fragment
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fragment-*
+          merge-multiple: true
+          path: parts
+
+      - name: Assembler et verifier
+        env:
+          SOURCE: ${{ inputs.source }}
+          MAILLES: ${{ inputs.mailles }}
+          DEBUT: ${{ inputs.annee_debut }}
+          FIN: ${{ inputs.annee_fin }}
+        run: |
+          if [ "$SOURCE" = "demo" ]; then
+            TEXTE="DONNEES FICTIVES (jeu de démonstration, pas du climat)"
+          else
+            TEXTE="Réanalyse SAFRAN-ISBA (Météo-France), via GeoSAS INRAE"
+          fi
+          Rscript outils/carte_cli.R assembler source_texte="$TEXTE" mailles="$MAILLES" \
+            annee_debut="$DEBUT" annee_fin="$FIN" parts=parts sortie=public
+          Rscript outils/carte_cli.R verifier dossier=public
+          touch public/.nojekyll
+          {
+            echo "# Carte ClimaFor"
+            echo "Fichiers de donnees de l'onglet Carte de ClimaFor (aucune page a consulter ici)."
+          } > public/index.md
+
+      - if: ${{ inputs.source == 'demo' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jeu-demo-FICTIF
+          path: public/
+          retention-days: 7
+
+      - if: ${{ inputs.source != 'demo' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public/
+
+  publier:
+    # Jamais pour la source « demo » : des donnees fictives ne vont pas sur l'adresse publique.
+    if: ${{ inputs.source != 'demo' }}
+    needs: assembler
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verifier ce que verra le navigateur (CORS, compression)
+        continue-on-error: true
+        run: |
+          URL="${{ steps.deployment.outputs.page_url }}meta.json"
+          {
+            echo "### En-tetes de $URL"
+            echo '```'
+            curl -sSI -H "Origin: https://exemple.test" -H "Accept-Encoding: gzip" "$URL" | grep -iE '^(HTTP|access-control|content-type|content-encoding|cache-control)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

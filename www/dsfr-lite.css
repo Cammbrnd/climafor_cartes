@@ -1,0 +1,1406 @@
+/* =============================================================================
+   dsfr-lite.css — habillage inspiré du Système de Design de l'État (DSFR v1.11)
+   -----------------------------------------------------------------------------
+   Version 2 de l'interface. Le contenu, les calculs et les identifiants d'input
+   sont inchangés : seule la mise en scène évolue.
+
+   CE QUI CHANGE, ET POURQUOI
+   --------------------------
+   1. Les réglages quittent la BANDE HORIZONTALE pour un ONGLET ACCUEIL dédié.
+      La bande imposait un compromis permanent : soit elle occupait le haut de
+      page et repoussait les résultats, soit elle se repliait et l'utilisateur
+      perdait tout accès à ses réglages. Un onglet supprime le compromis, et
+      contrairement à un tiroir latéral il figure dans la navigation : il se
+      trouve sans avoir à deviner qu'il existe.
+
+   2. Les réglages sont numérotés 1-2 et le bouton d'action est ancré dans une
+      barre collante. On lit une procédure, pas un tableau de configuration.
+
+   3. Les réglages secondaires (plage affichée, fenêtre P - ETP, référence
+      personnalisée) sont repliés. Un débutant voit trois champs ; un habitué
+      déplie et retrouve les six.
+
+   4. Une seule barre d'application (marque + bouton Réglages) surmonte des
+      onglets collants. L'ancienne version empilait un en-tête de 110 px PUIS
+      une barre d'onglets : 170 px consommés avant la première information.
+
+   5. La duplication lieu/coordonnées/référence (bandeau du module bilan ET
+      récapitulatif de l'app) est résolue : une seule barre de contexte à
+      l'écran, le bandeau ne ressort qu'à l'impression.
+
+   RÈGLE TYPOGRAPHIQUE — inchangée, cinq tailles, jamais sous 14 px.
+     --t-xs  14px  mentions, aides, légendes         (plancher absolu)
+     --t-sm  16px  corps de texte, champs, boutons   (défaut)
+     --t-md  18px  titres de carte, valeurs d'indicateur
+     --t-lg  24px  titres de section
+     --t-xl  30px  titre de l'application
+
+   Organisation
+     1. Jetons                  2. Base et typographie
+     3. Barre et onglets        4. Tiroir de réglages
+     5. Contexte et synthèse    6. Cartes, grilles, graphiques
+     7. Formulaires et boutons  8. Alertes et états
+     9. Responsive              10. Impression
+   ========================================================================== */
+
+/* -- 1. Jetons ------------------------------------------------------------- */
+:root {
+  /* Couleurs primaires DSFR */
+  --cf-bleu:           #000091;
+  --cf-bleu-survol:    #1212FF;
+  --cf-bleu-pale:      #F5F5FE;
+
+  /* Neutres */
+  --cf-texte:          #1E1E1E;
+  --cf-texte-mention:  #5A5A5A;
+  --cf-fond:           #FFFFFF;
+  --cf-fond-alt:       #F6F6F6;
+  --cf-fond-contraste: #EEEEEE;
+  --cf-bordure:        #DDDDDD;
+  --cf-bordure-forte:  #929292;
+
+  /* Fonctionnelles */
+  --cf-succes:         #18753C;
+  --cf-succes-fond:    #E3FBE9;
+  --cf-attention:      #B34000;
+  --cf-attention-fond: #FFF4F3;
+  --cf-erreur:         #CE0500;
+  --cf-erreur-fond:    #FFF0F0;
+  --cf-info:           #0063CB;
+  --cf-info-fond:      #F0F4FF;
+
+  /* ÉCHELLE TYPOGRAPHIQUE — les cinq seules tailles autorisées */
+  --t-xs: 0.875rem;   /* 14px */
+  --t-sm: 1rem;       /* 16px */
+  --t-md: 1.125rem;   /* 18px */
+  --t-lg: 1.5rem;     /* 24px */
+  --t-xl: 1.875rem;   /* 30px */
+
+  /* Espacements — échelle de 4 px */
+  --e-1: 4px;  --e-2: 8px;  --e-3: 12px;
+  --e-4: 16px; --e-6: 24px; --e-8: 32px;
+
+  /* Élévation. Le DSFR proscrit les arrondis décoratifs, pas les ombres :
+     elles servent ici à dire ce qui flotte au-dessus du reste. */
+  --cf-ombre-barre:  0 1px 0 rgba(0, 0, 0, .10);
+
+  /* Hauteurs des éléments collants — servent aux calculs de position */
+  --cf-h-onglets:  48px;
+
+  /* Marianne est la police de l'État. Repli sur la pile système si les
+     fichiers ne sont pas déposés dans www/fonts (voir README). */
+  --cf-police: "Marianne", -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, Arial, sans-serif;
+
+  --cf-largeur-max: 1440px;
+}
+
+/* -- 2. Base --------------------------------------------------------------- */
+* { box-sizing: border-box; }
+
+/* CORRECTIF INDISPENSABLE — NE PAS SUPPRIMER.
+   Bootstrap 3, chargé par bootstrapPage(), applique `html { font-size: 10px }`.
+   Toute l'échelle typographique ci-dessus étant exprimée en rem, --t-sm ne
+   valait plus 16 px mais 10 px, et --t-xs 8,75 px : l'application entière
+   s'affichait à 62,5 % de la taille prévue, alors que la maquette HTML — qui
+   ne charge pas Bootstrap — était juste. D'où l'écart entre les deux.
+   On rétablit la base à 100 %, c'est-à-dire à la taille choisie par
+   l'utilisateur dans son navigateur : écrire 16px en dur ignorerait ce
+   réglage, qui est un besoin d'accessibilité réel. */
+html {
+  font-size: 100%;
+  scroll-behavior: smooth;
+  scroll-padding-top: 130px;
+}
+
+body {
+  font-family: var(--cf-police);
+  color: var(--cf-texte);
+  background: var(--cf-fond-alt);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+  margin: 0;
+}
+
+h1, h2, h3, h4 { font-weight: 700; color: var(--cf-texte); margin-top: 0; }
+h1 { font-size: var(--t-xl); line-height: 1.2; }
+h2 { font-size: var(--t-lg); line-height: 1.3; }
+h3 { font-size: var(--t-md); line-height: 1.35; }
+h4 { font-size: var(--t-sm); line-height: 1.4; }
+
+p { margin: 0 0 var(--e-3); }
+
+a { color: var(--cf-bleu); text-underline-offset: 2px; }
+a:hover { color: var(--cf-bleu-survol); }
+
+/* Focus visible : exigence d'accessibilité du DSFR, jamais supprimée */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid #0A76F6;
+  outline-offset: 2px;
+}
+
+/* Lien d'évitement : premier élément focusable, invisible tant qu'il n'a pas
+   le focus. Attendu par le RGAA sur une interface à navigation répétée. */
+.cf-evitement {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--cf-bleu); color: #FFF; padding: var(--e-2) var(--e-4);
+  font-weight: 700; text-decoration: none;
+}
+.cf-evitement:focus { left: 0; color: #FFF; }
+
+/* Textes secondaires — au plancher de 14 px, pas en dessous */
+.cf-mention { color: var(--cf-texte-mention); font-size: var(--t-xs); }
+.cf-aide {
+  color: var(--cf-texte-mention);
+  font-size: var(--t-xs);
+  line-height: 1.45;
+  margin-top: var(--e-2);
+}
+.cf-chapeau {
+  font-size: var(--t-sm);
+  color: var(--cf-texte);
+  max-width: 72ch;
+  margin-bottom: var(--e-4);
+}
+
+.cf-titre-section {
+  font-size: var(--t-lg);
+  margin: 0 0 var(--e-4);
+  padding-bottom: var(--e-2);
+  border-bottom: 1px solid var(--cf-bordure);
+}
+
+.cf-liste { padding-left: 1.25rem; margin: 0 0 var(--e-3); }
+.cf-liste li { margin-bottom: var(--e-2); }
+.cf-liste--refs li { font-size: var(--t-xs); color: var(--cf-texte-mention); }
+
+.cf-liste-def dt { font-weight: 700; margin-top: var(--e-3); }
+.cf-liste-def dd { margin: var(--e-1) 0 0; }
+
+/* Longueur de ligne : au-delà d'environ 90 caractères, l'œil perd le début de
+   la ligne suivante. La contrainte porte sur le texte, pas sur les cartes,
+   pour que les graphiques gardent toute la largeur disponible. */
+.cf-carte p, .cf-carte li, .cf-liste-def dd, .cf-details__corps p { max-width: 92ch; }
+
+.cf-conteneur {
+  max-width: var(--cf-largeur-max);
+  margin: 0 auto;
+  padding: var(--e-6) var(--e-4) var(--e-8);
+}
+
+/* Icônes en ligne (SVG injectés par cf_icone()) */
+.cf-icone {
+  width: 1.15em; height: 1.15em;
+  flex: 0 0 auto;
+  vertical-align: -0.18em;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* =============================================================================
+   3. Barre d'application et onglets
+   -----------------------------------------------------------------------------
+   Une seule barre, collante, haute de 60 px : la marque à gauche, l'accès aux
+   réglages à droite. Les onglets forment une deuxième bande collante juste en
+   dessous, de sorte que la navigation reste atteignable en bas de page — un
+   bilan complet dépasse quatre écrans de haut.
+   ========================================================================== */
+
+/* La barre n'est PAS collante : sa hauteur dépend de celle des logos, et la
+   figer dans un jeton pour en décaler les onglets d'autant serait un couplage
+   fragile. Seuls les onglets restent collants — c'est eux dont on a besoin en
+   bas de page, pas le bloc-marque. */
+.cf-barre {
+  background: var(--cf-fond);
+  border-bottom: 1px solid var(--cf-bordure);
+}
+.cf-barre__interieur {
+  max-width: var(--cf-largeur-max);
+  margin: 0 auto;
+  padding: var(--e-3) var(--e-4);
+  display: flex; align-items: center;
+  gap: var(--e-4); flex-wrap: wrap;
+}
+
+/* Bloc-marque officiel.
+   Le liseré bleu-blanc-rouge dessiné en CSS a été retiré : dès lors que le
+   vrai bloc-marque « République française » est présent, le reproduire en
+   bordure décorative ferait doublon — et le DSFR interdit d'en fabriquer une
+   variante. On reprend l'ordonnancement officiel : bloc-marque, filet, logo
+   de l'opérateur, filet, nom du service. */
+.cf-entete-marques {
+  display: flex; align-items: center; gap: var(--e-4);
+  flex: 0 0 auto;
+}
+.cf-logo { display: block; width: auto; }
+.cf-logo--rf        { height: 68px; }
+.cf-logo--operateur { height: 48px; padding-left: var(--e-4);
+                      border-left: 1px solid var(--cf-bordure); }
+
+.cf-marque {
+  padding-left: var(--e-4);
+  border-left: 1px solid var(--cf-bordure);
+  min-width: 0;
+}
+.cf-marque__organisme {
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.03em;
+  text-transform: uppercase; color: var(--cf-texte-mention);
+  line-height: 1.2;
+}
+/* 30 px : c'est le titre de l'application, le plus gros texte de l'écran.
+   Le rétrograder à 24 px pour gagner de la hauteur de barre le faisait passer
+   pour un simple titre de section. */
+.cf-marque__titre {
+  font-size: var(--t-xl); font-weight: 700; margin: 0; line-height: 1.15;
+}
+.cf-marque__soustitre {
+  font-size: var(--t-xs); color: var(--cf-texte-mention);
+  line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 60ch;
+}
+
+/* -- Onglets --------------------------------------------------------------- */
+/* ALIGNEMENT DES ONGLETS SUR LE CONTENU.
+   Le fond et le filet de la barre d'onglets doivent occuper toute la largeur
+   de la fenêtre, mais les onglets eux-mêmes doivent commencer exactement où
+   commence le contenu — c'est-à-dire au bord du conteneur centré de 1440 px.
+   D'où ce rembourrage calculé : la moitié de la marge résiduelle, plus le
+   rembourrage normal du conteneur. Le max() évite une valeur négative sur les
+   écrans plus étroits que le conteneur. */
+/* SÉLECTEUR — attention à la structure réelle.
+   tabsetPanel() ne pose pas le <ul> directement dans son conteneur : il
+   l'enveloppe dans un <div class="tabbable">. Un sélecteur en enfant direct
+   `.cf-onglets > .nav-tabs` ne l'atteignait donc jamais dans l'application,
+   alors qu'il fonctionnait dans la maquette écrite à la main — l'alignement
+   et le comportement collant ne s'appliquaient que dans cette dernière.
+   Les deux structures sont désormais couvertes. */
+.cf-onglets > .nav-tabs,
+.cf-onglets > .tabbable > .nav-tabs {
+  position: sticky; top: 0; z-index: 55;
+  display: flex; flex-wrap: nowrap;
+  overflow-x: auto; overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--cf-bordure);
+  background: var(--cf-fond);
+  padding-left:  max(var(--e-4), calc((100% - var(--cf-largeur-max)) / 2 + var(--e-4)));
+  padding-right: max(var(--e-4), calc((100% - var(--cf-largeur-max)) / 2 + var(--e-4)));
+  margin: 0;
+  box-shadow: var(--cf-ombre-barre);
+}
+.cf-onglets > .nav-tabs::-webkit-scrollbar,
+.cf-onglets > .tabbable > .nav-tabs::-webkit-scrollbar { display: none; }
+.cf-onglets > .nav-tabs > li,
+.cf-onglets > .tabbable > .nav-tabs > li { float: none; flex: 0 0 auto; }
+
+/* Remises à zéro que Bootstrap assure dans l'application mais que la maquette
+   n'a pas : sans elles, la liste d'onglets s'affiche à puces et les libellés
+   soulignés. La feuille doit tenir debout seule — c'est ce qui garantit que la
+   maquette montre bien ce que verra l'utilisateur. */
+.cf-onglets .nav-tabs { list-style: none; }
+.cf-onglets .nav-tabs > li { list-style: none; }
+
+.nav-tabs > li > a,
+.nav-tabs .nav-link {
+  text-decoration: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: var(--cf-texte) !important;
+  font-size: var(--t-sm);
+  font-weight: 500;
+  padding: var(--e-3) var(--e-4) !important;
+  background: transparent !important;
+  margin: 0 !important;
+  display: flex; align-items: center; gap: var(--e-2);
+  white-space: nowrap;
+  min-height: var(--cf-h-onglets);
+}
+.nav-tabs > li.active > a,
+.nav-tabs .nav-link.active {
+  color: var(--cf-bleu) !important;
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 0 var(--cf-bleu);
+  background: var(--cf-fond) !important;
+}
+.nav-tabs > li > a:hover { background: var(--cf-fond-alt) !important; }
+
+/* =============================================================================
+   4. Écran d'accueil et barre d'action
+   -----------------------------------------------------------------------------
+   L'accueil est un onglet à part entière : on y désigne le point et la période,
+   puis « Lancer l'analyse » bascule sur l'onglet Bilan. Le parcours est
+   linéaire — on ne configure pas et on ne lit pas au même endroit.
+
+   Le tiroir latéral de la version précédente a été retiré. Il résolvait un vrai
+   problème (garder les réglages accessibles sans amputer la page de résultats),
+   mais au prix d'un mécanisme que rien ne signale à l'écran : un panneau qui
+   glisse depuis le bord n'a pas d'existence dans la barre de navigation. Un
+   onglet, si. Sur mobile en particulier, « revenir à l'accueil » se comprend
+   sans apprentissage, là où « rouvrir le tiroir » suppose de savoir qu'il
+   existe.
+   ========================================================================== */
+
+/* Deux colonnes dès qu'il y a la place : « Où ? » et « Quand ? » se lisent
+   côte à côte, et l'ensemble des réglages tient dans un écran. */
+.cf-accueil-grille {
+  display: grid; gap: var(--e-4);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+@media (min-width: 1000px) {
+  .cf-accueil-grille { grid-template-columns: 1fr 1fr; }
+}
+
+/* Barre d'action collante en bas de l'accueil. L'action principale reste
+   visible pendant qu'on fait défiler la carte ou les réglages avancés :
+   sur téléphone, le bouton se trouvait sinon deux écrans plus bas. */
+.cf-barre-action {
+  position: sticky; bottom: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--e-4); flex-wrap: wrap;
+  background: var(--cf-fond);
+  border: 1px solid var(--cf-bordure);
+  border-top: 3px solid var(--cf-bleu);
+  padding: var(--e-3) var(--e-4);
+  margin-top: var(--e-4);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, .08);
+}
+.cf-barre-action__etat { flex: 1 1 260px; min-width: 0; }
+.cf-barre-action__etat .cf-etat { margin-top: 0; border: none; padding: 0; background: none; }
+.cf-barre-action > .cf-btn { flex: 0 0 auto; min-width: 260px; }
+
+/* Étapes numérotées. Le numéro n'est pas décoratif : il dit qu'il y a un
+   ordre, et combien il reste à faire. */
+.cf-etape {
+  display: flex; align-items: center; gap: var(--e-2);
+  margin: 0 0 var(--e-3);
+}
+.cf-etape__num {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--cf-bleu); color: #FFFFFF;
+  font-size: var(--t-xs); font-weight: 700;
+}
+.cf-etape__titre { font-size: var(--t-sm); font-weight: 700; }
+.cf-etape__note {
+  font-size: var(--t-xs); color: var(--cf-texte-mention); font-weight: 400;
+}
+
+/* Panneaux internes, utilisés par les modules de réglage */
+.cf-panneau { border: 1px solid var(--cf-bordure); background: var(--cf-fond); }
+.cf-panneau--simple { border: none; }
+.cf-panneau__corps { padding: var(--e-3); }
+.cf-panneau--simple > .cf-panneau__corps { padding: 0; }
+
+/* =============================================================================
+   5. Barre de contexte et synthèse
+   ========================================================================== */
+
+/* Rappelle en permanence CE QUI est analysé. Sans elle, on parcourt quatre
+   écrans de graphiques sans plus savoir de quel point ni de quelle référence
+   il s'agit — première cause d'erreur d'interprétation. */
+.cf-contexte {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--e-4); flex-wrap: wrap;
+  background: var(--cf-bleu); color: #FFFFFF;
+  padding: var(--e-3) var(--e-4);
+  margin-bottom: var(--e-6);
+}
+.cf-contexte__lieu {
+  display: flex; align-items: center; gap: var(--e-2);
+  font-size: var(--t-md); font-weight: 700;
+}
+.cf-contexte__meta { font-size: var(--t-xs); color: #DADAF5; }
+.cf-contexte__meta b { color: #FFFFFF; font-weight: 700; }
+
+/* Bandeau d'identification : réservé au papier. À l'écran il ferait doublon
+   avec la barre de contexte ci-dessus. */
+.cf-bandeau { display: none; }
+.cf-bandeau__titre { font-size: var(--t-lg); margin: 0 0 var(--e-1); }
+.cf-bandeau__meta { font-size: var(--t-xs); color: var(--cf-texte-mention); }
+
+/* -- Indicateurs clés ------------------------------------------------------ */
+.cf-kpis {
+  display: grid; gap: var(--e-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: var(--e-6);
+}
+.cf-kpi {
+  background: var(--cf-fond);
+  border: 1px solid var(--cf-bordure);
+  border-left: 4px solid var(--cf-texte-mention);
+  padding: var(--e-3);
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.cf-kpi--ok     { border-left-color: var(--cf-succes); }
+.cf-kpi--alerte { border-left-color: var(--cf-erreur); }
+/* Ecart faible, ou indicateur sans cote favorable (gel, neige) : gris. */
+.cf-kpi--neutre { border-left-color: var(--cf-bordure-forte); }
+.cf-kpi__libelle {
+  font-size: var(--t-xs); color: var(--cf-texte-mention);
+  line-height: 1.35; min-height: 2.7em;
+}
+.cf-kpi__valeur {
+  font-size: var(--t-lg); font-weight: 700; margin: var(--e-1) 0;
+  line-height: 1.15; font-variant-numeric: tabular-nums;
+}
+.cf-kpi__ecart {
+  font-size: var(--t-xs); font-weight: 700;
+  display: flex; align-items: center; gap: var(--e-1);
+}
+.cf-kpi--alerte .cf-kpi__ecart { color: var(--cf-erreur); }
+.cf-kpi--ok .cf-kpi__ecart     { color: var(--cf-succes); }
+
+/* =============================================================================
+   6. Cartes, grilles, graphiques
+   ========================================================================== */
+.cf-carte {
+  background: var(--cf-fond);
+  border: 1px solid var(--cf-bordure);
+  border-radius: 0;              /* le DSFR proscrit les arrondis décoratifs */
+  padding: var(--e-4);
+  margin-bottom: var(--e-4);
+}
+.cf-carte__entete {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--e-3); flex-wrap: wrap;
+  margin-bottom: var(--e-3);
+}
+.cf-carte__titre { font-size: var(--t-md); margin: 0; }
+.cf-carte__actions { display: flex; gap: var(--e-2); align-items: center; }
+
+/* Sélecteur d'année, dans l'en-tête de certaines cartes. Il est compact et
+   aligné sur le titre : c'est un réglage de lecture, pas un champ de
+   formulaire, il ne doit pas peser autant qu'une saisie de l'accueil. */
+.cf-carte__reglage { display: flex; align-items: center; gap: var(--e-2); }
+.cf-carte__reglage-lib {
+  font-size: var(--t-xs); font-weight: 700; color: var(--cf-texte-mention);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.cf-carte__reglage .shiny-input-container { margin-bottom: 0; width: auto !important; }
+.cf-carte__reglage select {
+  min-height: 36px; padding: var(--e-1) var(--e-2) !important;
+  font-size: var(--t-xs) !important;
+}
+.cf-carte__graphe { min-height: 200px; }
+/* Le widget plotly doit occuper toute la largeur de la carte : sans cela il
+   conserve la largeur qu'il avait au moment de sa construction, qui peut
+   dater d'avant un changement d'onglet ou un redimensionnement. */
+.cf-carte__graphe .js-plotly-plot,
+.cf-carte__graphe .plotly,
+.cf-carte__graphe .plot-container { width: 100% !important; }
+
+/* Sous-titre du graphique, replacé sous celui-ci : ggplotly ne le conserve
+   pas, et il porte des informations de lecture (seuils retenus, sens des
+   couleurs) sans lesquelles plusieurs graphiques s'interprètent de travers. */
+.cf-sous-titre {
+  margin-top: var(--e-2);
+  padding-left: var(--e-2);
+  border-left: 2px solid var(--cf-bordure);
+}
+
+/* Notes sous un graphique ou sous la synthese : ce qui nuance la lecture
+   (annee incomplete, jours sans mesure, source de l'ETP, tendance). */
+.cf-notes {
+  margin: var(--e-2) 0 0; padding: 0 0 0 var(--e-4);
+  font-size: var(--t-xs); color: var(--cf-texte-mention); line-height: 1.45;
+}
+.cf-notes li { margin: 0 0 var(--e-1); }
+
+/* Texte pour lecteur d'ecran seulement. */
+.cf-sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Tableau des valeurs d'un graphique (alternative non visuelle). */
+.cf-tableau-defile { max-height: 320px; overflow: auto; }
+.cf-tableau {
+  border-collapse: collapse; width: 100%;
+  font-size: var(--t-xs); font-variant-numeric: tabular-nums;
+}
+.cf-tableau th, .cf-tableau td {
+  padding: var(--e-1) var(--e-2); text-align: right;
+  border-bottom: 1px solid var(--cf-bordure); white-space: nowrap;
+}
+.cf-tableau th {
+  position: sticky; top: 0; background: var(--cf-fond-alt);
+  font-weight: 700; text-align: right;
+}
+.cf-tableau th:first-child, .cf-tableau td:first-child { text-align: left; }
+
+/* Les exports sont utiles mais secondaires : discrets au repos, francs au
+   survol. Ils ne doivent pas concurrencer le titre du graphique. */
+.cf-lien-outil {
+  display: inline-flex; align-items: center; gap: var(--e-1);
+  font-size: var(--t-xs); font-weight: 700;
+  color: var(--cf-texte-mention);
+  text-decoration: none;
+  padding: var(--e-1) var(--e-2);
+  border: 1px solid var(--cf-bordure);
+}
+.cf-lien-outil:hover {
+  color: var(--cf-bleu); border-color: var(--cf-bleu);
+  background: var(--cf-bleu-pale); text-decoration: none;
+}
+
+.cf-bloc { margin-bottom: var(--e-4); }
+
+/* Sections thématiques : un titre tous les deux ou trois graphiques donne des
+   points de repère dans une page qui en compte quatorze. */
+/* Pas de scroll-margin-top ici : html porte déjà scroll-padding-top (130 px). Les
+   deux s'additionnaient (260 px) et le titre atterrissait à mi-écran. */
+.cf-famille { margin: 0 0 var(--e-8); }
+.cf-famille__titre {
+  font-size: var(--t-lg); margin: 0 0 var(--e-3);
+  padding-bottom: var(--e-2);
+  border-bottom: 2px solid var(--cf-bleu);
+  display: flex; align-items: baseline; gap: var(--e-2); flex-wrap: wrap;
+}
+.cf-famille__compte {
+  font-size: var(--t-xs); font-weight: 400; color: var(--cf-texte-mention);
+}
+
+.cf-grille-graphes { display: grid; gap: var(--e-4); grid-template-columns: 1fr; }
+.cf-grille-parametres {
+  display: grid; gap: var(--e-4);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+}
+
+.cf-commentaire {
+  background: var(--cf-fond-alt);
+  border-left: 4px solid var(--cf-bleu);
+  padding: var(--e-3);
+  margin: var(--e-3) 0 0;
+  font-size: var(--t-sm);
+}
+
+.cf-details {
+  border-top: 1px solid var(--cf-bordure);
+  margin-top: var(--e-3); padding-top: var(--e-2);
+}
+.cf-details > summary {
+  cursor: pointer; font-weight: 700; font-size: var(--t-sm);
+  color: var(--cf-bleu); padding: var(--e-2) 0; list-style: none;
+  display: flex; align-items: center; gap: var(--e-2);
+}
+.cf-details > summary::-webkit-details-marker { display: none; }
+.cf-details__corps { font-size: var(--t-sm); padding-bottom: var(--e-2); }
+
+/* Chevrons des dépliants : DESSINÉS EN CSS, pas écrits.
+   Un caractère comme U+25B8 dépend de la police installée, se lit « triangle
+   noir pointant vers la droite » dans un lecteur d'écran, et n'a rien à faire
+   dans une interface de l'État. Trois bordures suffisent, la rotation dit
+   l'état ouvert. */
+.cf-details > summary::before,
+.cf-repli > summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 0; height: 0;
+  border-left: 6px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform .15s ease;
+}
+.cf-details[open] > summary::before,
+.cf-repli[open] > summary::before { transform: rotate(90deg); }
+
+/* Repli des réglages secondaires */
+.cf-repli {
+  border: 1px solid var(--cf-bordure);
+  background: var(--cf-fond-alt);
+  margin-top: var(--e-3);
+}
+.cf-repli > summary {
+  cursor: pointer; list-style: none;
+  padding: var(--e-2) var(--e-3);
+  font-size: var(--t-xs); font-weight: 700; color: var(--cf-bleu);
+  display: flex; align-items: center; gap: var(--e-2);
+  min-height: 40px;
+}
+.cf-repli > summary::-webkit-details-marker { display: none; }
+.cf-repli__corps {
+  padding: var(--e-3); background: var(--cf-fond);
+  border-top: 1px solid var(--cf-bordure);
+}
+
+/* -- Filtre thématique, en pastilles --------------------------------------- */
+.cf-filtres {
+  background: var(--cf-fond); border: 1px solid var(--cf-bordure);
+  padding: var(--e-3) var(--e-4); margin-bottom: var(--e-6);
+}
+.cf-filtres__entete {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--e-3); flex-wrap: wrap; margin-bottom: var(--e-2);
+}
+.cf-filtres__legende {
+  font-size: var(--t-xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--cf-texte-mention);
+}
+.cf-filtres__raccourcis { display: flex; gap: var(--e-4); }
+.cf-filtres__raccourcis a { font-size: var(--t-xs); font-weight: 700; }
+
+/* La case à cocher reste visible : le motif fonctionne même si le navigateur
+   ne gère pas :has(). Ce dernier n'ajoute qu'un remplissage de confort. */
+.cf-chips .shiny-options-group { display: flex; flex-wrap: wrap; gap: var(--e-2); }
+/* Le libellé du groupe est déjà écrit dans .cf-filtres__legende : on le masque
+   VISUELLEMENT, sans display:none, pour qu'il reste le nom accessible du
+   groupe de cases dans les technologies d'assistance. */
+.cf-chips .shiny-input-container > label {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.cf-chips .checkbox-inline {
+  display: inline-flex !important; align-items: center; gap: var(--e-2);
+  margin: 0 !important; padding: var(--e-2) var(--e-3);
+  min-height: 40px;
+  border: 1px solid var(--cf-bordure-forte);
+  background: var(--cf-fond);
+  font-size: var(--t-xs) !important; font-weight: 500 !important;
+  cursor: pointer;
+}
+.cf-chips .checkbox-inline input[type="checkbox"] { position: static; margin: 0; }
+.cf-chips .checkbox-inline:hover { background: var(--cf-bleu-pale); }
+.cf-chips .checkbox-inline:has(input:checked) {
+  background: var(--cf-bleu-pale);
+  border-color: var(--cf-bleu);
+  color: var(--cf-bleu);
+  font-weight: 700 !important;
+}
+
+/* =============================================================================
+   7. Formulaires et boutons
+   ========================================================================== */
+.form-control, .selectize-input, select,
+input[type="text"], input[type="number"], textarea {
+  border: 1px solid var(--cf-bordure-forte) !important;
+  border-bottom: 2px solid var(--cf-texte) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: var(--cf-fond-contraste) !important;
+  font-size: var(--t-sm) !important;
+  height: auto !important;
+  min-height: 40px;
+  padding: var(--e-2) var(--e-3) !important;
+}
+
+/* Le champ de saisie interne de selectize ne doit pas hériter du cadre des
+   champs de formulaire : il apparaissait comme une petite case vide à côté de
+   la valeur sélectionnée. */
+.selectize-input > input[type="text"] {
+  border: none !important; background: transparent !important;
+  min-height: 0 !important; padding: 0 !important; box-shadow: none !important;
+}
+
+/* Toutes les étiquettes de champ à la même taille : c'est le premier facteur
+   de désordre typographique dans une interface Shiny. */
+.control-label,
+.shiny-input-container > label,
+.shiny-input-container .control-label,
+label {
+  font-weight: 700 !important;
+  font-size: var(--t-sm) !important;
+  color: var(--cf-texte) !important;
+  margin-bottom: var(--e-1) !important;
+}
+.shiny-input-container { margin-bottom: var(--e-3); width: 100% !important; }
+
+/* Cases à cocher et boutons radio : le libellé n'est pas un titre */
+.checkbox label, .radio label,
+.checkbox-inline, .radio-inline {
+  font-weight: 400 !important;
+  font-size: var(--t-sm) !important;
+}
+.checkbox, .radio { margin: var(--e-1) 0; }
+
+/* Radios et cases en liste cliquable : la cible tactile passe de 16 px de
+   texte à toute la largeur de la ligne. */
+.cf-choix .radio, .cf-choix .checkbox { margin: 0; }
+.cf-choix .radio label, .cf-choix .checkbox label {
+  display: block; width: 100%;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--cf-bordure);
+  border-bottom: none;
+  cursor: pointer;
+  min-height: 44px;
+}
+.cf-choix .radio:last-child label, .cf-choix .checkbox:last-child label {
+  border-bottom: 1px solid var(--cf-bordure);
+}
+.cf-choix .radio label:hover, .cf-choix .checkbox label:hover { background: var(--cf-bleu-pale); }
+
+/* Liste d'indicateurs du rapport : plusieurs colonnes dès qu'il y a la place */
+.cf-choix--colonnes .shiny-options-group {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
+}
+.cf-choix--colonnes .checkbox label { border-bottom: 1px solid var(--cf-bordure); }
+
+.cf-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--e-2);
+  border: none; border-radius: 0; font-weight: 500;
+  font-family: inherit; font-size: var(--t-sm);
+  padding: var(--e-2) var(--e-4);
+  min-height: 40px;
+  cursor: pointer; white-space: nowrap;
+}
+.cf-btn--principal { background: var(--cf-bleu); color: #FFFFFF; }
+.cf-btn--principal:hover { background: var(--cf-bleu-survol); color: #FFFFFF; }
+.cf-btn--sec {
+  background: transparent; color: var(--cf-bleu);
+  box-shadow: inset 0 0 0 1px var(--cf-bleu);
+}
+.cf-btn--sec:hover { background: var(--cf-bleu-pale); color: var(--cf-bleu); }
+.cf-btn--clair {
+  background: transparent; color: #FFFFFF;
+  box-shadow: inset 0 0 0 1px #FFFFFF;
+}
+.cf-btn--clair:hover { background: rgba(255, 255, 255, .12); color: #FFFFFF; }
+.cf-btn--large { width: 100%; min-height: 48px; font-size: var(--t-md); font-weight: 700; }
+.btn-default, .btn { font-size: var(--t-sm); border-radius: 0; }
+
+/* Deux champs côte à côte, qui repassent en colonne quand c'est trop étroit */
+.cf-duo {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--e-3);
+}
+.cf-duo > * { margin-bottom: 0 !important; }
+
+/* Champ + bouton sur une ligne */
+.cf-champ-bouton { display: flex; gap: var(--e-2); align-items: stretch; }
+.cf-champ-bouton > .shiny-input-container { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+.cf-champ-bouton .form-control { width: 100%; min-width: 0; }
+.cf-champ-bouton > .cf-btn { flex: 0 0 auto; }
+
+.cf-champ { margin-bottom: var(--e-4); }
+.cf-champ .shiny-input-container { margin-bottom: var(--e-1); }
+
+/* Curseurs (ion.rangeSlider) alignés sur la charte */
+.irs--shiny .irs-bar, .irs--shiny .irs-from, .irs--shiny .irs-to,
+.irs--shiny .irs-single { background: var(--cf-bleu); }
+.irs--shiny .irs-from, .irs--shiny .irs-to, .irs--shiny .irs-single {
+  border-radius: 0; font-size: var(--t-xs);
+}
+.irs--shiny .irs-min, .irs--shiny .irs-max { font-size: var(--t-xs); }
+.irs--shiny .irs-handle { border: 2px solid var(--cf-bleu); }
+
+/* =============================================================================
+   8. Alertes, états, résultats de recherche
+   ========================================================================== */
+.cf-alerte {
+  padding: var(--e-3); margin: var(--e-3) 0;
+  border-left: 4px solid; font-size: var(--t-sm);
+}
+.cf-alerte--info      { border-color: var(--cf-info);      background: var(--cf-info-fond); }
+.cf-alerte--attention { border-color: var(--cf-attention); background: var(--cf-attention-fond); }
+.cf-alerte--erreur    { border-color: var(--cf-erreur);    background: var(--cf-erreur-fond); }
+.cf-alerte__titre { font-weight: 700; display: block; margin-bottom: var(--e-1); }
+.cf-alerte ul { margin: var(--e-2) 0 0; padding-left: 1.2rem; }
+.cf-alerte li { font-size: var(--t-xs); margin-bottom: var(--e-1); }
+
+/* État de sélection, sous le panneau de localisation */
+.cf-etat {
+  display: flex; flex-direction: column;
+  padding: var(--e-2) var(--e-3);
+  border: 1px solid var(--cf-bordure);
+  font-size: var(--t-sm);
+  margin-top: var(--e-3);
+}
+.cf-etat--attente {
+  color: var(--cf-texte-mention);
+  border-style: dashed;
+  background: var(--cf-fond-alt);
+}
+.cf-etat--ok { background: var(--cf-succes-fond); border-color: var(--cf-succes); }
+.cf-etat__titre { font-weight: 700; display: flex; align-items: center; gap: var(--e-2); }
+.cf-etat__detail { font-size: var(--t-xs); color: var(--cf-texte-mention); }
+
+/* Résultats de recherche de commune */
+.cf-resultats {
+  border: 1px solid var(--cf-bordure);
+  background: var(--cf-fond);
+  max-height: 230px; overflow-y: auto;
+  margin-top: var(--e-2);
+}
+.cf-resultat {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: var(--e-2) var(--e-3);
+  min-height: 44px;
+  border-bottom: 1px solid var(--cf-fond-alt);
+  color: var(--cf-texte); text-decoration: none;
+  font-size: var(--t-sm);
+}
+.cf-resultat:hover { background: var(--cf-bleu-pale); color: var(--cf-bleu); text-decoration: none; }
+.cf-resultat:last-child { border-bottom: none; }
+.cf-resultat__meta { font-size: var(--t-xs); color: var(--cf-texte-mention); }
+
+.leaflet-container { border: 1px solid var(--cf-bordure); }
+
+/* -- Pied de page ---------------------------------------------------------- */
+.cf-pied {
+  background: var(--cf-fond);
+  border-top: 2px solid var(--cf-bleu);
+  padding: var(--e-6) var(--e-4);
+  margin-top: var(--e-8);
+  font-size: var(--t-xs); color: var(--cf-texte-mention);
+}
+.cf-pied__interieur { max-width: var(--cf-largeur-max); margin: 0 auto; }
+.cf-pied p { margin-bottom: var(--e-2); max-width: 100ch; }
+
+/* =============================================================================
+   8 bis. Localisation, source des données, qualité (v4)
+   ========================================================================== */
+
+/* -- Localisation : un geste, le reste à un clic ------------------------------- */
+.cf-loc > * + * { margin-top: var(--e-3); }
+.cf-loc .cf-resultats { margin-top: var(--e-2); }
+.cf-btn--pleine { width: 100%; }
+.cf-loc .cf-repli { margin-top: var(--e-2); }
+.cf-loc .cf-repli > summary .cf-icone { width: 18px; height: 18px; }
+.cf-loc .cf-etat { margin-top: 0; }
+
+/* -- Pastilles de qualité --------------------------------------------------------
+   Le niveau est écrit ET précédé d'un symbole différent par niveau : la couleur
+   seule ne se lit pas en plein soleil, ni pour un daltonien. */
+.cf-badge {
+  display: inline-flex; align-items: center; gap: var(--e-1);
+  padding: 2px var(--e-2);
+  font-size: var(--t-xs); font-weight: 700; line-height: 1.4;
+  border: 1px solid; white-space: nowrap;
+}
+.cf-badge--n1 { color: var(--cf-succes);    background: var(--cf-succes-fond);    border-color: var(--cf-succes); }
+.cf-badge--n2 { color: #0B5A28;             background: #F1FAF3;                  border-color: #0B5A28; }
+.cf-badge--n3 { color: var(--cf-attention); background: #FFF6EC;                  border-color: var(--cf-attention); }
+.cf-badge--n4 { color: var(--cf-erreur);    background: var(--cf-erreur-fond);    border-color: var(--cf-erreur); }
+.cf-badge--neutre { color: var(--cf-info);  background: var(--cf-info-fond);      border-color: var(--cf-info); }
+
+/* -- Carte « Source des données » --------------------------------------------------- */
+.cf-source {
+  margin-top: var(--e-4);
+  border: 1px solid var(--cf-bordure);
+  border-left: 4px solid var(--cf-bleu);
+  background: var(--cf-bleu-pale);
+  padding: var(--e-3);
+}
+.cf-source__titre {
+  display: flex; align-items: center; gap: var(--e-2);
+  font-size: var(--t-xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--cf-texte-mention);
+  margin-bottom: var(--e-2);
+}
+.cf-source__titre .cf-icone { width: 18px; height: 18px; }
+.cf-source__nom {
+  display: flex; align-items: center; gap: var(--e-2); flex-wrap: wrap;
+  font-size: var(--t-md); font-weight: 700; line-height: 1.3;
+}
+.cf-source__meta { font-size: var(--t-xs); color: var(--cf-texte-mention); margin-top: var(--e-1); }
+.cf-source__pourquoi {
+  font-size: var(--t-xs); margin-top: var(--e-2); padding-left: var(--e-2);
+  border-left: 3px solid var(--cf-attention);
+}
+.cf-source__note { margin-top: var(--e-2); }
+.cf-source .cf-aide { margin-top: var(--e-2); }
+.cf-source .cf-repli { background: var(--cf-fond); }
+
+.cf-chips-info { display: flex; flex-wrap: wrap; gap: var(--e-1) var(--e-2); margin-top: var(--e-2); }
+.cf-chip-info {
+  font-size: var(--t-xs); padding: 1px var(--e-2);
+  background: var(--cf-fond); border: 1px solid var(--cf-bordure);
+}
+
+/* Choix de la source : chaque ligne est une cible tactile entière */
+.cf-source .radio { margin: 0; }
+.cf-source .radio label {
+  display: block; width: 100%; padding: var(--e-2) var(--e-2) var(--e-2) 36px;
+  border: 1px solid var(--cf-bordure); border-bottom: none;
+  min-height: 44px; cursor: pointer; position: relative;
+}
+.cf-source .radio:last-child label { border-bottom: 1px solid var(--cf-bordure); }
+.cf-source .radio label:hover { background: var(--cf-bleu-pale); }
+.cf-source .radio input[type="radio"] { position: absolute; left: var(--e-3); top: 14px; margin: 0; }
+.cf-source__opt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-1) var(--e-2); }
+.cf-source__optmeta { font-size: var(--t-xs); color: var(--cf-texte-mention); }
+
+/* -- Qualité de la série, en tête du bilan ----------------------------------------- */
+.cf-qualite {
+  background: var(--cf-fond); border: 1px solid var(--cf-bordure);
+  border-left: 4px solid var(--cf-bordure-forte);
+  padding: var(--e-3); margin-bottom: var(--e-4);
+}
+.cf-qualite--n1 { border-left-color: var(--cf-succes); }
+.cf-qualite--n2 { border-left-color: #0B5A28; }
+.cf-qualite--n3 { border-left-color: var(--cf-attention); }
+.cf-qualite--n4 { border-left-color: var(--cf-erreur); }
+.cf-qualite__tete { display: flex; align-items: center; gap: var(--e-2) var(--e-3); flex-wrap: wrap; }
+.cf-qualite__station { font-size: var(--t-xs); color: var(--cf-texte-mention); }
+.cf-qualite__liste { margin: var(--e-2) 0 0; padding-left: 1.2rem; }
+.cf-qualite__liste li { font-size: var(--t-xs); margin-bottom: var(--e-1); max-width: 100ch; }
+.cf-qualite .cf-repli { margin-top: var(--e-2); }
+.cf-liste-simple { margin: 0 0 var(--e-2); padding-left: 1.2rem; }
+.cf-liste-simple li { font-size: var(--t-xs); margin-bottom: var(--e-1); }
+
+/* -- Une thématique à la fois (écran étroit) ------------------------------------------
+   Rangée de pastilles à défilement horizontal, comme une barre d'onglets : elle
+   ne prend qu'une ligne, quel que soit le nombre de thématiques. */
+.cf-pastilles {
+  position: sticky; top: var(--cf-h-onglets); z-index: 30;
+  background: var(--cf-fond-alt);
+  margin: 0 calc(-1 * var(--e-3)) var(--e-3); padding: var(--e-2) var(--e-3);
+  border-bottom: 1px solid var(--cf-bordure);
+}
+.cf-pastilles .shiny-input-container { margin: 0; }
+.cf-pastilles .control-label { display: none; }
+.cf-pastilles .shiny-options-group {
+  display: flex; flex-wrap: nowrap; gap: var(--e-2);
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.cf-pastilles .shiny-options-group::-webkit-scrollbar { display: none; }
+.cf-pastilles .radio-inline {
+  flex: 0 0 auto; margin: 0 !important; padding: 0 !important;
+  font-size: var(--t-xs) !important; font-weight: 700 !important;
+  border: 1px solid var(--cf-bordure-forte); background: var(--cf-fond);
+  min-height: 40px; display: inline-flex; align-items: center;
+  padding: 0 var(--e-3) !important; white-space: nowrap; cursor: pointer;
+}
+.cf-pastilles .radio-inline input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+/* Le sélecteur générique « label » impose sa couleur avec !important : la
+   pastille choisie doit donc le surclasser, sur le libellé et son <span>. */
+.cf-pastilles .radio-inline:has(input:checked),
+.cf-pastilles .radio-inline:has(input:checked) span {
+  background: var(--cf-bleu); color: #FFFFFF !important; border-color: var(--cf-bleu);
+}
+
+/* =============================================================================
+   9. Responsive
+   -----------------------------------------------------------------------------
+   Trois paliers, du poste de travail au terrain :
+     >= 1200 px  deux colonnes de graphiques dans le bilan ;
+     >= 1000 px  « Où ? » et « Quand ? » côte à côte dans l'accueil ;
+     <  640 px   une seule colonne partout, onglets sans icône, cibles 44 px.
+   ========================================================================== */
+
+/* Grand écran : deux colonnes de graphiques */
+@media (min-width: 1200px) {
+  .cf-grille-graphes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Les séries longues ont besoin de toute la largeur pour rester lisibles */
+  .cf-grille-graphes > #chart-tmp,
+  .cf-grille-graphes > #chart-petp,
+  .cf-grille-graphes > #chart-pre,
+  /* 365 points sur une demi-colonne seraient illisibles : la chronique
+     journalière prend toute la largeur, comme les séries longues. */
+  .cf-grille-graphes > #chart-tmp_jour { grid-column: 1 / -1; }
+  /* Deux familles ne comptent qu'un seul indicateur (Gel, Neige). Laisse à
+     lui-même, ce graphique unique occupait une demi-colonne face a un vide :
+     une section entiere pour un demi-graphique se lit comme un oubli. */
+  .cf-grille-graphes > .cf-carte:only-child { grid-column: 1 / -1; }
+}
+
+/* Tablette portrait : les grilles denses repassent en colonne unique */
+@media (max-width: 820px) {
+  .cf-duo { grid-template-columns: 1fr; }
+  .cf-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .cf-marque__soustitre { display: none; }
+  .cf-logo--rf        { height: 54px; }
+  .cf-logo--operateur { height: 38px; }
+  .cf-contexte { flex-direction: column; align-items: stretch; }
+  .cf-contexte .cf-btn { width: 100%; }
+}
+
+@media (max-width: 640px) {
+  :root { --cf-h-onglets: 44px; }
+  /* En-tête compact : le nom de l'organisme est redondant avec le bloc-marque
+     juste à côté, et la barre ne doit pas prendre le quart de l'écran. */
+  .cf-marque__organisme { display: none; }
+  .cf-barre__interieur { padding: var(--e-2) var(--e-3); }
+  .cf-pied { padding: var(--e-4) var(--e-3); margin-top: var(--e-4); }
+  /* Barre de contexte : lieu + bouton sur une ligne, détail en dessous */
+  .cf-contexte { flex-direction: row; align-items: flex-start; padding: var(--e-2) var(--e-3);
+                 margin-bottom: var(--e-3); }
+  .cf-contexte .cf-btn { width: auto; min-height: 40px; padding: 0 var(--e-3); }
+  .cf-contexte__lieu { font-size: var(--t-sm); }
+  .cf-kpi { padding: var(--e-2) var(--e-3); }
+  .cf-kpi__libelle { min-height: 0; }
+  .cf-source { padding: var(--e-2) var(--e-3); }
+  .cf-onglets > .nav-tabs,
+  .cf-onglets > .tabbable > .nav-tabs { padding-left: 0; padding-right: 0; }
+  .nav-tabs > li > a { padding: var(--e-2) var(--e-3) !important; }
+  /* Les icônes des onglets disparaissent sous 640 px. Elles coûtent une
+     trentaine de pixels chacune, soit à elles quatre la différence entre une
+     barre d'onglets qui tient à l'écran et une barre qui déborde en silence :
+     le défilement horizontal ne s'annonce pas, et un onglet hors champ est un
+     onglet qui n'existe pas pour l'utilisateur. Les libellés, eux, restent. */
+  .nav-tabs .cf-icone { display: none; }
+  .cf-marque__titre { font-size: var(--t-lg); }
+  .cf-logo--rf        { height: 46px; }
+  .cf-logo--operateur { height: 32px; padding-left: var(--e-3); }
+  .cf-marque { padding-left: var(--e-3); }
+  .cf-barre__interieur { gap: var(--e-3); }
+  .cf-conteneur { padding: var(--e-4) var(--e-3) var(--e-8); }
+  .cf-carte { padding: var(--e-3); }
+  .cf-barre-action { padding: var(--e-3); }
+  .cf-barre-action > .cf-btn { min-width: 0; width: 100%; }
+  /* Cibles tactiles : 44 px, recommandation d'accessibilité */
+  .cf-btn { min-height: 44px; }
+  .cf-kpis { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .cf-kpi__valeur { font-size: var(--t-md); }
+  .cf-famille__titre { font-size: var(--t-md); }
+  html { scroll-padding-top: 60px; }
+}
+
+/* Cibles tactiles des actions secondaires. Les liens d'export et les
+   raccourcis « tout / aucun » restaient des cibles de 20 à 36 px : atteignables
+   à la souris, ratés au doigt. Sur écran tactile, ils passent à 44 px comme
+   les boutons — le libellé ne change pas, seule la zone cliquable grandit. */
+@media (pointer: coarse) {
+  .cf-lien-outil { min-height: 44px; padding: var(--e-2) var(--e-3); }
+  .cf-filtres__raccourcis a,
+  .cf-carte__entete .shiny-input-container ~ a {
+    display: inline-flex; align-items: center; min-height: 44px;
+  }
+  .cf-details > summary { min-height: 44px; }
+}
+
+/* =============================================================================
+   10. Impression
+   -----------------------------------------------------------------------------
+   Le bandeau d'identification, masqué à l'écran parce qu'il ferait doublon
+   avec la barre de contexte, réapparaît ici : sur une feuille, il n'y a plus
+   de barre.
+   ========================================================================== */
+@media print {
+  .cf-barre, .nav-tabs, .cf-filtres, .cf-barre-action,
+  .cf-carte__actions, .cf-details, .cf-pied, .cf-contexte {
+    display: none !important;
+  }
+  body { background: #FFFFFF; }
+  .cf-bandeau {
+    display: block;
+    border-bottom: 2px solid #000000;
+    padding-bottom: 8px; margin-bottom: 16px;
+  }
+  .cf-carte { break-inside: avoid; border: 1px solid #CCCCCC; }
+  .cf-famille__titre { break-after: avoid; }
+  .cf-grille-graphes { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+  html { scroll-behavior: auto; }
+}
+
+/* =============================================================================
+   11. Accessibilité et cibles tactiles (v1.3)
+   -----------------------------------------------------------------------------
+   Corrections de l'audit d'ergonomie : cibles d'au moins 24 x 24 px (WCAG 2.2,
+   critère 2.5.8, niveau AA) et de 44 px au doigt, étiquettes reliées à leur
+   champ, sommaire du bilan. Placé en fin de fichier : ces règles complètent ou
+   surclassent celles des sections précédentes.
+   ========================================================================== */
+
+/* Le repère <main> reçoit le focus quand on active le lien d'évitement : il n'a
+   pas à porter de cadre, il n'est pas un contrôle. */
+main:focus { outline: none; }
+
+/* -- Cases à cocher et boutons radio : 24 px ------------------------------------
+   Les cases natives mesurent 13 px. La case grandit, et sa ligne entière reste
+   cliquable (le libellé l'enveloppe). */
+input[type="radio"], input[type="checkbox"] {
+  width: 24px; height: 24px; accent-color: var(--cf-bleu);
+  cursor: pointer; flex: 0 0 auto;
+}
+.checkbox label, .radio label { position: relative; padding-left: 36px; min-height: 28px; }
+.checkbox input[type="checkbox"], .radio input[type="radio"] {
+  position: absolute; left: 4px; top: 50%; margin: 0; transform: translateY(-50%);
+}
+/* Listes encadrées (format, niveau, source) : la case se place dans la marge
+   gauche de la ligne, centrée sur sa hauteur. */
+.cf-choix .radio label, .cf-choix .checkbox label,
+.cf-source .radio label { padding-left: 48px; }
+.cf-choix .radio input[type="radio"], .cf-choix .checkbox input[type="checkbox"],
+.cf-source .radio input[type="radio"] { left: var(--e-3); top: 50%; }
+/* Pastilles et puces en ligne : la case reste dans le flux (puces) ou recouvre
+   toute la pastille (pastilles) : la cible est alors la pastille entière. */
+.cf-chips .checkbox-inline input[type="checkbox"] {
+  position: static; margin: 0; transform: none;
+}
+.cf-pastilles .radio-inline { position: relative; }
+.cf-pastilles .radio-inline input[type="radio"] {
+  /* -1 px : recouvre aussi la bordure de la pastille, cible = 44 px pleins */
+  position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px);
+  margin: 0; opacity: 0; cursor: pointer; transform: none;
+}
+
+/* -- Étiquette « Année » des cartes ---------------------------------------------
+   C'est désormais un <label> : la règle générale des étiquettes (gras, taille
+   normale, !important) ne doit pas grossir cette légende discrète. */
+label.cf-carte__reglage-lib {
+  font-size: var(--t-xs) !important; font-weight: 700 !important;
+  color: var(--cf-texte-mention) !important; margin: 0 !important;
+}
+
+/* -- Titre de bloc dans une carte (ex-h4, devenu h3 : voir mod_rapport.R) ------ */
+.cf-bloc__titre { font-size: var(--t-sm); line-height: 1.4; margin: 0 0 var(--e-2); }
+
+/* -- Sommaire du bilan ------------------------------------------------------------
+   Collé sous la barre d'onglets : la page de résultats fait une quinzaine
+   d'écrans, il permet d'atteindre une thématique sans tout faire défiler. */
+.cf-sommaire {
+  position: sticky; top: var(--cf-h-onglets); z-index: 30;
+  display: flex; align-items: center; gap: var(--e-3);
+  background: var(--cf-fond); border: 1px solid var(--cf-bordure);
+  padding: var(--e-2) var(--e-4); margin-bottom: var(--e-6);
+}
+.cf-sommaire__lib {
+  flex: 0 0 auto; font-size: var(--t-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--cf-texte-mention);
+}
+.cf-sommaire ul {
+  display: flex; flex-wrap: wrap; gap: var(--e-2);
+  list-style: none; margin: 0; padding: 0;
+}
+.cf-sommaire a {
+  display: inline-flex; align-items: center; gap: var(--e-2);
+  min-height: 32px; padding: 0 var(--e-3);
+  border: 1px solid var(--cf-bordure-forte); background: var(--cf-fond);
+  font-size: var(--t-xs); font-weight: 700; text-decoration: none;
+}
+.cf-sommaire a:hover { background: var(--cf-bleu-pale); text-decoration: none; }
+.cf-sommaire a[aria-current="location"] {
+  background: var(--cf-bleu); border-color: var(--cf-bleu); color: #FFFFFF;
+}
+.cf-sommaire__n { font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* -- Liste d'indicateurs en colonnes : cellules de même hauteur ---------------------
+   Un libellé sur deux lignes rendait sa cellule plus haute que ses voisines : les
+   bordures se décalaient d'une colonne à l'autre. La case occupe toute la cellule. */
+.cf-choix--colonnes .shiny-options-group .checkbox { display: flex; }
+.cf-choix--colonnes .shiny-options-group .checkbox label { flex: 1 1 auto; }
+/* Cellule plus haute que son libellé : la case reste alignée sur la première ligne. */
+.cf-choix--colonnes .checkbox input[type="checkbox"] { top: 7px; transform: none; }
+
+/* -- Poignées des curseurs : 26 px ------------------------------------------------
+   ion.rangeSlider les dessine à 22 px. Elles sont la cible du doigt ou de la
+   souris (WCAG 2.5.8 : 24 px au moins). La bibliothèque mesure la poignée à
+   l'initialisation : la taille est donc fixée par CSS, pas par script. */
+.irs--shiny .irs-handle { width: 26px; height: 26px; top: 16px; }
+
+/* -- Doigt : 44 px ------------------------------------------------------------------ */
+@media (pointer: coarse) {
+  select, .form-control, input[type="text"], input[type="number"] { min-height: 44px; }
+  .cf-carte__reglage select { min-height: 44px; }
+  .cf-chips .checkbox-inline, .cf-pastilles .radio-inline { min-height: 44px; }
+  .cf-repli > summary { min-height: 44px; }
+  .cf-sommaire a { min-height: 44px; }
+  .cf-contexte .cf-btn { min-height: 44px; }
+}
+
+@media print { .cf-sommaire { display: none !important; } }
+
+
+/* ==============================================================================
+   12. VERSION 1.4 — SIMPLICITÉ D'UTILISATION (audit, partie 5)
+   ============================================================================== */
+
+/* -- À retenir : les trois écarts les plus marqués (S1) --------------------------- */
+.cf-retenir {
+  margin: var(--e-4) 0;
+  padding: var(--e-3) var(--e-4);
+  border-left: 4px solid var(--cf-bleu);
+  background: var(--cf-bleu-pale);
+}
+.cf-retenir__titre { margin: 0 0 var(--e-2); font-size: var(--t-md); }
+.cf-retenir__liste { margin: 0 0 var(--e-2); padding-left: 1.2rem; }
+.cf-retenir__liste li { margin-bottom: var(--e-2); }
+.cf-retenir__lien {
+  display: inline-flex; align-items: center; min-height: 24px;
+  margin-left: var(--e-2); font-size: var(--t-xs); white-space: nowrap;
+}
+.cf-retenir .cf-aide { margin: 0; }
+
+/* -- Ligne d'état d'un bloc replié (S1) ----------------------------------------------
+   Dit ce que contient le bloc sans l'ouvrir : valeurs par défaut, ou ce qui a changé. */
+.cf-etat-reglage { margin: var(--e-2) 0 var(--e-3); font-size: var(--t-xs); }
+.cf-etat-reglage--modifie {
+  padding-left: var(--e-3); border-left: 3px solid var(--cf-attention);
+  color: var(--cf-texte);
+}
+
+/* -- Termes du glossaire (S3) ---------------------------------------------------------
+   Bootstrap 3 souligne déjà abbr[title] d'un filet pointillé : on le remplace par un
+   soulignement du texte, plus discret dans un titre en gras. */
+abbr.cf-terme, abbr.cf-terme[title] {
+  border-bottom: 0;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+/* -- Liens au milieu d'une phrase (régression d'accessibilité corrigée en 1.4) -------------
+   Bootstrap 3 retire le soulignement des liens. Dans une phrase en gris (#5a5a5a), un
+   lien bleu foncé (#000091) n'est distinct que par 2,2:1 — sous les 3:1 exigés quand la
+   couleur est le seul signe (WCAG 1.4.1). On souligne donc les liens de texte courant ;
+   les liens-boutons (sommaire, « Voir les graphiques ») gardent leur forme propre. */
+.cf-notes a, .cf-aide a, .cf-retenir .cf-aide a { text-decoration: underline; }
+
+/* -- Raccourcis « Tout inclure / Tout retirer » (cibles de 24 px au moins) ------------------
+   À la souris, ils mesuraient 21,7 px de haut (WCAG 2.5.8) ; le mode tactile, lui, les
+   portait déjà à 44 px (section 9). */
+.cf-filtres__raccourcis a {
+  display: inline-flex; align-items: center; min-height: 28px; padding: 0 var(--e-1);
+}
+
+/* -- Détail technique d'un échec (S5) ------------------------------------------------ */
+.cf-erreur-detail {
+  margin-top: var(--e-3); padding-left: var(--e-3);
+  border-left: 3px solid var(--cf-erreur);
+}
+.cf-erreur-detail code {
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--cf-texte); background: var(--cf-fond-alt);
+}
+
+/* -- Barre de contexte : actions (S2) ------------------------------------------------ */
+.cf-contexte__actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--e-2);
+}
+.cf-contexte__actions .cf-btn .cf-icone { margin-right: var(--e-2); }
+/* Retour visuel de la copie : le bouton passe en blanc le temps de la confirmation. */
+.cf-btn--clair.cf-btn--copie { background: #FFFFFF; color: var(--cf-bleu); }
+
+@media (pointer: coarse) {
+  .cf-retenir__lien { min-height: 44px; }
+}
+
+@media print {
+  .cf-contexte__actions, .cf-retenir__lien { display: none !important; }
+}
+
+/* =============================================================================
+   13. VERSION 1.5 — RIGUEUR SCIENTIFIQUE (audit, partie 6)
+   ============================================================================== */
+
+/* -- Statut d'un seuil et références (M6) ------------------------------------------
+   « Convention d'usage » ou « Repère indicatif » : dit ce que vaut le chiffre, sans
+   le laisser passer pour un résultat. La bordure porte le sens autant que la couleur. */
+.cf-statut {
+  display: inline-block; margin: 0 var(--e-2); padding: 0 var(--e-2);
+  font-size: var(--t-xs); font-weight: 700; white-space: nowrap;
+  border: 1px solid currentColor;
+}
+.cf-statut--convention { color: var(--cf-texte-mention); }
+.cf-statut--indicatif  { color: var(--cf-bleu); }
+.cf-refs {
+  display: block; margin-top: var(--e-1);
+  font-size: var(--t-xs); color: var(--cf-texte-mention);
+}
+.cf-aide--statuts { margin-bottom: var(--e-3); }
+
+/* =============================================================================
+   14. VERSION 1.8 — ONGLET CARTE
+   ----------------------------------------------------------------------------
+   Le composant est anime par www/carte/carte.js ; MapLibre apporte son propre
+   feuillet (www/carte/lib/maplibre-gl.css) pour les commandes de la carte.
+   ============================================================================== */
+
+.cf-carto { margin-top: var(--e-4); }
+.cf-carto[hidden] { display: none; }
+
+/* -- Reglages : indicateur, affichage, annee ----------------------------------- */
+.cf-carto__barre {
+  display: grid; gap: var(--e-4); align-items: end;
+  grid-template-columns: minmax(0, 2fr) auto minmax(0, 1.4fr);
+  padding: var(--e-4); background: var(--cf-fond);
+  border: 1px solid var(--cf-bordure);
+}
+.cf-carto__champ { display: flex; flex-direction: column; gap: var(--e-1); min-width: 0; }
+/* Les etiquettes (label) ont deja leur style commun, impose plus haut. Bootstrap 3 met
+   en bloc l'element <output> : on le remet dans la ligne de son etiquette. */
+.cf-carto__champ output { display: inline; padding: 0; font: inherit; }
+.cf-carto__champ select { width: 100%; min-height: 40px; font: inherit; font-size: var(--t-sm); }
+.cf-carto__modes { border: 0; margin: 0; padding: 0; min-width: 0; }
+.cf-carto__modes legend {
+  font-weight: 700; font-size: var(--t-sm); padding: 0; margin: 0 0 var(--e-1); border: 0;
+}
+/* Un choix de bouton radio n'est pas un titre : meme regle que .radio label. */
+.cf-carto__mode {
+  display: inline-flex; align-items: center; gap: var(--e-2);
+  margin: 0 var(--e-4) 0 0 !important; font-weight: 400 !important; cursor: pointer;
+}
+.cf-carto__mode input { margin: 0; }
+.cf-carto__annee { display: flex; align-items: center; gap: var(--e-3); }
+.cf-carto__annee input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--cf-bleu); }
+.cf-carto__annee .cf-btn { flex: 0 0 auto; min-width: 96px; }
+.cf-carto__annee input:disabled, .cf-carto__annee button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* -- Carte et fiche de la maille ------------------------------------------------- */
+.cf-carto__scene {
+  display: grid; gap: var(--e-4); margin-top: var(--e-4);
+  grid-template-columns: minmax(0, 1fr) 320px; align-items: start;
+}
+.cf-carto__carte {
+  position: relative; min-height: 360px; height: clamp(360px, 64vh, 720px);
+  background: var(--cf-fond-contraste); border: 1px solid var(--cf-bordure);
+}
+.cf-carto__carte:focus-visible { outline: 3px solid var(--cf-bleu); outline-offset: 2px; }
+.cf-carto__info {
+  padding: var(--e-4); background: var(--cf-fond);
+  border: 1px solid var(--cf-bordure); border-top: 3px solid var(--cf-bleu);
+  min-width: 0;
+}
+.cf-carto__info-titre { font-size: var(--t-md); margin: 0 0 var(--e-3); }
+.cf-carto__valeurs { margin: 0 0 var(--e-3); }
+.cf-carto__ligne {
+  display: flex; justify-content: space-between; gap: var(--e-3);
+  padding: var(--e-1) 0; border-bottom: 1px solid var(--cf-bordure);
+  font-size: var(--t-xs); font-variant-numeric: tabular-nums;
+}
+.cf-carto__ligne dt { font-weight: 400; color: var(--cf-texte-mention); }
+.cf-carto__ligne dd { margin: 0; font-weight: 700; text-align: right; }
+
+/* Bulle de survol, posee sur la carte (souris uniquement) */
+.cf-carto__bulle {
+  position: absolute; z-index: 2; display: none; pointer-events: none;
+  padding: var(--e-1) var(--e-2); background: var(--cf-texte); color: #FFFFFF;
+  font-size: var(--t-xs); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* Courbe de la maille choisie */
+.cf-carto__courbe { display: block; width: 100%; height: auto; margin: 0 0 var(--e-3); }
+.cf-carto__courbe-serie { fill: none; stroke: var(--cf-bleu); stroke-width: 1.5; }
+.cf-carto__courbe-normale { stroke: var(--cf-bordure-forte); stroke-width: 1; stroke-dasharray: 4 3; }
+.cf-carto__courbe-point { fill: var(--cf-bleu); stroke: #FFFFFF; stroke-width: 1.5; }
+
+/* -- Legende ------------------------------------------------------------------------ */
+.cf-carto__legende {
+  margin-top: var(--e-4); padding: var(--e-3) var(--e-4);
+  background: var(--cf-fond); border: 1px solid var(--cf-bordure);
+}
+.cf-carto__legende-titre { font-weight: 700; font-size: var(--t-xs); margin-bottom: var(--e-2); }
+.cf-carto__degrade { height: 14px; max-width: 560px; border: 1px solid var(--cf-bordure-forte); }
+.cf-carto__legende-bornes {
+  display: flex; justify-content: space-between; max-width: 560px;
+  font-size: var(--t-xs); font-variant-numeric: tabular-nums; margin-top: var(--e-1);
+}
+.cf-carto__legende-note { font-size: var(--t-xs); color: var(--cf-texte-mention); margin-top: var(--e-2); }
+.cf-carto__etat--erreur { color: var(--cf-erreur); font-weight: 700; }
+
+@media (max-width: 1000px) {
+  .cf-carto__barre { grid-template-columns: minmax(0, 1fr); }
+  .cf-carto__scene { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .cf-carto__barre { padding: var(--e-3); }
+  .cf-carto__mode { display: flex; margin: 0 0 var(--e-2); }
+  .cf-carto__carte { height: 56vh; }
+}
+@media print {
+  .cf-carto__barre, .cf-carto__annee { display: none !important; }
+}

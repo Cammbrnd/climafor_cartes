@@ -1,0 +1,145 @@
+/* =============================================================================
+   styles_rapport.css — mise en forme du rapport HTML exporté
+   -----------------------------------------------------------------------------
+   Le rapport est un document autonome, destiné à être transmis, lu à l'écran ou
+   imprimé. Il reprend les codes DSFR de l'application, dans une composition en
+   colonne unique de largeur de lecture confortable.
+   ========================================================================== */
+
+body {
+  font-family: "Marianne", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color: #3A3A3A;
+  line-height: 1.6;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  background: #FFFFFF;
+}
+
+h1 {
+  font-size: 2rem;
+  border-left: 4px solid #000091;
+  padding-left: 16px;
+  margin-bottom: 8px;
+}
+h1::after {
+  content: "";
+  display: block;
+  width: 60px; height: 3px;
+  background: #E1000F;
+  margin-top: 12px;
+}
+
+h2 {
+  font-size: 1.375rem;
+  margin-top: 48px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #DDDDDD;
+}
+
+h3 {
+  font-size: 1.0625rem;
+  margin-top: 32px;
+  color: #000091;
+}
+
+/* Bloc de citation : sert aux avertissements méthodologiques */
+blockquote {
+  border-left: 4px solid #B34000;
+  background: #FFE9E6;
+  margin: 24px 0;
+  padding: 12px 16px;
+  font-size: 0.9375rem;
+}
+blockquote p { margin: 0; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 20px 0;
+  font-size: 0.9375rem;
+}
+th {
+  background: #F6F6F6;
+  text-align: left;
+  font-weight: 700;
+  border-bottom: 2px solid #000091;
+  padding: 8px 12px;
+}
+td { padding: 8px 12px; border-bottom: 1px solid #EEEEEE; }
+tr:hover td { background: #F5F5FE; }
+caption {
+  caption-side: bottom;
+  font-size: 0.8125rem;
+  color: #666666;
+  text-align: left;
+  padding-top: 8px;
+}
+
+img { max-width: 100%; height: auto; }
+
+ul li { margin-bottom: 8px; }
+
+hr { border: none; border-top: 1px solid #DDDDDD; margin: 40px 0 16px; }
+
+code {
+  background: #F6F6F6;
+  padding: 2px 5px;
+  font-size: 0.875em;
+}
+
+/* Sommaire.
+   Il est STATIQUE : toc_float de rmarkdown depend de Bootstrap, que le rapport
+   ne charge pas (voir le commentaire dans src/mod_rapport.R). On obtient le
+   meme confort de lecture en le rendant collant, ce qui ne coute qu'une regle
+   CSS et aucune dependance. */
+#TOC {
+  background: #F6F6F6;
+  border-left: 4px solid #000091;
+  padding: 16px 20px;
+  font-size: 0.875rem;
+  margin-bottom: 32px;
+}
+#TOC ul { margin: 0; padding-left: 1.1rem; }
+#TOC li { margin-bottom: 4px; }
+#TOC a { text-decoration: none; }
+#TOC a:hover { text-decoration: underline; }
+
+/* Le corps fait 900 px de large et reste centré. Pour loger un sommaire de
+   240 px dans la marge gauche sans qu'il déborde de la fenêtre, il faut au
+   minimum 900 + 2 x 280 = 1460 px de fenêtre. En dessous, le sommaire reste en
+   tête de document, ce qui est le bon comportement : mieux vaut un sommaire
+   déroulant qu'un sommaire à moitié hors champ. */
+@media screen and (min-width: 1460px) {
+  #TOC {
+    position: sticky;
+    top: 16px;
+    float: left;
+    width: 240px;
+    margin-left: -280px;
+    margin-bottom: 0;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+}
+
+@media print {
+  body { max-width: none; padding: 0; }
+  h2, h3 { break-after: avoid; }
+  table, img { break-inside: avoid; }
+  #TOC { display: none; }
+}
+
+
+/* Widget d'amorce plotly : voir le chunk `amorce_plotly` du modele. Il ne sert
+   qu'a faire enregistrer plotly.js par knitr et n'a rien a montrer. */
+.html-widget[style*="height:1px"] { display: none !important; }
+
+/* Les graphiques interactifs occupent toute la largeur de la colonne. */
+.js-plotly-plot, .plotly, .plot-container { width: 100% !important; }
+
+@media print {
+  /* Un widget ne s'imprime pas de facon fiable : on le laisse tel quel, mais
+     on evite au moins qu'il soit coupe entre deux pages. */
+  .js-plotly-plot { break-inside: avoid; }
+}

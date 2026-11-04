@@ -1,0 +1,8 @@
+cache/*.rds
+rsconnect/
+.Rproj.user/
+.Rhistory
+donnees_carte/
+parts/
+public/
+essai/
