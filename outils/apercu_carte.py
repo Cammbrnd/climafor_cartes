@@ -82,7 +82,12 @@ SCRIPT_PAGE = r"""
     .then(function (carte) {
       log("Fichiers lus : " + carte.meta.n + " mailles, " + carte.meta.couches.length + " indicateurs, " +
           carte.meta.annees[0] + "–" + carte.meta.annees[carte.meta.annees.length - 1]);
-      carte.map.on("error", function (e) { log("MapLibre : " + (e && e.error && e.error.message)); });
+      var tuilesKO = 0;
+      carte.map.on("error", function (e) {
+        var m = String((e && e.error && e.error.message) || "");
+        if (/tile|geopf|AJAXError|Failed to fetch/i.test(m)) { tuilesKO++; return; }   // fond IGN : compte a part
+        log("MapLibre : " + m);
+      });
       var compter = function (quand) {
         try {
           var n = carte.map.queryRenderedFeatures({ layers: ["cellules"] }).length;
@@ -90,7 +95,10 @@ SCRIPT_PAGE = r"""
         } catch (e) { log("Mailles dessinées : impossible à compter (" + (e && e.message) + ")"); }
       };
       carte.map.once("idle", function () { compter("carte au repos"); });
-      setTimeout(function () { compter("après 6 s"); }, 6000);
+      setTimeout(function () {
+        compter("après 6 s");
+        log("Fond de carte IGN : " + (tuilesKO ? tuilesKO + " tuile(s) non chargée(s) — fond gris, sans conséquence sur les mailles" : "aucune erreur"));
+      }, 6000);
     })
     .catch(function (e) {
       log("Chargement : ÉCHEC — " + (e && e.message));

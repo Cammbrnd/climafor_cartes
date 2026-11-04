@@ -35,7 +35,7 @@ const [,, fichier, base] = process.argv;
     return out;
   });
   console.log('MESURE ' + JSON.stringify(mesure, null, 1));
-  console.log('ERREURS ' + JSON.stringify(erreurs.filter(e => !/geopf|tile/i.test(e)).slice(0, 12)));
+  console.log('ERREURS ' + JSON.stringify(erreurs.filter(e => !/geopf|tile|ERR_TUNNEL|Failed to load resource/i.test(e)).slice(0, 12)));
   console.log('REQUETES EN ECHEC ' + JSON.stringify(echecs.filter(e => !/geopf/.test(e)).slice(0, 12)));
   const jpg = await page.screenshot({ type: 'jpeg', quality: 55 });
   console.log('JPEG_DEBUT'); console.log(jpg.toString('base64')); console.log('JPEG_FIN');
