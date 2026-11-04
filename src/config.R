@@ -414,8 +414,8 @@ CONFIG <- list(
     # Version du FORMAT des fichiers publies. A incrementer si leur disposition
     # change : un jeu d'une autre version n'est pas affiche, au lieu d'etre mal lu.
     schema        = 1L,
-    # Adresse https des fichiers publies (GitHub Pages du depot climafor_carte,
-    # par exemple « https://<compte>.github.io/climafor_carte/donnees/ »).
+    # Adresse https des fichiers publies (GitHub Pages du depot climafor_cartes,
+    # par exemple « https://<compte>.github.io/climafor_cartes/ »).
     # Laisser vide pour utiliser le dossier local ci-dessous. La variable
     # d'environnement CLIMAFOR_CARTE_URL, si elle existe, la remplace : pratique
     # pour essayer un jeu sans modifier le code.

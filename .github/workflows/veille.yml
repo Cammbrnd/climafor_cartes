@@ -36,7 +36,7 @@ jobs:
         if: ${{ steps.veille.outputs.declencher == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run construire-carte.yml --repo "${{ github.repository }}" -f source=position
+        run: gh workflow run construire-carte.yml --repo "${{ github.repository }}" -f source=sim
 
       # GitHub desactive les workflows planifies d'un depot public sans activite depuis
       # 60 jours. On demande a se reactiver soi-meme ; si cela ne suffit pas, GitHub

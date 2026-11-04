@@ -936,6 +936,14 @@ la carte est celle que l'onglet d'analyse afficherait pour ce point. `tests/test
 le vérifie au bit près. Les années incomplètes (SAFRAN publie avec retard) ne sont
 cartographiées pour aucun indicateur.
 
+Les séries journalières viennent par défaut des **fichiers annuels en masse de
+Météo-France** (source `sim` : « Données changement climatique — SIM quotidienne »,
+data.gouv.fr, Licence Ouverte 2.0), c'est-à-dire la source même de GeoSAS : la carte ne
+fait **aucune requête à GeoSAS** (hors une lecture de métadonnées), et la grille est la
+grille native de 9 892 mailles, enumérée par le fichier de coordonnées de Météo-France.
+Les carrés sont dessinés en Lambert II étendu (`outils/carte_geo.R`) : leurs bords sont
+exacts.
+
 ```
 GitHub Actions ──► outils/carte_cli.R ──► fichiers (meta.json, grille.json, c_*.bin.gz)
  (calcul planifié)   (fragments, assemblage)        │
@@ -952,7 +960,7 @@ inséré comme du HTML.
 
 1. **Adresse distante** : variable d'environnement `CLIMAFOR_CARTE_URL` (ou
    `CONFIG$carte$url_donnees`), en `https`, par exemple
-   `https://<compte>.github.io/climafor_carte/`. Les fichiers sont alors chargés
+   `https://<compte>.github.io/climafor_cartes/`. Les fichiers sont alors chargés
    **directement par le navigateur** ; cet hébergeur voit l'adresse IP du visiteur
    (précisé dans « Sources et méthodes > Position et confidentialité »).
 2. À défaut, le dossier **`donnees_carte/`** à côté de l'application, servi par
@@ -973,23 +981,41 @@ Rscript outils/carte_cli.R assembler "source_texte=DONNEES FICTIVES (essai)" mai
 
 ### Avant le premier calcul réel — ce qui reste à faire
 
-Le point bloquant n'est pas l'affichage, c'est **l'accès en masse aux données SAFRAN** :
+1. **Dépôt** public `climafor_cartes` (créé), projet poussé, *Settings > Pages > Source :
+   GitHub Actions* (à confirmer dans l'onglet Settings : l'API de Pages n'est pas
+   interrogeable depuis les workflows).
+2. Lancer **« Construire la carte »** avec les valeurs par défaut (`source=sim`,
+   `mailles=sim`, 3 fragments, 3 en parallèle). Chaque fragment télécharge les ≈ 68
+   fichiers annuels (≈ 140 Mo chacun, ≈ 9,5 Go par fragment, ≈ 26 Go en tout, depuis le
+   serveur de Météo-France), puis calcule ses mailles. Prévoir **de l'ordre d'une heure
+   par fragment** (non mesuré de bout en bout).
+3. Renseigner `CLIMAFOR_CARTE_URL` (`https://<compte>.github.io/climafor_cartes/`) dans
+   l'application déployée.
 
-1. **Créer le dépôt** public `climafor_carte`, y pousser le projet, activer
-   *Settings > Pages > Source : GitHub Actions*.
-2. **Lancer « Diagnostic GeoSAS »** (onglet Actions) et lire son journal : il dit si le
-   service accepte les requêtes par zone (`area`, `cube`), à quelle vitesse et quel poids.
-3. **Produire `donnees_grille/mailles_safran.csv`** (colonnes `lon`, `lat`, une ligne par
-   maille réelle, ≈ 9 900). Cette énumération n'est pas faite : le contour utilisé pour
-   le jeu fictif est grossier et ne convient pas.
-4. **Prévenir GeoSAS / INRAE** : la source `position` (`outils/carte_sources.R`) envoie
-   ≈ 660 000 requêtes (≈ 9 900 mailles × ≈ 67 années). Si le diagnostic montre que les
-   zones passent, une source par zone sera écrite à la place.
-5. Lancer **« Construire la carte »** (≈ 20 fragments, 4 en parallèle par défaut).
-6. Renseigner `CLIMAFOR_CARTE_URL` dans l'application déployée.
+« **Veille** » (workflow mensuel) relance la construction (`source=sim`) quand une année
+complète supplémentaire existe — **jamais** le premier calcul.
 
-« **Veille** » (workflow mensuel) relance la construction quand une année complète
-supplémentaire existe — **jamais** le premier calcul.
+Les sources `position` (une requête par maille et par année sur GeoSAS, ≈ 660 000
+requêtes) et `demo` restent disponibles ; `position` est à éviter. Le workflow
+« Diagnostic GeoSAS » (étapes `zone`, `grille`, `sim`) a servi à établir ce qui suit.
+
+### Ce que le diagnostic a établi
+
+- GeoSAS n'expose que `position` et `cube` pour `safran-isba`. Le `cube` interpole sur une
+  grille régulière qui dépend de l'emprise demandée : ses valeurs **diffèrent** de celles
+  de la maille (rejeté pour la carte). `position` renvoie bien la valeur de la maille.
+- Les fichiers SIM de Météo-France, comparés à `position` sur 4 mailles terrestres × 366
+  jours, sont **identiques** (écart ≤ 6·10⁻⁶, bruit de codage en float32) pour toutes les
+  variables, **sauf l'ETP** : l'ETP de GeoSAS est supérieure de quelques % (jusqu'à
+  1,3–1,9 mm/jour) à celle du fichier SIM, sans décalage de jour.
+- Conséquence : la couche **P − ETP** (seule à utiliser l'ETP) porte une note visible
+  dans la carte (« l'ETP vient du fichier SIM de Météo-France : elle s'écarte de quelques %
+  de l'ETP lue par l'analyse d'une maille »). Les 17 autres couches sont identiques à
+  celles de l'analyse.
+- GeoSAS n'expose pas la hauteur de neige (`HTEURNEIGE`) : l'analyse d'une maille la
+  laisse vide, la carte aussi (parité).
+- Coordonnées : la projection Lambert II étendu écrite en R est comparée à PROJ (0,3 m) ;
+  les centres de GeoSAS tombent sur la grille de 8 km à 1 m près.
 
 ### Ce qui a été mesuré, et ce qui ne l'a pas été
 
@@ -999,18 +1025,23 @@ supplémentaire existe — **jamais** le premier calcul.
   vrai GPU, mobiles, connexion lente.
 - Mesuré : calcul des 18 couches ≈ 0,45 s par maille (≈ 75 min de calcul pour ≈ 9 900
   mailles, répartissable en fragments).
-- **Non vérifié** : débit et tolérance de GeoSAS ; en-têtes (CORS) de GitHub Pages — le
-  workflow les affiche dans son résumé au premier déploiement ; si la réactivation
-  automatique du workflow « Veille » suffit à éviter la désactivation des tâches planifiées
-  après 60 jours sans activité (sinon GitHub prévient le propriétaire du dépôt).
+- Mesuré sur un exécuteur GitHub : téléchargement d'un fichier annuel ≈ 69 Mo/s ; lecture
+  (`data.table::fread`) de 3,6 millions de lignes (9 892 mailles × 366 jours) en ≈ 4 s.
+- **Non vérifié** : le déroulement complet sur 68 années (mémoire ≈ 3,6 Go par fragment à
+  3 fragments, durée) ; les en-têtes (CORS) de GitHub Pages — le workflow les affiche dans
+  son résumé au premier déploiement ; si la réactivation automatique du workflow
+  « Veille » suffit à éviter la désactivation des tâches planifiées après 60 jours sans
+  activité (sinon GitHub prévient le propriétaire du dépôt).
 
 ### Limites connues
 
 - **Accessibilité partielle** : étiquettes, annonces (`aria-live`), tableau des 10 mailles
   extrêmes accessible au clavier ; mais la carte elle-même n'est pas parcourable maille
   par maille au clavier, et il n'y a pas d'équivalent tableau complet.
-- Le tracé d'une maille est un carré de 8 km en Lambert-93 ; la grille SAFRAN est en
-  Lambert II étendu : centres exacts, bords à quelques dizaines de mètres près.
+- Avec la source `sim`, le tracé d'une maille est le carré exact de 8 km en Lambert II
+  étendu. Avec un CSV de mailles sans `lambx`/`lamby`, il est approché autour du centre.
+- Les mailles sont celles de la grille SAFRAN-ISBA-MODCOU (9 892, dont des mailles marines
+  ou frontalières) ; celles sans valeur exploitable sont signalées dans le journal.
 - P − ETP est calculé sur la fenêtre par défaut de l'application (avril–octobre) ;
   les seuils personnalisés de l'onglet Paramètres ne s'appliquent pas à la carte.
 - Le fond de carte IGN est chargé par le navigateur (comme l'onglet Accueil).
@@ -1042,7 +1073,7 @@ climafor/
 ├── DESCRIPTION                 Paquets et versions requis (v1.8.0)
 ├── .github/workflows/          Diagnostic GeoSAS, Construire la carte, Veille (v1.8)
 ├── outils/                     carte_*.R : précalcul de la carte (format, géométrie, calcul,
-│                               sources, démo, ligne de commande, veille, diagnostic)
+│                               sources, SIM, démo, ligne de commande, veille, diagnostic)
 │                               construire_modele_docx.py (modèle Word)
 │                               couverture.R (couverture de lignes, covr)
 │                               figer_versions.R (écrit renv.lock)

@@ -595,7 +595,7 @@ brut18 <- utils::read.csv(gzfile(file.path(dos_sim18, "QUOT_SIM2_2020.csv.gz")),
 b57 <- brut18[brut18$LAMBX == m_sim18$lambx[57] & brut18$LAMBY == m_sim18$lamby[57], ]
 a57 <- d57[d57$annee == 2020, ]
 verifier(identical(a57$t_moy, b57$T) && identical(a57$swi, b57$SWI) && identical(a57$ff, b57$FF) &&
-           identical(a57$t_min, b57$TINF_H) && identical(a57$p_liq, b57$PRELIQ) && identical(a57$neig_h, b57$HTEURNEIGE),
+           identical(a57$t_min, b57$TINF_H) && identical(a57$p_liq, b57$PRELIQ) && identical(a57$neig_h, as.numeric(b57$HTEURNEIGE)),
          "les valeurs relues sont identiques au fichier, decimale pour decimale")
 
 # Parite avec l'application : une variable que GeoSAS n'expose pas reste vide, comme dans l'analyse.
@@ -671,3 +671,9 @@ src_ref18 <- carte_source_sim(2003:2022, m_sim18, pt18$indices[1], carte_sim_fou
 dir18 <- carte_calculer_maille(src_ref18(pt18$indices[1], 0, 0), carte_ctx(2003:2022), 2003:2022)
 verifier(identical(unname(dir18$tmp$valeurs), unname(pt18$valeurs$tmp[, 1])),
          "valeur de la carte == valeur du calcul direct sur le tableau SIM de la maille (a l'identique)")
+verifier(any(grepl("options: \\[sim, position, demo\\]", wf18$construire)) && any(grepl("extra-packages: any::data.table", wf18$construire, fixed = TRUE)) &&
+           any(grepl("SIM quotidienne", wf18$construire, fixed = TRUE)),
+         "le workflow propose la source sim (par defaut), installe data.table et cite l'origine des donnees")
+verifier(any(grepl("note_etp", lire18("outils/carte_cli.R"), fixed = TRUE)) &&
+           any(grepl("s'écarte de quelques %", lire18("outils/carte_cli.R"), fixed = TRUE)),
+         "la limite connue de la source sim (ETP differente de celle de l'analyse) est dite a l'utilisateur")

@@ -85,7 +85,12 @@ if (commande == "fragment") {
   if (!length(fichiers)) stop("Aucun fragment dans ", opt$parts, call. = FALSE)
   cat(sprintf("%d fragment(s) a reunir.\n", length(fichiers)))
   l2e <- if (all(c("lambx", "lamby") %in% names(m))) list(x = m$lambx * 100, y = m$lamby * 100) else NULL
-  r <- carte_assembler(fichiers, m$lon, m$lat, annees, opt$source_texte, opt$sortie, l2e = l2e)
+  # Seule limite connue de la source sim : l'ETP du fichier SIM n'est pas l'ETP_Q de GeoSAS
+  # (ecart de quelques %, mesure par outils/carte_diagnostic_sim.R). Elle est dite a l'utilisateur.
+  note_etp <- if (!is.null(l2e) && grepl("SIM", opt$source_texte, fixed = TRUE))
+    paste("L'ETP vient du fichier SIM de Météo-France : elle s'écarte de quelques % de l'ETP lue par",
+          "l'analyse d'une maille, donc ce bilan peut différer un peu de celui de l'analyse.") else ""
+  r <- carte_assembler(fichiers, m$lon, m$lat, annees, opt$source_texte, opt$sortie, l2e = l2e, note_etp = note_etp)
   cat(sprintf("Jeu ecrit dans %s : %d mailles, %d-%d, %d Ko, %d maille(s) sans donnees.\n",
               r$dossier, r$n, min(r$annees), max(r$annees), r$taille_octets %/% 1024, length(r$echecs)))
   if (length(r$annees_retirees)) {
