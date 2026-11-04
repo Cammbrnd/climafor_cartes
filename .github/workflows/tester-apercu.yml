@@ -1,0 +1,40 @@
+# Tester l'apercu — a lancer a la main. Construit la page d'apercu de l'onglet Carte
+# (outils/apercu_carte.py), l'ouvre dans un vrai Chromium (rendu logiciel) en lisant les
+# fichiers PUBLIES sur GitHub Pages, et affiche dans le journal : l'etat de la carte, le
+# nombre de mailles dessinees, les erreurs, et une capture (JPEG base64).
+# Ne modifie rien.
+name: Tester l'apercu
+
+on:
+  workflow_dispatch:
+    inputs:
+      adresse:
+        description: "Adresse des fichiers (vide = adresse publique du depot)"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  tester:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Installer Playwright et Chromium
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null && npm i playwright@1.49.1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Construire et tester l'apercu
+        env:
+          ADRESSE: ${{ inputs.adresse }}
+          REPO: ${{ github.repository }}
+        run: |
+          OWNER="${REPO%%/*}"; NOM="${REPO##*/}"
+          [ -z "$ADRESSE" ] && ADRESSE="https://${OWNER,,}.github.io/${NOM}/"
+          python3 outils/apercu_carte.py "$RUNNER_TEMP/apercu_carte.html"
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" node outils/apercu_tester.js "$RUNNER_TEMP/apercu_carte.html" "$ADRESSE"
