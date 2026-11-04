@@ -416,10 +416,11 @@ CONFIG <- list(
     schema        = 1L,
     # Adresse https des fichiers publies (GitHub Pages du depot climafor_cartes,
     # par exemple « https://<compte>.github.io/climafor_cartes/ »).
-    # Laisser vide pour utiliser le dossier local ci-dessous. La variable
+    # Premier calcul publie le 4 novembre 2026. Mettre "" pour utiliser le dossier local
+    # ci-dessous (ou definir CLIMAFOR_CARTE_URL="" ). La variable
     # d'environnement CLIMAFOR_CARTE_URL, si elle existe, la remplace : pratique
     # pour essayer un jeu sans modifier le code.
-    url_donnees   = Sys.getenv("CLIMAFOR_CARTE_URL", ""),
+    url_donnees   = Sys.getenv("CLIMAFOR_CARTE_URL", "https://cammbrnd.github.io/climafor_cartes/"),
     # Dossier servi par l'application elle-meme quand url_donnees est vide :
     # aucun tiers n'est alors contacte, au prix d'un redeploiement a chaque mise
     # a jour des donnees.

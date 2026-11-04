@@ -989,8 +989,17 @@ Rscript outils/carte_cli.R assembler "source_texte=DONNEES FICTIVES (essai)" mai
    fichiers annuels (≈ 140 Mo chacun, ≈ 9,5 Go par fragment, ≈ 26 Go en tout, depuis le
    serveur de Météo-France), puis calcule ses mailles. Prévoir **de l'ordre d'une heure
    par fragment** (non mesuré de bout en bout).
-3. Renseigner `CLIMAFOR_CARTE_URL` (`https://<compte>.github.io/climafor_cartes/`) dans
-   l'application déployée.
+3. L'adresse `https://cammbrnd.github.io/climafor_cartes/` est la valeur par défaut de
+   `CONFIG$carte$url_donnees` ; la variable `CLIMAFOR_CARTE_URL` la remplace. Redéployer
+   l'application (`deploy.R`) pour que l'onglet Carte lise ce jeu.
+4. Lancer **« Vérifier la publication »** (onglet Actions) : il lit les fichiers sur l'adresse
+   publique et affiche statut, CORS, compression, cohérence de `meta.json` et de la grille.
+
+**Premier calcul réel (4 novembre 2026)** : 9 888 mailles, 1959–2025, 18 couches, 14 Mo,
+publié sur GitHub Pages. Quatre mailles du domaine SAFRAN (frontière suisse/autrichienne,
+lon 10,00–10,04) dépassent la borne est de l'application (10°) et sont écartées, avec un
+message dans le journal. Chaque fragment a pris ≈ 25 min de calcul (≈ 11 min de lecture des
+68 fichiers, ≈ 13 min de calcul) ; la mise en place de R peut, elle, prendre jusqu'à 30 min.
 
 « **Veille** » (workflow mensuel) relance la construction (`source=sim`) quand une année
 complète supplémentaire existe — **jamais** le premier calcul.
@@ -1026,12 +1035,13 @@ requêtes) et `demo` restent disponibles ; `position` est à éviter. Le workflo
 - Mesuré : calcul des 18 couches ≈ 0,45 s par maille (≈ 75 min de calcul pour ≈ 9 900
   mailles, répartissable en fragments).
 - Mesuré sur un exécuteur GitHub : téléchargement d'un fichier annuel ≈ 69 Mo/s ; lecture
-  (`data.table::fread`) de 3,6 millions de lignes (9 892 mailles × 366 jours) en ≈ 4 s.
-- **Non vérifié** : le déroulement complet sur 68 années (mémoire ≈ 3,6 Go par fragment à
-  3 fragments, durée) ; les en-têtes (CORS) de GitHub Pages — le workflow les affiche dans
-  son résumé au premier déploiement ; si la réactivation automatique du workflow
-  « Veille » suffit à éviter la désactivation des tâches planifiées après 60 jours sans
-  activité (sinon GitHub prévient le propriétaire du dépôt).
+  (`data.table::fread`) de 3,6 millions de lignes (9 892 mailles × 366 jours) en ≈ 4 s ;
+  calcul complet sur 68 années en 3 fragments sans dépassement de mémoire.
+- Mesuré sur la publication : `access-control-allow-origin: *`, `meta.json` servi en gzip,
+  18 fichiers de couches en 200, 9 888 identifiants de maille distincts (0 à 9 887).
+- **Non vérifié** : si la réactivation automatique du workflow « Veille » suffit à éviter la
+  désactivation des tâches planifiées après 60 jours sans activité (sinon GitHub prévient
+  le propriétaire du dépôt) ; l'affichage dans un vrai navigateur avec GPU, et sur mobile.
 
 ### Limites connues
 
