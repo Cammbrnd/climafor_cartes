@@ -44,7 +44,7 @@ jobs:
           curl -sSI -H "Origin: https://exemple.test" "${ADRESSE}grille.json" | grep -iE '^(HTTP|access-control-allow-origin|content-length|content-encoding)'
           curl -sS "${ADRESSE}grille.json" -o grille.json
           echo "mailles (features) : $(jq '.features | length' grille.json)"
-          echo "ids : min $(jq '[.features[].id] | min' grille.json), max $(jq '[.features[].id] | max' grille.json), distincts $(jq '[.features[].id] | unique | length' grille.json)"
+          echo "ids (properties.id) : min $(jq '[.features[].properties.id] | min' grille.json), max $(jq '[.features[].properties.id] | max' grille.json), distincts $(jq '[.features[].properties.id] | unique | length' grille.json)"
           echo "type de geometrie : $(jq -r '[.features[].geometry.type] | unique | join(",")' grille.json)"
           echo "== fichiers de couches annonces par meta.json =="
           FICHIERS=$(jq -r '.. | objects | .fichier? // empty' meta.json | sort -u)
