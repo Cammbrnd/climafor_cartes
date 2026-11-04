@@ -1,0 +1,61 @@
+# Verifier la publication — a lancer a la main apres « Construire la carte ».
+#
+# Lit les fichiers sur l'adresse PUBLIQUE de GitHub Pages, comme le ferait un navigateur
+# d'un autre site : statut, en-tetes CORS, compression, taille, et coherence de meta.json
+# avec grille.json et les fichiers de couches. Ne modifie rien. Le resultat est dans le
+# journal du job.
+name: Verifier la publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      adresse:
+        description: "Adresse de base (vide = https://<compte>.github.io/<depot>/)"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Lire l'adresse publique
+        env:
+          ADRESSE: ${{ inputs.adresse }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          if [ -z "$ADRESSE" ]; then
+            OWNER="${REPO%%/*}"; NOM="${REPO##*/}"
+            ADRESSE="https://${OWNER,,}.github.io/${NOM}/"
+          fi
+          case "$ADRESSE" in */) ;; *) ADRESSE="$ADRESSE/";; esac
+          echo "Adresse : $ADRESSE"
+          echo "== En-tetes de meta.json (Origin: https://exemple.test) =="
+          curl -sSI -H "Origin: https://exemple.test" -H "Accept-Encoding: gzip" "${ADRESSE}meta.json" \
+            | grep -iE '^(HTTP|access-control|content-type|content-encoding|cache-control|content-length|last-modified)'
+          curl -sS "${ADRESSE}meta.json" -o meta.json
+          echo "== meta.json =="
+          jq -c 'to_entries | map(select(.value|type!="array" and type!="object")) | from_entries' meta.json || { echo "meta.json illisible"; exit 1; }
+          echo "cles : $(jq -c 'keys' meta.json)"
+          echo "== grille.json =="
+          curl -sSI -H "Origin: https://exemple.test" "${ADRESSE}grille.json" | grep -iE '^(HTTP|access-control-allow-origin|content-length|content-encoding)'
+          curl -sS "${ADRESSE}grille.json" -o grille.json
+          echo "mailles (features) : $(jq '.features | length' grille.json)"
+          echo "ids : min $(jq '[.features[].id] | min' grille.json), max $(jq '[.features[].id] | max' grille.json), distincts $(jq '[.features[].id] | unique | length' grille.json)"
+          echo "type de geometrie : $(jq -r '[.features[].geometry.type] | unique | join(",")' grille.json)"
+          echo "== fichiers de couches annonces par meta.json =="
+          FICHIERS=$(jq -r '.. | objects | .fichier? // empty' meta.json | sort -u)
+          N=0; KO=0
+          for f in $FICHIERS; do
+            N=$((N+1))
+            R=$(curl -sS -o /tmp/f.bin -w "%{http_code} %{size_download}" -H "Origin: https://exemple.test" "${ADRESSE}${f}")
+            CODE=${R%% *}
+            if [ "$CODE" != "200" ]; then KO=$((KO+1)); echo "ABSENT/ERREUR $f : $R"; else echo "ok $f : $R octets"; fi
+          done
+          echo "Fichiers listes : $N ; en erreur : $KO"
+          echo "== Page d'accueil et .nojekyll =="
+          curl -sS -o /dev/null -w "index.md/index.html : %{http_code}\n" "${ADRESSE}"
+          [ "$KO" = "0" ] && [ "$N" -gt 0 ]
