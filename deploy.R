@@ -71,24 +71,35 @@ for (cle in names(INDICATEURS)) {
 message("  Structure du registre : OK")
 
 # -- 3. Deploiement -----------------------------------------------------------
-# Le cache est exclu : il se reconstitue tout seul, et son envoi ferait
-# inutilement gonfler le paquet.
+# Liste des fichiers envoyes. Le cache est exclu : il se reconstitue tout seul, et son
+# envoi ferait inutilement gonfler le paquet. www/ et rapport/ sont parcourus RECURSIVEMENT :
+# www/carte/ (carte.js, MapLibre) est un sous-dossier, et un fichier absent du paquet
+# casserait l'onglet Carte sans message.
+fichiers_app <- c(
+  # Motifs insensibles a la casse : avec des fichiers en .r (partage reseau),
+  # un motif "\\.R$" n'enverrait AUCUN fichier de src/ au serveur.
+  list.files(".", pattern = "^(app|global)\\.r$|^\\.rprofile$",
+             ignore.case = TRUE, all.files = TRUE),
+  list.files("src", pattern = "^[^_].*\\.r$", ignore.case = TRUE, full.names = TRUE),
+  list.files("www", full.names = TRUE, recursive = TRUE),
+  list.files("rapport", full.names = TRUE, recursive = TRUE),
+  # Jeu cartographique embarque (facultatif : sinon l'application lit l'adresse
+  # CONFIG$carte$url_donnees). Vide si le dossier n'existe pas.
+  list.files(CONFIG$carte$dossier_local, full.names = TRUE, recursive = TRUE)
+)
+fichiers_app <- sub("^\\./", "", fichiers_app)
+stopifnot(
+  "Le paquet n'embarque pas www/carte/carte.js"        = "www/carte/carte.js" %in% fichiers_app,
+  "Le paquet n'embarque pas MapLibre (www/carte/lib/)" = "www/carte/lib/maplibre-gl.js" %in% fichiers_app
+)
+message(sprintf("  %d fichiers a envoyer (dont %d pour la carte)", length(fichiers_app),
+                sum(grepl("^www/carte/", fichiers_app))))
+
 rsconnect::deployApp(
   appDir      = ".",
   appName     = "climafor",
   appTitle    = "ClimaFor - Bilan climatique forestier",
-  # Motifs insensibles a la casse : avec des fichiers en .r (partage reseau),
-  # un motif "\\.R$" n'enverrait AUCUN fichier de src/ au serveur.
-  appFiles    = c(
-    list.files(".", pattern = "^(app|global)\\.r$|^\\.rprofile$",
-               ignore.case = TRUE, all.files = TRUE),
-    list.files("src", pattern = "^[^_].*\\.r$", ignore.case = TRUE, full.names = TRUE),
-    list.files("www", full.names = TRUE),
-    list.files("rapport", full.names = TRUE),
-    # Jeu cartographique embarque (facultatif : sinon l'application lit l'adresse
-    # CONFIG$carte$url_donnees). Vide si le dossier n'existe pas.
-    list.files(CONFIG$carte$dossier_local, full.names = TRUE)
-  ),
+  appFiles    = fichiers_app,
   forceUpdate = TRUE,
   launch.browser = TRUE
 )

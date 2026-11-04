@@ -700,3 +700,11 @@ verifier(any(grepl("options: \\[sim, position, demo\\]", wf18$construire)) && an
 verifier(any(grepl("note_etp", lire18("outils/carte_cli.R"), fixed = TRUE)) &&
            any(grepl("s'écarte de quelques %", lire18("outils/carte_cli.R"), fixed = TRUE)),
          "la limite connue de la source sim (ETP differente de celle de l'analyse) est dite a l'utilisateur")
+
+# deploy.R : www/ contient un sous-dossier (www/carte/). Un envoi non recursif l'aurait laisse
+# hors du paquet shinyapps.io et l'onglet Carte serait reste vide sans message.
+dep18 <- lire18("deploy.R")
+verifier(any(grepl('list.files("www", full.names = TRUE, recursive = TRUE)', dep18, fixed = TRUE)) &&
+           any(grepl("www/carte/carte.js", dep18, fixed = TRUE)) && any(grepl("www/carte/lib/maplibre-gl.js", dep18, fixed = TRUE)) &&
+           any(grepl("appFiles    = fichiers_app", dep18, fixed = TRUE)),
+         "deploy.R envoie www/ de facon recursive et refuse un paquet sans carte.js ni MapLibre")
