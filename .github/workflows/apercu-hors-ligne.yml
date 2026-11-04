@@ -1,0 +1,62 @@
+# Apercu hors ligne — a lancer a la main. Telecharge les fichiers PUBLIES de la carte, construit
+# une page HTML UNIQUE qui les embarque (outils/apercu_carte.py --hors-ligne), la teste dans un
+# vrai Chromium (captures de parcours dans le journal, JPEG base64), puis la depose sur la branche
+# « apercu-hors-ligne » (un seul fichier) pour qu'on puisse la recuperer. Ne touche pas a main.
+name: Apercu hors ligne
+
+on:
+  workflow_dispatch:
+    inputs:
+      adresse:
+        description: "Adresse des fichiers (vide = adresse publique du depot)"
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  construire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Installer Playwright et Chromium
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null && npm i playwright@1.49.1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Telecharger les fichiers publies
+        env:
+          ADRESSE: ${{ inputs.adresse }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          OWNER="${REPO%%/*}"; NOM="${REPO##*/}"
+          [ -z "$ADRESSE" ] && ADRESSE="https://${OWNER,,}.github.io/${NOM}/"
+          case "$ADRESSE" in */) ;; *) ADRESSE="$ADRESSE/";; esac
+          mkdir -p "$RUNNER_TEMP/donnees" && cd "$RUNNER_TEMP/donnees"
+          curl -fsS "${ADRESSE}meta.json" -o meta.json
+          GRILLE=$(jq -r '.grille' meta.json)
+          for f in "$GRILLE" $(jq -r '.couches[].fichier' meta.json); do
+            curl -fsS "${ADRESSE}${f}" -o "$f"
+          done
+          ls -la
+      - name: Construire la page hors ligne
+        run: python3 outils/apercu_carte.py "$RUNNER_TEMP/climafor_apercu_carte_hors_ligne.html" --hors-ligne "$RUNNER_TEMP/donnees"
+      - name: Tester dans Chromium (captures)
+        run: |
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" node outils/apercu_tester.js "$RUNNER_TEMP/climafor_apercu_carte_hors_ligne.html" - --captures
+      - name: Deposer la page sur la branche apercu-hors-ligne
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp "$RUNNER_TEMP/climafor_apercu_carte_hors_ligne.html" "$RUNNER_TEMP/page.html"
+          git checkout --orphan apercu-hors-ligne
+          git rm -rf . -q
+          cp "$RUNNER_TEMP/page.html" climafor_apercu_carte_hors_ligne.html
+          git add climafor_apercu_carte_hors_ligne.html
+          git commit -q -m "Apercu hors ligne de l'onglet Carte (donnees embarquees)"
+          git push -f origin apercu-hors-ligne

@@ -1,9 +1,13 @@
 // Teste l'apercu de l'onglet Carte dans un vrai Chromium (rendu WebGL logiciel) :
-//   node outils/apercu_tester.js apercu_carte.html [adresse_des_fichiers]
+//   node outils/apercu_tester.js apercu_carte.html [adresse_des_fichiers|-] [--captures]
+// (« - » : pas d'adresse, pour la page hors ligne). Avec --captures : une serie de captures du
+// parcours (valeur, fiche d'une maille, ecart, tendance, P-ETP) en JPEG base64 dans le journal.
 // Affiche l'etat, les erreurs, le nombre de mailles dessinees, le diagnostic de la page et une
 // capture (JPEG en base64 entre deux reperes) pour la lire dans un journal.
 const { chromium } = require('playwright');
-const [,, fichier, base] = process.argv;
+const args = process.argv.slice(2).filter(a => a !== '--captures');
+const captures = process.argv.includes('--captures');
+const fichier = args[0], base = args[1] && args[1] !== '-' ? args[1] : '';
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await (await b.newContext({ viewport: { width: 1360, height: 900 } })).newPage();
@@ -37,7 +41,30 @@ const [,, fichier, base] = process.argv;
   console.log('MESURE ' + JSON.stringify(mesure, null, 1));
   console.log('ERREURS ' + JSON.stringify(erreurs.filter(e => !/geopf|tile|ERR_TUNNEL|Failed to load resource/i.test(e)).slice(0, 12)));
   console.log('REQUETES EN ECHEC ' + JSON.stringify(echecs.filter(e => !/geopf/.test(e)).slice(0, 12)));
-  const jpg = await page.screenshot({ type: 'jpeg', quality: 55 });
-  console.log('JPEG_DEBUT'); console.log(jpg.toString('base64')); console.log('JPEG_FIN');
+  const sortie = async (nom, plein) => {
+    const jpg = await page.screenshot({ type: 'jpeg', quality: 80, fullPage: !!plein });
+    console.log('IMG_DEBUT ' + nom); console.log(jpg.toString('base64')); console.log('IMG_FIN ' + nom);
+  };
+  if (!captures) { await sortie('apercu', false); }
+  else {
+    await page.setViewportSize({ width: 1360, height: 1500 });
+    await page.waitForTimeout(2500);
+    await sortie('01_valeur_temperature_2025', true);
+    const box = await page.locator('[data-role="carte"]').boundingBox();
+    await page.mouse.click(box.x + box.width * 0.42, box.y + box.height * 0.62);
+    await page.waitForTimeout(2000);
+    await sortie('02_fiche_maille', true);
+    await page.check('input[data-role="mode"][value="ecart"]');
+    await page.evaluate(() => { const r = document.querySelector('[data-role="annee"]'); r.value = 2022; r.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.waitForTimeout(2500);
+    await sortie('03_ecart_a_la_normale_2022', true);
+    await page.check('input[data-role="mode"][value="tendance"]');
+    await page.waitForTimeout(2500);
+    await sortie('04_tendance', true);
+    await page.check('input[data-role="mode"][value="valeur"]');
+    await page.selectOption('#carte-couche', 'petp');
+    await page.waitForTimeout(3500);
+    await sortie('05_P_moins_ETP_2022', true);
+  }
   await b.close();
 })();

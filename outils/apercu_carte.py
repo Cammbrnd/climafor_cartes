@@ -3,6 +3,11 @@
 MapLibre et carte.js embarques) qui lit les fichiers publies de la carte a l'ouverture.
 
     python3 outils/apercu_carte.py apercu_carte.html [adresse_des_fichiers]
+    python3 outils/apercu_carte.py apercu_hors_ligne.html --hors-ligne DOSSIER_DES_FICHIERS
+
+Avec --hors-ligne, les fichiers de la carte (meta.json, grille.json, c_*.bin.gz) sont EMBARQUES
+dans la page : elle n'a plus besoin du reseau (hors fond de carte IGN). Utile quand l'afficheur
+bloque les requetes (apercu integre a une messagerie, par exemple).
 
 Rien n'est calcule ici. Le HTML de l'onglet et les icones viennent de apercu_carte_ui.py (copies de
 mod_carte_ui() et cf_icone(), dont tests/test_v18.R verifie qu'elles n'ont pas derive).
@@ -10,6 +15,7 @@ Le bloc « Diagnostic technique » de la page dit ce que le navigateur sait fair
 et ce qu'il a rendu, pour comprendre une carte qui n'affiche rien. Bibliotheque standard seule.
 """
 import base64
+import json
 import sys
 from pathlib import Path
 
@@ -27,9 +33,25 @@ SCRIPT_PAGE = r"""
   var DEFAUT = __DEFAUT__;
   var TUILES = __TUILES__;
   var base = DEFAUT;
+  var D = window.__DONNEES_EMBARQUEES || null;
+  if (D) {
+    // Mode hors ligne : les fichiers sont dans la page ; on repond a leur place aux fetch() de carte.js.
+    base = "hors-ligne/";
+    var fetchReel = window.fetch.bind(window);
+    window.fetch = function (url, opts) {
+      var u = String(url);
+      if (u.indexOf(base) !== 0) return fetchReel(url, opts);
+      var b64 = D.fichiers[u.slice(base.length)];
+      if (!b64) return Promise.resolve(new Response("", { status: 404 }));
+      var bin = atob(b64), oct = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) oct[i] = bin.charCodeAt(i);
+      return Promise.resolve(new Response(oct, { status: 200,
+        headers: { "Content-Type": /\.json$/.test(u) ? "application/json" : "application/gzip" } }));
+    };
+  }
   try {
     var p = new URLSearchParams(location.search).get("base");
-    if (p && /^https?:\/\/[A-Za-z0-9.:\/_-]+$/.test(p)) base = p;
+    if (!D && p && /^https?:\/\/[A-Za-z0-9.:\/_-]+$/.test(p)) base = p;
   } catch (e) {}
   if (base.charAt(base.length - 1) !== "/") base += "/";
 
@@ -38,7 +60,9 @@ SCRIPT_PAGE = r"""
   var pre = document.querySelector('[data-ap="diag-texte"]');
   function log(t) { pre.textContent += t + "\n"; }
   note.textContent = "Aperçu autonome de l'onglet Carte de ClimaFor (même code que l'application). " +
-    "Données lues sur " + base + " au moment de l'ouverture. Les autres onglets ne sont pas actifs ici.";
+    (D ? "Données embarquées dans cette page (copie publiée le " + D.genere_le + " : " + D.source + "). "
+       : "Données lues sur " + base + " au moment de l'ouverture. ") +
+    "Les autres onglets ne sont pas actifs ici.";
 
   // Onglets : seul « Carte » existe dans cet apercu.
   Array.prototype.forEach.call(document.querySelectorAll("[data-apercu-onglet]"), function (a) {
@@ -63,7 +87,7 @@ SCRIPT_PAGE = r"""
   // -- Diagnostic technique ---------------------------------------------------------------------
   log("Navigateur : " + navigator.userAgent);
   log("Adresse de la page : " + location.protocol + "//" + (location.host || "(fichier local)"));
-  log("Adresse des fichiers : " + base);
+  log(D ? "Données : embarquées dans la page (mode hors ligne)" : "Adresse des fichiers : " + base);
   var gl = false;
   try { var c = document.createElement("canvas"); gl = !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) {}
   log("WebGL : " + (gl ? "oui" : "NON — la carte ne peut pas s'afficher"));
@@ -116,7 +140,17 @@ def b64(chemin):
     return base64.b64encode(Path(chemin).read_bytes()).decode()
 
 
-def construire(base_defaut=BASE_DEFAUT):
+def donnees_embarquees(dossier):
+    """Lit meta.json et les fichiers qu'il annonce ; renvoie le script qui les place dans la page."""
+    d = Path(dossier)
+    meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+    noms = ["meta.json", meta["grille"]] + [c["fichier"] for c in meta["couches"]]
+    fichiers = {n: base64.b64encode((d / n).read_bytes()).decode() for n in noms}
+    return ("window.__DONNEES_EMBARQUEES = " + json.dumps(
+        {"genere_le": meta.get("genere_le"), "source": meta.get("source"), "fichiers": fichiers}) + ";")
+
+
+def construire(base_defaut=BASE_DEFAUT, dossier_donnees=None):
     css_app = lire(RACINE / "www/dsfr-lite.css")
     css_map = lire(RACINE / "www/carte/lib/maplibre-gl.css")
     js_map = lire(RACINE / "www/carte/lib/maplibre-gl.js")
@@ -128,6 +162,7 @@ def construire(base_defaut=BASE_DEFAUT):
             ' class="active"' if cle == "carte" else "",
             "true" if cle == "carte" else "false", cle, ICONES[cle], titre)
         for cle, titre in ONGLETS)
+    embarque = ("<script>\n" + donnees_embarquees(dossier_donnees) + "\n</script>\n") if dossier_donnees else ""
     script = (SCRIPT_PAGE.replace("__DEFAUT__", repr(base_defaut)).replace("__TUILES__", repr(TUILES_IGN)))
     return f"""<!DOCTYPE html>
 <html lang="fr">
@@ -187,7 +222,7 @@ def construire(base_defaut=BASE_DEFAUT):
  </div>
 </main>
 
-<script>
+{embarque}<script>
 /* MapLibre GL JS (BSD-3-Clause, voir www/carte/lib/LICENSE-maplibre-gl.txt) */
 {js_map}
 </script>
@@ -206,5 +241,9 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     sortie = Path(sys.argv[1])
-    sortie.write_text(construire(sys.argv[2] if len(sys.argv) > 2 else BASE_DEFAUT), encoding="utf-8")
+    if len(sys.argv) > 3 and sys.argv[2] == "--hors-ligne":
+        html = construire(dossier_donnees=sys.argv[3])
+    else:
+        html = construire(sys.argv[2] if len(sys.argv) > 2 else BASE_DEFAUT)
+    sortie.write_text(html, encoding="utf-8")
     print(f"{sortie} : {sortie.stat().st_size // 1024} Ko")
