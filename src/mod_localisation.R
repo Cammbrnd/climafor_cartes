@@ -275,7 +275,7 @@ mod_localisation_server <- function(id) {
         leaflet::clearMarkers() |>
         leaflet::addCircleMarkers(
           lng = p$lon, lat = p$lat, radius = 8,
-          color = CONFIG$couleurs$bleu_france, fillOpacity = 0.85, weight = 2,
+          color = CONFIG$couleurs$vert, fillOpacity = 0.85, weight = 2,
           label = htmltools::htmlEscape(p$nom)) |>
         leaflet::setView(lng = p$lon, lat = p$lat, zoom = 11)
     }

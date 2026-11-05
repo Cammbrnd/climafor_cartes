@@ -154,10 +154,9 @@ mod_gabarit_server <- function(id, donnees, ctx, lieu) {
 # Dependances a prevoir dans les trois cas : sf pour les geometries
 # administratives (contours ADMIN-EXPRESS de l'IGN, telecharges une fois et
 # simplifies avec rmapshaper), et une echelle de couleur continue construite
-# avec ggplot2::scale_fill_viridis_c() ou une palette DSFR sequentielle.
+# avec ggplot2::scale_fill_viridis_c() ou une palette sequentielle de la charte (voir CONFIG$couleurs).
 #
-# Charte : le DSFR fournit des palettes sequentielles et divergentes
-# accessibles. Pour une anomalie (positive/negative), retenir une palette
+# Charte : pour une anomalie (positive/negative), retenir une palette
 # divergente ancree sur zero, et non un gradient continu, sous peine de rendre
 # le signe illisible.
 # ==============================================================================

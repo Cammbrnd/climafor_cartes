@@ -2,7 +2,7 @@
 # utils_plot.R — MOTEUR GRAPHIQUE
 # ------------------------------------------------------------------------------
 # Deux niveaux :
-#   1. theme_dsfr() et les fabriques generiques (graphe_annuel, graphe_mensuel)
+#   1. theme_climafor() et les fabriques generiques (graphe_annuel, graphe_mensuel)
 #      qui portent 90 % de la mise en forme ;
 #   2. les fonctions plot_xxx(dat, ctx), tres courtes, qui se contentent de
 #      declarer quelle colonne tracer et avec quel libelle.
@@ -15,13 +15,13 @@ CL <- CONFIG$couleurs   # raccourci de lecture
 
 
 # ------------------------------------------------------------------------------
-# 1. Theme graphique — Systeme de Design de l'Etat
+# 1. Theme graphique
 # ------------------------------------------------------------------------------
 
-#' Theme ggplot2 conforme a l'esprit du DSFR : sobriete, grille horizontale
-#' discrete, pas de cadre, typographie Marianne avec repli systeme.
+#' Theme ggplot2 de ClimaFor : sobriete, grille horizontale discrete, pas de
+#' cadre, typographie Open Sans avec repli systeme.
 #' @export
-theme_dsfr <- function(base_size = 13, mobile = FALSE) {
+theme_climafor <- function(base_size = 13, mobile = FALSE) {
   taille <- if (mobile) base_size - 2 else base_size
   ggplot2::theme_minimal(base_size = taille) +
     ggplot2::theme(
@@ -238,7 +238,7 @@ graphe_avec_source <- function(p, source) ajouter_notes(p, source %||% "")
 graphe_annuel <- function(dat, y, titre_y, ctx,
                           type = c("barres", "lignes"),
                           sens = "neutre",
-                          couleur = CL$bleu_france,
+                          couleur = CL$annee_courante,
                           lissage = NULL,
                           montrer_tendance = FALSE,
                           unite_tendance = "", dec_tendance = 2,
@@ -309,7 +309,7 @@ graphe_annuel <- function(dat, y, titre_y, ctx,
   # -- Moyenne mobile (le calcul exclut deja l'annee incomplete)
   if (!is.null(lissage) && lissage %in% names(d)) {
     p <- p + ggplot2::geom_line(ggplot2::aes(y = .data[[lissage]]),
-                                colour = CL$bleu_france, linewidth = 1, na.rm = TRUE)
+                                colour = CL$annee_courante, linewidth = 1, na.rm = TRUE)
   }
 
   # -- Tendance : pente de Sen + intervalle de confiance
@@ -327,9 +327,9 @@ graphe_annuel <- function(dat, y, titre_y, ctx,
       p <- p +
         ggplot2::geom_ribbon(data = tr, ggplot2::aes(x = .data$annee, ymin = .data$ymin,
                                                      ymax = .data$ymax),
-                             inherit.aes = FALSE, fill = CL$rouge_marianne, alpha = 0.13) +
+                             inherit.aes = FALSE, fill = CL$alerte, alpha = 0.13) +
         ggplot2::geom_line(data = tr, ggplot2::aes(x = .data$annee, y = .data$y),
-                           inherit.aes = FALSE, colour = CL$rouge_marianne,
+                           inherit.aes = FALSE, colour = CL$alerte,
                            linewidth = 0.7)
     }
   }
@@ -343,7 +343,7 @@ graphe_annuel <- function(dat, y, titre_y, ctx,
   p <- p +
     ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
     ggplot2::labs(x = NULL, y = titre_y, fill = NULL, colour = NULL) +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
 
   avec_notes(p, notes_annuelles(d, ctx, meta, ref_n, tend, etp, periode))
 }
@@ -398,7 +398,7 @@ barre_partielle <- function(d, y) {
 #' @export
 graphe_mensuel <- function(dat, col_ref, col_cur, titre_y, ctx,
                            couleur_ref = CL$reference,
-                           couleur_cur = CL$bleu_france,
+                           couleur_cur = CL$annee_courante,
                            mobile = FALSE) {
 
   if (is.null(dat) || !nrow(dat)) return(graphe_message(message_indisponible(dat)))
@@ -422,7 +422,7 @@ graphe_mensuel <- function(dat, col_ref, col_cur, titre_y, ctx,
     ggplot2::scale_fill_manual(values = stats::setNames(
       c(couleur_ref, couleur_cur), c(lib_ref, lib_cur))) +
     ggplot2::labs(x = NULL, y = titre_y, fill = NULL) +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
 
   p <- marquer_mois_partiel(p, dat, col_cur, lib_cur)
   avec_notes(p, notes_mensuelles(dat, ctx, meta))
@@ -471,7 +471,7 @@ notes_mensuelles <- function(dat, ctx, meta = NULL) {
 #' @export
 plot_bilan_hydrique <- function(dat, ctx, mobile = FALSE) {
   p <- graphe_mensuel(dat, "bh_ref", "bh_cur", "P - ETP (mm)", ctx,
-                      couleur_ref = CL$reference, couleur_cur = CL$bleu_france,
+                      couleur_ref = CL$reference, couleur_cur = CL$annee_courante,
                       mobile = mobile) +
     ggplot2::labs(subtitle = "Solde négatif = la demande évaporative excède les apports")
   ajouter_notes(p, note_etp(attr(dat, "meta")))
@@ -502,7 +502,7 @@ plot_ombrothermique <- function(dat, ctx, mobile = FALSE) {
   if (any(is.finite(dat$p_cur))) {
     p <- p +
       ggplot2::geom_point(data = dat[!partiel, , drop = FALSE],
-                          ggplot2::aes(y = .data$p_cur), colour = CL$bleu_france,
+                          ggplot2::aes(y = .data$p_cur), colour = CL$annee_courante,
                           shape = 18, size = 2.6, na.rm = TRUE) +
       ggplot2::geom_line(ggplot2::aes(y = 2 * .data$t_cur, group = 1),
                          colour = CL$temperature, linetype = "dashed",
@@ -511,7 +511,7 @@ plot_ombrothermique <- function(dat, ctx, mobile = FALSE) {
       # Mois incomplet : losange creux et astérisque, pas de verdict sec/humide.
       p <- p +
         ggplot2::geom_point(data = dat[partiel, , drop = FALSE],
-                            ggplot2::aes(y = .data$p_cur), colour = CL$bleu_france,
+                            ggplot2::aes(y = .data$p_cur), colour = CL$annee_courante,
                             shape = 5, size = 2.6, na.rm = TRUE) +
         ggplot2::geom_text(data = dat[partiel, , drop = FALSE],
                            ggplot2::aes(y = .data$p_cur), label = "*", size = 6,
@@ -531,7 +531,7 @@ plot_ombrothermique <- function(dat, ctx, mobile = FALSE) {
         "Barres : pluie normale %s | Losanges : pluie %d | Trait plein : T normale | Tirets : T %d",
         ctx$ref_label, ctx$courante, ctx$courante)
     ) +
-    theme_dsfr(mobile = mobile) +
+    theme_climafor(mobile = mobile) +
     ggplot2::theme(
       axis.title.y.left  = ggplot2::element_text(colour = CL$pluie),
       axis.title.y.right = ggplot2::element_text(colour = CL$temperature)
@@ -574,12 +574,12 @@ plot_gel <- function(dat, ctx, mobile = FALSE) {
                         linetype = "dashed", linewidth = 0.5) +
     ggplot2::scale_fill_manual(values = c(
       "Jours de gel (T min < 0 °C)"  = CL$neige,
-      "dont gel tardif (avril-mai)"    = CL$rouge_marianne
+      "dont gel tardif (avril-mai)"    = CL$alerte
     )) +
     ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
     ggplot2::labs(x = NULL, y = "Nombre de jours", fill = NULL,
                   subtitle = "Le gel tardif frappe après le débourrement : c'est le plus dommageable") +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
 }
 
@@ -604,7 +604,7 @@ plot_chaleur <- function(dat, ctx, mobile = FALSE) {
     ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
     ggplot2::labs(x = NULL, y = "Nombre de jours", fill = NULL,
                   subtitle = "Seuils emboîtés : chaque barre englobe la suivante") +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
 }
 
@@ -633,7 +633,7 @@ plot_precipitations <- function(dat, ctx, mobile = FALSE) {
                       width = 0.75, na.rm = TRUE) +
     barre_partielle(d, "p_tot") +
     ggplot2::geom_line(data = d, ggplot2::aes(x = .data$annee, y = .data$lissee),
-                       colour = CL$bleu_france, linewidth = 1, na.rm = TRUE) +
+                       colour = CL$annee_courante, linewidth = 1, na.rm = TRUE) +
     ggplot2::geom_hline(yintercept = d$normale[1], colour = CL$reference,
                         linetype = "dashed", linewidth = 0.5) +
     ggplot2::scale_fill_manual(values = c(Pluie = CL$pluie, Neige = CL$neige,
@@ -643,7 +643,7 @@ plot_precipitations <- function(dat, ctx, mobile = FALSE) {
                   subtitle = if (phases)
                     "Total = phase liquide + phase solide (équivalent en eau)"
                   else "Cumul mesuré par la station : pluie et neige ne sont pas distinguées") +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
 }
 
@@ -677,7 +677,7 @@ plot_ete <- function(dat, ctx, mobile = FALSE) {
     ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
     ggplot2::labs(x = NULL, fill = NULL, colour = NULL,
                   subtitle = sprintf("Tirets : normales estivales %s", ctx$ref_label)) +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n"),
                                 periode = "saison"))
 }
@@ -733,12 +733,12 @@ plot_martonne <- function(dat, ctx, mobile = FALSE) {
                        linewidth = 0.9, na.rm = TRUE) +
     ggplot2::geom_line(ggplot2::aes(y = .data$i_estival, colour = "Indice estival (JJA)"),
                        linewidth = 0.9, na.rm = TRUE) +
-    ggplot2::scale_colour_manual(values = c("Indice annuel" = CL$bleu_france,
+    ggplot2::scale_colour_manual(values = c("Indice annuel" = CL$annee_courante,
                                             "Indice estival (JJA)" = CL$attention)) +
     ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
     ggplot2::labs(x = NULL, y = "Indice de De Martonne", colour = NULL,
                   subtitle = "Bandes : domaine subhumide (20-30) et semi-aride (10-20)") +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
 }
 
@@ -776,7 +776,7 @@ plot_vegetation <- function(dat, ctx, mobile = FALSE) {
                   subtitle = sprintf(
                     "Barres verticales : période ou T moy dépasse %g °C pendant %d jours consécutifs",
                     ctx$seuils$veg_seuil_t, ctx$seuils$veg_n_jours)) +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
 }
 
@@ -877,7 +877,7 @@ plot_temperature_journaliere <- function(dat, ctx, mobile = FALSE) {
       subtitle = sprintf(paste("Trait gris : normale %s lissée sur 15 jours.",
                                "Rouge : %d au-dessus. Bleu : %d en dessous."),
                          ctx$ref_label, ctx$courante, ctx$courante)) +
-    theme_dsfr(mobile = mobile)
+    theme_climafor(mobile = mobile)
 }
 
 
@@ -889,7 +889,7 @@ plot_temperature_journaliere <- function(dat, ctx, mobile = FALSE) {
 #' @export
 plot_vent <- function(dat, ctx, mobile = FALSE) {
   graphe_annuel(dat, "ff_moy", "Vent moyen à 10 m (m/s)", ctx,
-                type = "lignes", couleur = CL$bleu_france,
+                type = "lignes", couleur = CL$annee_courante,
                 montrer_tendance = TRUE, unite_tendance = "m/s", dec_tendance = 2,
                 mobile = mobile) +
     ggplot2::labs(subtitle = paste(
@@ -901,7 +901,7 @@ plot_vent <- function(dat, ctx, mobile = FALSE) {
 #' @export
 plot_vent_mensuel <- function(dat, ctx, mobile = FALSE) {
   graphe_mensuel(dat, "val_ref", "val_cur", "Vent moyen à 10 m (m/s)", ctx,
-                 couleur_ref = CL$reference, couleur_cur = CL$bleu_france,
+                 couleur_ref = CL$reference, couleur_cur = CL$annee_courante,
                  mobile = mobile) +
     ggplot2::labs(subtitle = "Saisonnalité du régime de vent")
 }
@@ -939,7 +939,7 @@ plot_vent_soutenu <- function(dat, ctx, mobile = FALSE) {
     return(graphe_message(message_indisponible(dat, "Vent non renseigné sur cette période")))
   }
   graphe_annuel(dat, "n_p95", "Journées de vent soutenu", ctx,
-                type = "barres", sens = "chaud", couleur = CL$bleu_france,
+                type = "barres", sens = "chaud", couleur = CL$annee_courante,
                 montrer_tendance = TRUE, unite_tendance = "j", dec_tendance = 1,
                 mobile = mobile) +
     ggplot2::labs(subtitle = sprintf(paste(

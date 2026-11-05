@@ -294,29 +294,29 @@ CONFIG <- list(
   fenetre_defaut = c(4, 10),
 
   # ---------------------------------------------------------------------------
-  # 7. Charte graphique — Systeme de Design de l'Etat (DSFR v1.11)
+  # 7. Charte graphique — verts et terres de la foret (voir www/climafor.css)
   # ---------------------------------------------------------------------------
   couleurs = list(
-    bleu_france   = "#000091",  # couleur primaire DSFR
-    rouge_marianne= "#E1000F",
-    texte         = "#3A3A3A",
-    texte_mention = "#666666",
-    bordure       = "#DDDDDD",
-    # Couleurs fonctionnelles DSFR
+    vert          = "#00664B",  # liens, boutons, point choisi sur la carte
+    alerte        = "#B5472E",  # terre cuite : gel tardif, chaleur
+    texte         = "#1E2A23",
+    texte_mention = "#56635B",
+    bordure       = "#D9DFD6",
+    # Couleurs fonctionnelles
     succes        = "#18753C",
     attention     = "#B34000",
     erreur        = "#CE0500",
-    # Palette metier (illustrative DSFR) utilisee dans les graphiques
-    pluie         = "#0063CB",
-    neige         = "#7AB1E8",
-    temperature   = "#CE0500",
-    etp           = "#B34000",
-    reference     = "#666666",
-    annee_courante= "#000091",
-    deficit       = "#CE614A",
-    excedent      = "#465F9D",
-    neutre        = "#8C8C8C",   # ecart faible : ni au-dessus ni en dessous
-    en_cours      = "#B6B6B6"    # annee en cours, incomplete
+    # Palette metier utilisee dans les graphiques
+    pluie         = "#2D6F94",   # ciel
+    neige         = "#8DB6CC",
+    temperature   = "#B5472E",   # terre cuite
+    etp           = "#A8561A",   # ocre
+    reference     = "#56635B",
+    annee_courante= "#12382B",   # vert sapin
+    deficit       = "#B5472E",
+    excedent      = "#2D6F94",
+    neutre        = "#7C8A80",   # ecart faible : ni au-dessus ni en dessous
+    en_cours      = "#A9B8A8"    # annee en cours, incomplete
   ),
 
   # ---------------------------------------------------------------------------
@@ -331,9 +331,9 @@ CONFIG <- list(
     hauteur_web    = 380,  # px
     hauteur_mobile = 300,  # px
     # Pile typographique des graphiques interactifs (plotly) : une seule
-    # definition, lue par utils_plot.R. Arial et sans-serif prennent le relais
-    # quand Marianne n'est pas installee sur le poste.
-    police         = "Marianne, Arial, sans-serif",
+    # definition, lue par utils_plot.R. Open Sans est servie par l'application
+    # (www/fonts) ; Arial et sans-serif prennent le relais a defaut.
+    police         = "Open Sans, Arial, sans-serif",
     lissage_annees = 10,   # fenetre de la moyenne mobile (evolutions annuelles)
     dpi_export     = 150,
     largeur_export = 10,   # pouces

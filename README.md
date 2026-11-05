@@ -306,7 +306,7 @@ dans Chromium, sur l'application alimentée en données synthétiques, bureau
 | **E5** Bilan très long | sommaire d'ancres collé sous les onglets (grand écran), avec le nombre d'indicateurs par thématique et la section courante signalée au défilement (`aria-current`) | voir ci-dessous |
 | **E6** typographie | déjà traité en v1.2 (virgule décimale, vrai signe moins) ; vérifié sur le texte visible des écrans | 0 point décimal, 0 tiret court |
 | **E7** titre sauté | `h4` → `h3` dans l'onglet Rapport | règle `heading-order` : 1 → 0 |
-| **E8** pas de favicon | `www/favicon.svg` + `www/favicon.png` déclarés dans `<head>` | — |
+| **E8** pas de favicon | `www/favicon.png` (pictogramme du DSF) déclaré dans `<head>` | — |
 
 Au total, 64 nœuds en échec sur les six écrans testés → 0.
 
@@ -1101,7 +1101,7 @@ climafor/
 │   ├── glossaire.R             Définitions et infobulles des termes techniques (v1.4)
 │   ├── references.R            Références, statut des seuils, corrections de méthode (v1.5)
 │   ├── utils_calc.R            Calcul des indicateurs
-│   ├── utils_plot.R            Thème DSFR + fabriques de graphiques
+│   ├── utils_plot.R            Thème graphique + fabriques de graphiques
 │   ├── registre_indicateurs.R  ★ Cœur générique
 │   ├── mod_localisation.R      Où ? (recherche + position, carte et coordonnées repliées)
 │   ├── mod_station.R           Source des données : station proposée et sa qualité
@@ -1114,10 +1114,11 @@ climafor/
 │   ├── mod_sources.R           Documentation
 │   └── _gabarit_extension.R    Modèle pour les évolutions (non chargé)
 ├── www/
-│   ├── dsfr-lite.css           Habillage DSFR, responsive
+│   ├── climafor.css            Habillage (vert, sauge, Open Sans), responsive
+│   ├── fonts/                  Open Sans (woff2, licence OFL)
 │   ├── app.js                  Géolocalisation, resize, largeur d'écran, sommaire, copie du lien
 │   ├── carte/                  carte.js (composant) + lib/ MapLibre GL JS 5.6.0 (BSD-3, embarqué)
-│   └── favicon.svg / .png      Icône de l'onglet
+│   └── favicon.png             Icône de l'onglet (pictogramme du DSF)
 ├── rapport/
 │   ├── rapport_climat.Rmd      Modèle de rapport
 │   ├── generer_rapport.R       Processus séparé de génération
@@ -1440,18 +1441,25 @@ structure responsive est déjà là.
 
 ## Charte graphique
 
-`www/dsfr-lite.css` réimplémente les jetons du Système de Design de l'État
-(couleurs, échelle typographique, espacements, états de focus) sans embarquer
-le framework complet, qui pèse plusieurs centaines de kilo-octets et entre en
-conflit avec le Bootstrap de Shiny.
+`www/climafor.css` porte tout l'habillage de l'interface, à partir de variables
+`--cf-*` (section 1 du fichier) : changer une couleur ou le rayon des angles se
+fait à un seul endroit.
 
-Bleu France `#000091`, rouge Marianne `#E1000F`, angles droits, focus visible
-non supprimé, contrastes AA.
+- **Fond de page** vert très pâle (`#EEF3EA`), **blocs blancs** à filets fins,
+  angles à 4 px.
+- **Sauge** (`#D5E4D0`) pour le bandeau d'onglets et les titres d'étape ;
+  **onglet actif** en vert foncé (`#00664B`), texte blanc, sans liseré.
+- **Vert foncé** pour ce qui se clique (liens, boutons) ; focus clavier ocre
+  (`#A8561A`), jamais supprimé ; contrastes AA vérifiés.
+- **Police Open Sans**, servie par l'application (`www/fonts/`, licence OFL,
+  sous-ensemble latin en trois graisses) : aucun appel à un service tiers.
+- **Icône d'onglet** : le pictogramme du DSF, `www/favicon.png` (64 px,
+  transparent).
+- Les couleurs des graphiques sont dans `CONFIG$couleurs` (`src/config.R`) ;
+  `theme_climafor()` (`src/utils_plot.R`) les lit.
 
-**Pour passer au DSFR officiel** : remplacer les variables de la section 1 du
-fichier CSS par les variables `--blue-france-*`, les classes `cf-*` conservant
-leur sémantique. La police Marianne n'est pas embarquée (licence) : déposer les
-fichiers dans `www/fonts/` et ajouter les règles `@font-face` correspondantes.
+Le rapport (HTML et Word, dossier `rapport/`) garde pour l'instant sa propre
+mise en forme.
 
 ---
 

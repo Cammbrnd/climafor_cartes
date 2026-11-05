@@ -189,12 +189,12 @@ verifier(!length(cites_faux171),
 
 # La police des graphiques n'a qu'une definition.
 police171 <- CONFIG$graphiques$police
-verifier(is.character(police171) && length(police171) == 1L && grepl("Marianne", police171) &&
+verifier(is.character(police171) && length(police171) == 1L && grepl("Open Sans", police171) &&
            grepl("sans-serif", police171) && is.null(CONFIG$graphiques$police_secours),
-         "CONFIG$graphiques$police est la pile typographique complete (Marianne, repli, sans-serif)")
+         "CONFIG$graphiques$police est la pile typographique complete (Open Sans, repli, sans-serif)")
 src_plot171 <- lire171("src/utils_plot.R")
 src_plot171 <- src_plot171[!grepl("^\\s*#", src_plot171)]
-verifier(!any(grepl("Marianne", src_plot171, fixed = TRUE)) &&
+verifier(!any(grepl("Open Sans", src_plot171, fixed = TRUE)) &&
            sum(grepl("CONFIG$graphiques$police", src_plot171, fixed = TRUE)) >= 4L,
          "utils_plot.R lit la police dans CONFIG, sans la recopier")
 
@@ -203,7 +203,7 @@ verifier(!any(grepl("Marianne", src_plot171, fixed = TRUE)) &&
 groupe("v1.7.1 — feuille de style et paquets")
 # ==============================================================================
 
-css171 <- paste(lire171("www/dsfr-lite.css"), collapse = "\n")
+css171 <- paste(lire171("www/climafor.css"), collapse = "\n")
 css171 <- gsub("/\\*.*?\\*/", "", css171, perl = TRUE)
 classes171 <- unique(gsub("^\\.", "", unlist(regmatches(css171, gregexpr("\\.cf-[A-Za-z0-9_-]+", css171)))))
 code_ui171 <- paste(unlist(lapply(c(fichiers_r171, "www/app.js", "www/carte/carte.js"), lire171)), collapse = "\n")

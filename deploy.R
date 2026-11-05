@@ -37,7 +37,8 @@ stopifnot(
   "CONFIG absent"              = exists("CONFIG"),
   "Registre vide"              = length(INDICATEURS) > 0,
   "Modele de rapport manquant" = file.exists(chemin_ci("rapport/rapport_climat.Rmd")),
-  "Feuille de style manquante" = file.exists("www/dsfr-lite.css"),
+  "Feuille de style manquante" = file.exists("www/climafor.css") &&
+                                 file.exists("www/fonts/open-sans-latin-400-normal.woff2"),
   "Script client manquant"     = file.exists("www/app.js"),
   "Composant carte manquant"   = file.exists("www/carte/carte.js") &&
                                  file.exists("www/carte/lib/maplibre-gl.js")

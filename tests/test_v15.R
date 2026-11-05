@@ -312,7 +312,7 @@ groupe("v1.5 — version, feuille de style, simulation rejouable")
 # ==============================================================================
 
 verifier(numeric_version(CONFIG$app$version) >= "1.5.0", "la version est au moins 1.5.0")
-css15 <- paste(readLines(chemin_ci("www/dsfr-lite.css"), encoding = "UTF-8", warn = FALSE), collapse = "\n")
+css15 <- paste(readLines(chemin_ci("www/climafor.css"), encoding = "UTF-8", warn = FALSE), collapse = "\n")
 verifier(grepl("\\.cf-statut--indicatif", css15) && grepl("\\.cf-refs", css15),
          "la feuille de style definit le statut des seuils et les references")
 verifier(file.exists(chemin_ci("tests/simulation_vpd.R")),

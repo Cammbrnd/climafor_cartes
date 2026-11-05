@@ -115,11 +115,14 @@ attendus <- c(
   "www/carte/lib/LICENSE-maplibre-gl.txt",
   "www/carte/lib/maplibre-gl.css",
   "www/carte/lib/maplibre-gl.js",
-  "www/dsfr-lite.css",
+  "www/climafor.css",
   "www/favicon.png",
-  "www/favicon.svg",
-  "www/logo_dsf.png",
-  "www/republique_francaise.png"
+  "www/fonts",
+  "www/fonts/LICENCE-OpenSans-OFL.txt",
+  "www/fonts/open-sans-latin-400-normal.woff2",
+  "www/fonts/open-sans-latin-600-normal.woff2",
+  "www/fonts/open-sans-latin-700-normal.woff2",
+  "www/logo_dsf.png"
 )
 
 # Entree de `parent` qui porte ce nom a la casse pres (vecteur vide si aucune)

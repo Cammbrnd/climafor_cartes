@@ -79,11 +79,10 @@ ui_construire <- function(etat = NULL) shiny::bootstrapPage(
     shiny::tags$meta(name = "description",
                      content = "Bilan météorologique et climatique pour la gestion forestière"),
     # Favicon : sans lien declare, le navigateur demande /favicon.ico et recoit
-    # une erreur 404 a chaque chargement. SVG pour les navigateurs recents,
-    # PNG pour les autres.
-    shiny::tags$link(rel = "icon", type = "image/svg+xml", href = "favicon.svg"),
-    shiny::tags$link(rel = "icon", type = "image/png", sizes = "32x32", href = "favicon.png"),
-    shiny::tags$link(rel = "stylesheet", href = "dsfr-lite.css"),
+    # une erreur 404 a chaque chargement. Pictogramme du DSF (l'oeil), en PNG
+    # transparent de 64 px : le navigateur le reduit a la taille de l'onglet.
+    shiny::tags$link(rel = "icon", type = "image/png", sizes = "64x64", href = "favicon.png"),
+    shiny::tags$link(rel = "stylesheet", href = "climafor.css"),
     shiny::tags$script(src = "app.js"),
     # Carte (v1.8) : ce petit chargeur n'appelle MapLibre qu'a la premiere
     # ouverture de l'onglet.
@@ -94,26 +93,20 @@ ui_construire <- function(etat = NULL) shiny::bootstrapPage(
   shiny::tags$a(class = "cf-evitement", href = "#contenu", "Aller au contenu"),
 
   # -- Barre d'application ---------------------------------------------------
-  # Ordonnancement officiel du DSFR : bloc-marque « République française »,
-  # filet, logo de l'opérateur, filet, nom du service. Les deux images portent
-  # un texte de remplacement — ce sont des logos porteurs de sens, pas des
-  # ornements, elles ne peuvent pas être marquées décoratives.
+  # Logo du DSF, puis nom du service, sans filet entre les deux. L'image porte
+  # un texte de remplacement : c'est un logo porteur de sens, pas un ornement.
   shiny::tags$header(
     class = "cf-barre",
     shiny::div(
       class = "cf-barre__interieur",
       shiny::div(
         class = "cf-entete-marques",
-        shiny::img(class = "cf-logo cf-logo--rf",
-                   src = "republique_francaise.png",
-                   alt = "République française — Liberté, Égalité, Fraternité"),
         shiny::img(class = "cf-logo cf-logo--operateur",
                    src = "logo_dsf.png",
                    alt = "Correspondant observateur — Département de la santé des forêts")
       ),
       shiny::div(
         class = "cf-marque",
-        shiny::div(class = "cf-marque__organisme", CONFIG$app$organisme),
         shiny::h1(class = "cf-marque__titre", CONFIG$app$nom),
         shiny::div(class = "cf-marque__soustitre", CONFIG$app$sous_titre)
       )

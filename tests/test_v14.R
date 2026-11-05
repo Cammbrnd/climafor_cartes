@@ -417,7 +417,7 @@ groupe("v1.4 — version, feuilles de style et script")
 # ==============================================================================
 
 verifier(numeric_version(CONFIG$app$version) >= "1.4.0", "la version est 1.4.0 ou plus recente")
-css14 <- paste(readLines(chemin_ci("www/dsfr-lite.css"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+css14 <- paste(readLines(chemin_ci("www/climafor.css"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
 js14  <- paste(readLines(chemin_ci("www/app.js"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
 verifier(grepl("\\.cf-retenir \\{", css14) && grepl("abbr\\.cf-terme", css14) &&
            grepl("\\.cf-erreur-detail", css14) && grepl("\\.cf-etat-reglage", css14),

@@ -24,11 +24,10 @@ verifier(grepl("<main[^>]*id=\"contenu\"", html_app),
          "le contenu est dans un repere <main id=\"contenu\">")
 verifier(grepl("href=\"#contenu\"", html_app),
          "le lien d'evitement pointe vers ce repere")
-verifier(grepl("rel=\"icon\"[^>]*favicon\\.svg", html_app) &&
-           grepl("rel=\"icon\"[^>]*favicon\\.png", html_app),
-         "un favicon SVG et un favicon PNG sont declares")
-verifier(file.exists(chemin_ci("www/favicon.svg")) && file.exists(chemin_ci("www/favicon.png")),
-         "les fichiers favicon existent")
+verifier(grepl("rel=\"icon\"[^>]*favicon\\.png", html_app),
+         "un favicon PNG (pictogramme du DSF) est declare")
+verifier(file.exists(chemin_ci("www/favicon.png")),
+         "le fichier favicon existe")
 
 
 groupe("v1.3 — champs etiquetes, listes natives (E2)")
@@ -67,7 +66,7 @@ verifier(grepl("tags\\$label\\([^)]*`for` = ns\\(\"annee\"\\)", gsub("\n\\s*", "
 
 groupe("v1.3 — cibles et sommaire (E4, E5), contenu des feuilles de style")
 
-css <- paste(readLines(chemin_ci("www/dsfr-lite.css"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+css <- paste(readLines(chemin_ci("www/climafor.css"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
 verifier(grepl("input\\[type=\"radio\"\\], input\\[type=\"checkbox\"\\] \\{\\s*width: 24px; height: 24px", css),
          "cases et boutons radio d'au moins 24 px (WCAG 2.5.8)")
 verifier(grepl("@media \\(pointer: coarse\\) \\{\\s*select, \\.form-control", css),

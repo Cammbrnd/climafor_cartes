@@ -237,7 +237,7 @@ def donnees_embarquees(dossier):
 
 
 def construire(base_defaut=BASE_DEFAUT, dossier_donnees=None):
-    css_app = lire(RACINE / "www/dsfr-lite.css")
+    css_app = lire(RACINE / "www/climafor.css")
     css_map = lire(RACINE / "www/carte/lib/maplibre-gl.css")
     js_map = lire(RACINE / "www/carte/lib/maplibre-gl.js")
     js_carte = lire(RACINE / "www/carte/carte.js")
@@ -278,11 +278,9 @@ def construire(base_defaut=BASE_DEFAUT, dossier_donnees=None):
 <header class="cf-barre">
   <div class="cf-barre__interieur">
     <div class="cf-entete-marques">
-      <img class="cf-logo cf-logo--rf" src="data:image/png;base64,{b64(RACINE / 'www/republique_francaise.png')}" alt="République française — Liberté, Égalité, Fraternité">
       <img class="cf-logo cf-logo--operateur" src="data:image/png;base64,{b64(RACINE / 'www/logo_dsf.png')}" alt="Correspondant observateur — Département de la santé des forêts">
     </div>
     <div class="cf-marque">
-      <div class="cf-marque__organisme">DSF — Département de la santé des forêts</div>
       <h1 class="cf-marque__titre">ClimaFor</h1>
       <div class="cf-marque__soustitre">Bilan météorologique et climatique pour la gestion forestière</div>
     </div>

@@ -1,39 +1,21 @@
 /* =============================================================================
-   dsfr-lite.css — habillage inspiré du Système de Design de l'État (DSFR v1.11)
+   climafor.css — habillage de ClimaFor
    -----------------------------------------------------------------------------
-   Version 2 de l'interface. Le contenu, les calculs et les identifiants d'input
-   sont inchangés : seule la mise en scène évolue.
+   Style sobre : fond de page vert très pâle, blocs blancs à filets fins, sauge
+   pour le bandeau d'onglets et les titres d'étape, vert foncé pour ce qui se
+   clique. Police : Open Sans, hébergée avec l'application (www/fonts, licence
+   OFL) — aucun appel à un service tiers.
 
-   CE QUI CHANGE, ET POURQUOI
-   --------------------------
-   1. Les réglages quittent la BANDE HORIZONTALE pour un ONGLET ACCUEIL dédié.
-      La bande imposait un compromis permanent : soit elle occupait le haut de
-      page et repoussait les résultats, soit elle se repliait et l'utilisateur
-      perdait tout accès à ses réglages. Un onglet supprime le compromis, et
-      contrairement à un tiroir latéral il figure dans la navigation : il se
-      trouve sans avoir à deviner qu'il existe.
+   Les règles d'ensemble de l'interface ne changent pas : réglages sur un onglet
+   Accueil, bouton d'action collant, réglages secondaires repliés, une seule
+   barre de contexte à l'écran (le bandeau n'apparaît qu'à l'impression).
 
-   2. Les réglages sont numérotés 1-2 et le bouton d'action est ancré dans une
-      barre collante. On lit une procédure, pas un tableau de configuration.
-
-   3. Les réglages secondaires (plage affichée, fenêtre P - ETP, référence
-      personnalisée) sont repliés. Un débutant voit trois champs ; un habitué
-      déplie et retrouve les six.
-
-   4. Une seule barre d'application (marque + bouton Réglages) surmonte des
-      onglets collants. L'ancienne version empilait un en-tête de 110 px PUIS
-      une barre d'onglets : 170 px consommés avant la première information.
-
-   5. La duplication lieu/coordonnées/référence (bandeau du module bilan ET
-      récapitulatif de l'app) est résolue : une seule barre de contexte à
-      l'écran, le bandeau ne ressort qu'à l'impression.
-
-   RÈGLE TYPOGRAPHIQUE — inchangée, cinq tailles, jamais sous 14 px.
+   RÈGLE TYPOGRAPHIQUE — cinq tailles, jamais sous 14 px.
      --t-xs  14px  mentions, aides, légendes         (plancher absolu)
      --t-sm  16px  corps de texte, champs, boutons   (défaut)
-     --t-md  18px  titres de carte, valeurs d'indicateur
-     --t-lg  24px  titres de section
-     --t-xl  30px  titre de l'application
+     --t-md  18px  titres de carte et d'étape, valeurs d'indicateur
+     --t-lg  24px  titres de section, titre de l'application
+     --t-xl  30px  réservé
 
    Organisation
      1. Jetons                  2. Base et typographie
@@ -43,21 +25,39 @@
      9. Responsive              10. Impression
    ========================================================================== */
 
+/* Open Sans — sous-ensemble latin (accents français compris), trois graisses */
+@font-face {
+  font-family: "Open Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("fonts/open-sans-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Open Sans"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("fonts/open-sans-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Open Sans"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("fonts/open-sans-latin-700-normal.woff2") format("woff2");
+}
+
 /* -- 1. Jetons ------------------------------------------------------------- */
 :root {
-  /* Couleurs primaires DSFR */
-  --cf-bleu:           #000091;
-  --cf-bleu-survol:    #1212FF;
-  --cf-bleu-pale:      #F5F5FE;
+  /* Verts */
+  --cf-vert:           #00664B;   /* liens, boutons, onglet actif (7:1 sur blanc) */
+  --cf-vert-survol:    #12382B;
+  --cf-vert-pale:      #EEF3EA;   /* survol et sélection sur fond blanc */
+  --cf-sapin:          #12382B;   /* titres */
+  --cf-sauge:          #D5E4D0;   /* bandeau d'onglets, titres d'étape */
 
   /* Neutres */
-  --cf-texte:          #1E1E1E;
-  --cf-texte-mention:  #5A5A5A;
-  --cf-fond:           #FFFFFF;
-  --cf-fond-alt:       #F6F6F6;
-  --cf-fond-contraste: #EEEEEE;
-  --cf-bordure:        #DDDDDD;
-  --cf-bordure-forte:  #929292;
+  --cf-texte:          #1E2A23;
+  --cf-texte-mention:  #56635B;
+  --cf-fond:           #FFFFFF;   /* blocs */
+  --cf-fond-alt:       #EEF3EA;   /* fond de page */
+  --cf-fond-contraste: #E3ECE0;
+  --cf-bordure:        #D9DFD6;
+  --cf-bordure-forte:  #7C8A80;   /* contour des champs (3,6:1) */
+  --cf-focus:          #A8561A;   /* contour du focus clavier (5,2:1) */
+  --cf-rayon:          4px;
 
   /* Fonctionnelles */
   --cf-succes:         #18753C;
@@ -80,16 +80,11 @@
   --e-1: 4px;  --e-2: 8px;  --e-3: 12px;
   --e-4: 16px; --e-6: 24px; --e-8: 32px;
 
-  /* Élévation. Le DSFR proscrit les arrondis décoratifs, pas les ombres :
-     elles servent ici à dire ce qui flotte au-dessus du reste. */
-  --cf-ombre-barre:  0 1px 0 rgba(0, 0, 0, .10);
-
   /* Hauteurs des éléments collants — servent aux calculs de position */
   --cf-h-onglets:  48px;
 
-  /* Marianne est la police de l'État. Repli sur la pile système si les
-     fichiers ne sont pas déposés dans www/fonts (voir README). */
-  --cf-police: "Marianne", -apple-system, BlinkMacSystemFont, "Segoe UI",
+  /* Open Sans, hébergée dans www/fonts ; repli sur la pile système. */
+  --cf-police: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
                Roboto, Arial, sans-serif;
 
   --cf-largeur-max: 1440px;
@@ -123,6 +118,7 @@ body {
 }
 
 h1, h2, h3, h4 { font-weight: 700; color: var(--cf-texte); margin-top: 0; }
+h1, h2 { color: var(--cf-sapin); }
 h1 { font-size: var(--t-xl); line-height: 1.2; }
 h2 { font-size: var(--t-lg); line-height: 1.3; }
 h3 { font-size: var(--t-md); line-height: 1.35; }
@@ -130,13 +126,13 @@ h4 { font-size: var(--t-sm); line-height: 1.4; }
 
 p { margin: 0 0 var(--e-3); }
 
-a { color: var(--cf-bleu); text-underline-offset: 2px; }
-a:hover { color: var(--cf-bleu-survol); }
+a { color: var(--cf-vert); text-underline-offset: 2px; }
+a:hover { color: var(--cf-vert-survol); }
 
-/* Focus visible : exigence d'accessibilité du DSFR, jamais supprimée */
+/* Focus visible : exigence d'accessibilité (RGAA), jamais supprimé */
 a:focus-visible, button:focus-visible, input:focus-visible,
 select:focus-visible, textarea:focus-visible, summary:focus-visible {
-  outline: 2px solid #0A76F6;
+  outline: 3px solid var(--cf-focus);
   outline-offset: 2px;
 }
 
@@ -144,7 +140,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
    le focus. Attendu par le RGAA sur une interface à navigation répétée. */
 .cf-evitement {
   position: absolute; left: -9999px; top: 0; z-index: 100;
-  background: var(--cf-bleu); color: #FFF; padding: var(--e-2) var(--e-4);
+  background: var(--cf-vert); color: #FFF; padding: var(--e-2) var(--e-4);
   font-weight: 700; text-decoration: none;
 }
 .cf-evitement:focus { left: 0; color: #FFF; }
@@ -165,10 +161,11 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 }
 
 .cf-titre-section {
-  font-size: var(--t-lg);
+  font-size: var(--t-md);
   margin: 0 0 var(--e-4);
-  padding-bottom: var(--e-2);
-  border-bottom: 1px solid var(--cf-bordure);
+  padding: 10px 14px;
+  background: var(--cf-sauge);
+  border-radius: var(--cf-rayon);
 }
 
 .cf-liste { padding-left: 1.25rem; margin: 0 0 var(--e-3); }
@@ -213,6 +210,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
    bas de page, pas le bloc-marque. */
 .cf-barre {
   background: var(--cf-fond);
+  border-top: 4px solid var(--cf-vert);
   border-bottom: 1px solid var(--cf-bordure);
 }
 .cf-barre__interieur {
@@ -223,36 +221,18 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
   gap: var(--e-4); flex-wrap: wrap;
 }
 
-/* Bloc-marque officiel.
-   Le liseré bleu-blanc-rouge dessiné en CSS a été retiré : dès lors que le
-   vrai bloc-marque « République française » est présent, le reproduire en
-   bordure décorative ferait doublon — et le DSFR interdit d'en fabriquer une
-   variante. On reprend l'ordonnancement officiel : bloc-marque, filet, logo
-   de l'opérateur, filet, nom du service. */
+/* Logo, puis nom du service : aucun filet entre les deux. */
 .cf-entete-marques {
   display: flex; align-items: center; gap: var(--e-4);
   flex: 0 0 auto;
 }
 .cf-logo { display: block; width: auto; }
-.cf-logo--rf        { height: 68px; }
-.cf-logo--operateur { height: 48px; padding-left: var(--e-4);
-                      border-left: 1px solid var(--cf-bordure); }
+.cf-logo--operateur { height: 52px; }
 
-.cf-marque {
-  padding-left: var(--e-4);
-  border-left: 1px solid var(--cf-bordure);
-  min-width: 0;
-}
-.cf-marque__organisme {
-  font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.03em;
-  text-transform: uppercase; color: var(--cf-texte-mention);
-  line-height: 1.2;
-}
-/* 30 px : c'est le titre de l'application, le plus gros texte de l'écran.
-   Le rétrograder à 24 px pour gagner de la hauteur de barre le faisait passer
-   pour un simple titre de section. */
+.cf-marque { min-width: 0; }
 .cf-marque__titre {
-  font-size: var(--t-xl); font-weight: 700; margin: 0; line-height: 1.15;
+  font-size: var(--t-lg); font-weight: 700; margin: 0; line-height: 1.2;
+  color: var(--cf-sapin);
 }
 .cf-marque__soustitre {
   font-size: var(--t-xs); color: var(--cf-texte-mention);
@@ -284,11 +264,10 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   border-bottom: 1px solid var(--cf-bordure);
-  background: var(--cf-fond);
+  background: var(--cf-sauge);
   padding-left:  max(var(--e-4), calc((100% - var(--cf-largeur-max)) / 2 + var(--e-4)));
   padding-right: max(var(--e-4), calc((100% - var(--cf-largeur-max)) / 2 + var(--e-4)));
   margin: 0;
-  box-shadow: var(--cf-ombre-barre);
 }
 .cf-onglets > .nav-tabs::-webkit-scrollbar,
 .cf-onglets > .tabbable > .nav-tabs::-webkit-scrollbar { display: none; }
@@ -309,7 +288,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
   border-radius: 0 !important;
   color: var(--cf-texte) !important;
   font-size: var(--t-sm);
-  font-weight: 500;
+  font-weight: 400;
   padding: var(--e-3) var(--e-4) !important;
   background: transparent !important;
   margin: 0 !important;
@@ -317,14 +296,18 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
   white-space: nowrap;
   min-height: var(--cf-h-onglets);
 }
+/* Onglet actif : aplat vert foncé, texte blanc (7:1), sans liseré. */
 .nav-tabs > li.active > a,
 .nav-tabs .nav-link.active {
-  color: var(--cf-bleu) !important;
-  font-weight: 700;
-  box-shadow: inset 0 -3px 0 0 var(--cf-bleu);
-  background: var(--cf-fond) !important;
+  color: #FFFFFF !important;
+  font-weight: 600;
+  background: var(--cf-vert) !important;
 }
-.nav-tabs > li > a:hover { background: var(--cf-fond-alt) !important; }
+/* :not(.active) — sans lui, le survol de l'onglet actif le repassait en clair
+   sous un texte blanc. */
+.nav-tabs > li:not(.active) > a:hover { background: rgba(255, 255, 255, .6) !important; }
+/* Pas de pictogramme dans les onglets : du texte seul. */
+.nav-tabs .cf-icone { display: none; }
 
 /* =============================================================================
    4. Écran d'accueil et barre d'action
@@ -362,7 +345,6 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
   gap: var(--e-4); flex-wrap: wrap;
   background: var(--cf-fond);
   border: 1px solid var(--cf-bordure);
-  border-top: 3px solid var(--cf-bleu);
   padding: var(--e-3) var(--e-4);
   margin-top: var(--e-4);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, .08);
@@ -374,17 +356,18 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 /* Étapes numérotées. Le numéro n'est pas décoratif : il dit qu'il y a un
    ordre, et combien il reste à faire. */
 .cf-etape {
-  display: flex; align-items: center; gap: var(--e-2);
-  margin: 0 0 var(--e-3);
+  display: flex; align-items: baseline; gap: var(--e-2);
+  margin: 0 0 var(--e-4);
+  padding: 10px 14px;
+  background: var(--cf-sauge);
+  border-radius: var(--cf-rayon);
 }
 .cf-etape__num {
   flex: 0 0 auto;
-  width: 26px; height: 26px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--cf-bleu); color: #FFFFFF;
-  font-size: var(--t-xs); font-weight: 700;
+  font-size: var(--t-md); font-weight: 700; color: var(--cf-sapin);
 }
-.cf-etape__titre { font-size: var(--t-sm); font-weight: 700; }
+.cf-etape__num::after { content: "."; }
+.cf-etape__titre { font-size: var(--t-md); font-weight: 700; color: var(--cf-sapin); }
 .cf-etape__note {
   font-size: var(--t-xs); color: var(--cf-texte-mention); font-weight: 400;
 }
@@ -405,16 +388,17 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 .cf-contexte {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--e-4); flex-wrap: wrap;
-  background: var(--cf-bleu); color: #FFFFFF;
+  background: var(--cf-fond); color: var(--cf-texte);
+  border: 1px solid var(--cf-bordure);
   padding: var(--e-3) var(--e-4);
   margin-bottom: var(--e-6);
 }
 .cf-contexte__lieu {
   display: flex; align-items: center; gap: var(--e-2);
-  font-size: var(--t-md); font-weight: 700;
+  font-size: var(--t-lg); font-weight: 700; color: var(--cf-sapin);
 }
-.cf-contexte__meta { font-size: var(--t-xs); color: #DADAF5; }
-.cf-contexte__meta b { color: #FFFFFF; font-weight: 700; }
+.cf-contexte__meta { font-size: var(--t-xs); color: var(--cf-texte-mention); }
+.cf-contexte__meta b { color: var(--cf-texte); font-weight: 700; }
 
 /* Bandeau d'identification : réservé au papier. À l'écran il ferait doublon
    avec la barre de contexte ci-dessus. */
@@ -460,7 +444,6 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 .cf-carte {
   background: var(--cf-fond);
   border: 1px solid var(--cf-bordure);
-  border-radius: 0;              /* le DSFR proscrit les arrondis décoratifs */
   padding: var(--e-4);
   margin-bottom: var(--e-4);
 }
@@ -543,8 +526,8 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
   border: 1px solid var(--cf-bordure);
 }
 .cf-lien-outil:hover {
-  color: var(--cf-bleu); border-color: var(--cf-bleu);
-  background: var(--cf-bleu-pale); text-decoration: none;
+  color: var(--cf-vert); border-color: var(--cf-vert);
+  background: var(--cf-vert-pale); text-decoration: none;
 }
 
 .cf-bloc { margin-bottom: var(--e-4); }
@@ -557,7 +540,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 .cf-famille__titre {
   font-size: var(--t-lg); margin: 0 0 var(--e-3);
   padding-bottom: var(--e-2);
-  border-bottom: 2px solid var(--cf-bleu);
+  border-bottom: 2px solid var(--cf-vert);
   display: flex; align-items: baseline; gap: var(--e-2); flex-wrap: wrap;
 }
 .cf-famille__compte {
@@ -573,7 +556,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 
 .cf-commentaire {
   background: var(--cf-fond-alt);
-  border-left: 4px solid var(--cf-bleu);
+  border-left: 4px solid var(--cf-vert);
   padding: var(--e-3);
   margin: var(--e-3) 0 0;
   font-size: var(--t-sm);
@@ -585,7 +568,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 }
 .cf-details > summary {
   cursor: pointer; font-weight: 700; font-size: var(--t-sm);
-  color: var(--cf-bleu); padding: var(--e-2) 0; list-style: none;
+  color: var(--cf-vert); padding: var(--e-2) 0; list-style: none;
   display: flex; align-items: center; gap: var(--e-2);
 }
 .cf-details > summary::-webkit-details-marker { display: none; }
@@ -618,7 +601,7 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 .cf-repli > summary {
   cursor: pointer; list-style: none;
   padding: var(--e-2) var(--e-3);
-  font-size: var(--t-xs); font-weight: 700; color: var(--cf-bleu);
+  font-size: var(--t-xs); font-weight: 700; color: var(--cf-vert);
   display: flex; align-items: center; gap: var(--e-2);
   min-height: 40px;
 }
@@ -661,15 +644,15 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
   min-height: 40px;
   border: 1px solid var(--cf-bordure-forte);
   background: var(--cf-fond);
-  font-size: var(--t-xs) !important; font-weight: 500 !important;
+  font-size: var(--t-xs) !important; font-weight: 600 !important;
   cursor: pointer;
 }
 .cf-chips .checkbox-inline input[type="checkbox"] { position: static; margin: 0; }
-.cf-chips .checkbox-inline:hover { background: var(--cf-bleu-pale); }
+.cf-chips .checkbox-inline:hover { background: var(--cf-vert-pale); }
 .cf-chips .checkbox-inline:has(input:checked) {
-  background: var(--cf-bleu-pale);
-  border-color: var(--cf-bleu);
-  color: var(--cf-bleu);
+  background: var(--cf-vert-pale);
+  border-color: var(--cf-vert);
+  color: var(--cf-vert);
   font-weight: 700 !important;
 }
 
@@ -679,13 +662,12 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 .form-control, .selectize-input, select,
 input[type="text"], input[type="number"], textarea {
   border: 1px solid var(--cf-bordure-forte) !important;
-  border-bottom: 2px solid var(--cf-texte) !important;
-  border-radius: 0 !important;
+  border-radius: var(--cf-rayon) !important;
   box-shadow: none !important;
-  background: var(--cf-fond-contraste) !important;
+  background: var(--cf-fond) !important;
   font-size: var(--t-sm) !important;
   height: auto !important;
-  min-height: 40px;
+  min-height: 44px;
   padding: var(--e-2) var(--e-3) !important;
 }
 
@@ -703,7 +685,7 @@ input[type="text"], input[type="number"], textarea {
 .shiny-input-container > label,
 .shiny-input-container .control-label,
 label {
-  font-weight: 700 !important;
+  font-weight: 600 !important;
   font-size: var(--t-sm) !important;
   color: var(--cf-texte) !important;
   margin-bottom: var(--e-1) !important;
@@ -732,7 +714,7 @@ label {
 .cf-choix .radio:last-child label, .cf-choix .checkbox:last-child label {
   border-bottom: 1px solid var(--cf-bordure);
 }
-.cf-choix .radio label:hover, .cf-choix .checkbox label:hover { background: var(--cf-bleu-pale); }
+.cf-choix .radio label:hover, .cf-choix .checkbox label:hover { background: var(--cf-vert-pale); }
 
 /* Liste d'indicateurs du rapport : plusieurs colonnes dès qu'il y a la place */
 .cf-choix--colonnes .shiny-options-group {
@@ -744,26 +726,26 @@ label {
 .cf-btn {
   display: inline-flex; align-items: center; justify-content: center;
   gap: var(--e-2);
-  border: none; border-radius: 0; font-weight: 500;
+  border: none; border-radius: var(--cf-rayon); font-weight: 600;
   font-family: inherit; font-size: var(--t-sm);
   padding: var(--e-2) var(--e-4);
   min-height: 40px;
   cursor: pointer; white-space: nowrap;
 }
-.cf-btn--principal { background: var(--cf-bleu); color: #FFFFFF; }
-.cf-btn--principal:hover { background: var(--cf-bleu-survol); color: #FFFFFF; }
+.cf-btn--principal { background: var(--cf-vert); color: #FFFFFF; }
+.cf-btn--principal:hover { background: var(--cf-vert-survol); color: #FFFFFF; }
 .cf-btn--sec {
-  background: transparent; color: var(--cf-bleu);
-  box-shadow: inset 0 0 0 1px var(--cf-bleu);
+  background: transparent; color: var(--cf-vert);
+  box-shadow: inset 0 0 0 1px var(--cf-vert);
 }
-.cf-btn--sec:hover { background: var(--cf-bleu-pale); color: var(--cf-bleu); }
+.cf-btn--sec:hover { background: var(--cf-vert-pale); color: var(--cf-vert); }
 .cf-btn--clair {
-  background: transparent; color: #FFFFFF;
-  box-shadow: inset 0 0 0 1px #FFFFFF;
+  background: transparent; color: var(--cf-vert);
+  box-shadow: inset 0 0 0 1px var(--cf-vert);
 }
-.cf-btn--clair:hover { background: rgba(255, 255, 255, .12); color: #FFFFFF; }
+.cf-btn--clair:hover { background: var(--cf-vert-pale); color: var(--cf-vert); }
 .cf-btn--large { width: 100%; min-height: 48px; font-size: var(--t-md); font-weight: 700; }
-.btn-default, .btn { font-size: var(--t-sm); border-radius: 0; }
+.btn-default, .btn { font-size: var(--t-sm); border-radius: var(--cf-rayon); }
 
 /* Deux champs côte à côte, qui repassent en colonne quand c'est trop étroit */
 .cf-duo {
@@ -773,22 +755,24 @@ label {
 .cf-duo > * { margin-bottom: 0 !important; }
 
 /* Champ + bouton sur une ligne */
-.cf-champ-bouton { display: flex; gap: var(--e-2); align-items: stretch; }
+/* Alignés en bas : le libellé masqué du champ occupe une ligne au-dessus de lui,
+   et l'étirement rendait le bouton plus haut que le champ. */
+.cf-champ-bouton { display: flex; gap: var(--e-2); align-items: flex-end; }
 .cf-champ-bouton > .shiny-input-container { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
 .cf-champ-bouton .form-control { width: 100%; min-width: 0; }
-.cf-champ-bouton > .cf-btn { flex: 0 0 auto; }
+.cf-champ-bouton > .cf-btn { flex: 0 0 auto; min-height: 44px; }
 
 .cf-champ { margin-bottom: var(--e-4); }
 .cf-champ .shiny-input-container { margin-bottom: var(--e-1); }
 
 /* Curseurs (ion.rangeSlider) alignés sur la charte */
 .irs--shiny .irs-bar, .irs--shiny .irs-from, .irs--shiny .irs-to,
-.irs--shiny .irs-single { background: var(--cf-bleu); }
+.irs--shiny .irs-single { background: var(--cf-vert); }
 .irs--shiny .irs-from, .irs--shiny .irs-to, .irs--shiny .irs-single {
   border-radius: 0; font-size: var(--t-xs);
 }
 .irs--shiny .irs-min, .irs--shiny .irs-max { font-size: var(--t-xs); }
-.irs--shiny .irs-handle { border: 2px solid var(--cf-bleu); }
+.irs--shiny .irs-handle { border: 2px solid var(--cf-vert); }
 
 /* =============================================================================
    8. Alertes, états, résultats de recherche
@@ -836,7 +820,7 @@ label {
   color: var(--cf-texte); text-decoration: none;
   font-size: var(--t-sm);
 }
-.cf-resultat:hover { background: var(--cf-bleu-pale); color: var(--cf-bleu); text-decoration: none; }
+.cf-resultat:hover { background: var(--cf-vert-pale); color: var(--cf-vert); text-decoration: none; }
 .cf-resultat:last-child { border-bottom: none; }
 .cf-resultat__meta { font-size: var(--t-xs); color: var(--cf-texte-mention); }
 
@@ -844,8 +828,8 @@ label {
 
 /* -- Pied de page ---------------------------------------------------------- */
 .cf-pied {
-  background: var(--cf-fond);
-  border-top: 2px solid var(--cf-bleu);
+  background: transparent;
+  border-top: 1px solid var(--cf-bordure);
   padding: var(--e-6) var(--e-4);
   margin-top: var(--e-8);
   font-size: var(--t-xs); color: var(--cf-texte-mention);
@@ -884,8 +868,8 @@ label {
 .cf-source {
   margin-top: var(--e-4);
   border: 1px solid var(--cf-bordure);
-  border-left: 4px solid var(--cf-bleu);
-  background: var(--cf-bleu-pale);
+  border-left: 4px solid var(--cf-vert);
+  background: var(--cf-vert-pale);
   padding: var(--e-3);
 }
 .cf-source__titre {
@@ -922,7 +906,7 @@ label {
   min-height: 44px; cursor: pointer; position: relative;
 }
 .cf-source .radio:last-child label { border-bottom: 1px solid var(--cf-bordure); }
-.cf-source .radio label:hover { background: var(--cf-bleu-pale); }
+.cf-source .radio label:hover { background: var(--cf-vert-pale); }
 .cf-source .radio input[type="radio"] { position: absolute; left: var(--e-3); top: 14px; margin: 0; }
 .cf-source__opt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-1) var(--e-2); }
 .cf-source__optmeta { font-size: var(--t-xs); color: var(--cf-texte-mention); }
@@ -974,7 +958,7 @@ label {
    pastille choisie doit donc le surclasser, sur le libellé et son <span>. */
 .cf-pastilles .radio-inline:has(input:checked),
 .cf-pastilles .radio-inline:has(input:checked) span {
-  background: var(--cf-bleu); color: #FFFFFF !important; border-color: var(--cf-bleu);
+  background: var(--cf-vert); color: #FFFFFF !important; border-color: var(--cf-vert);
 }
 
 /* =============================================================================
@@ -1007,17 +991,14 @@ label {
   .cf-duo { grid-template-columns: 1fr; }
   .cf-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .cf-marque__soustitre { display: none; }
-  .cf-logo--rf        { height: 54px; }
-  .cf-logo--operateur { height: 38px; }
+  .cf-logo--operateur { height: 44px; }
   .cf-contexte { flex-direction: column; align-items: stretch; }
   .cf-contexte .cf-btn { width: 100%; }
 }
 
 @media (max-width: 640px) {
   :root { --cf-h-onglets: 44px; }
-  /* En-tête compact : le nom de l'organisme est redondant avec le bloc-marque
-     juste à côté, et la barre ne doit pas prendre le quart de l'écran. */
-  .cf-marque__organisme { display: none; }
+  /* En-tête compact : la barre ne doit pas prendre le quart de l'écran. */
   .cf-barre__interieur { padding: var(--e-2) var(--e-3); }
   .cf-pied { padding: var(--e-4) var(--e-3); margin-top: var(--e-4); }
   /* Barre de contexte : lieu + bouton sur une ligne, détail en dessous */
@@ -1031,16 +1012,7 @@ label {
   .cf-onglets > .nav-tabs,
   .cf-onglets > .tabbable > .nav-tabs { padding-left: 0; padding-right: 0; }
   .nav-tabs > li > a { padding: var(--e-2) var(--e-3) !important; }
-  /* Les icônes des onglets disparaissent sous 640 px. Elles coûtent une
-     trentaine de pixels chacune, soit à elles quatre la différence entre une
-     barre d'onglets qui tient à l'écran et une barre qui déborde en silence :
-     le défilement horizontal ne s'annonce pas, et un onglet hors champ est un
-     onglet qui n'existe pas pour l'utilisateur. Les libellés, eux, restent. */
-  .nav-tabs .cf-icone { display: none; }
-  .cf-marque__titre { font-size: var(--t-lg); }
-  .cf-logo--rf        { height: 46px; }
-  .cf-logo--operateur { height: 32px; padding-left: var(--e-3); }
-  .cf-marque { padding-left: var(--e-3); }
+  .cf-logo--operateur { height: 36px; }
   .cf-barre__interieur { gap: var(--e-3); }
   .cf-conteneur { padding: var(--e-4) var(--e-3) var(--e-8); }
   .cf-carte { padding: var(--e-3); }
@@ -1112,7 +1084,7 @@ main:focus { outline: none; }
    Les cases natives mesurent 13 px. La case grandit, et sa ligne entière reste
    cliquable (le libellé l'enveloppe). */
 input[type="radio"], input[type="checkbox"] {
-  width: 24px; height: 24px; accent-color: var(--cf-bleu);
+  width: 24px; height: 24px; accent-color: var(--cf-vert);
   cursor: pointer; flex: 0 0 auto;
 }
 .checkbox label, .radio label { position: relative; padding-left: 36px; min-height: 28px; }
@@ -1171,11 +1143,11 @@ label.cf-carte__reglage-lib {
   border: 1px solid var(--cf-bordure-forte); background: var(--cf-fond);
   font-size: var(--t-xs); font-weight: 700; text-decoration: none;
 }
-.cf-sommaire a:hover { background: var(--cf-bleu-pale); text-decoration: none; }
+.cf-sommaire a:hover { background: var(--cf-vert-pale); text-decoration: none; }
 .cf-sommaire a[aria-current="location"] {
-  background: var(--cf-bleu); border-color: var(--cf-bleu); color: #FFFFFF;
+  background: var(--cf-vert); border-color: var(--cf-vert); color: #FFFFFF;
 }
-.cf-sommaire__n { font-weight: 500; font-variant-numeric: tabular-nums; }
+.cf-sommaire__n { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* -- Liste d'indicateurs en colonnes : cellules de même hauteur ---------------------
    Un libellé sur deux lignes rendait sa cellule plus haute que ses voisines : les
@@ -1212,8 +1184,8 @@ label.cf-carte__reglage-lib {
 .cf-retenir {
   margin: var(--e-4) 0;
   padding: var(--e-3) var(--e-4);
-  border-left: 4px solid var(--cf-bleu);
-  background: var(--cf-bleu-pale);
+  border-left: 4px solid var(--cf-vert);
+  background: var(--cf-vert-pale);
 }
 .cf-retenir__titre { margin: 0 0 var(--e-2); font-size: var(--t-md); }
 .cf-retenir__liste { margin: 0 0 var(--e-2); padding-left: 1.2rem; }
@@ -1244,8 +1216,8 @@ abbr.cf-terme, abbr.cf-terme[title] {
 }
 
 /* -- Liens au milieu d'une phrase (régression d'accessibilité corrigée en 1.4) -------------
-   Bootstrap 3 retire le soulignement des liens. Dans une phrase en gris (#5a5a5a), un
-   lien bleu foncé (#000091) n'est distinct que par 2,2:1 — sous les 3:1 exigés quand la
+   Bootstrap 3 retire le soulignement des liens. Dans une phrase en gris-vert (#56635B), un
+   lien vert foncé (#00664B) n'est quasiment pas distinct (moins de 1,2:1) — sous les 3:1 exigés quand la
    couleur est le seul signe (WCAG 1.4.1). On souligne donc les liens de texte courant ;
    les liens-boutons (sommaire, « Voir les graphiques ») gardent leur forme propre. */
 .cf-notes a, .cf-aide a, .cf-retenir .cf-aide a { text-decoration: underline; }
@@ -1272,8 +1244,8 @@ abbr.cf-terme, abbr.cf-terme[title] {
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--e-2);
 }
 .cf-contexte__actions .cf-btn .cf-icone { margin-right: var(--e-2); }
-/* Retour visuel de la copie : le bouton passe en blanc le temps de la confirmation. */
-.cf-btn--clair.cf-btn--copie { background: #FFFFFF; color: var(--cf-bleu); }
+/* Retour visuel de la copie : le bouton passe en vert plein le temps de la confirmation. */
+.cf-btn--clair.cf-btn--copie { background: var(--cf-vert); color: #FFFFFF; }
 
 @media (pointer: coarse) {
   .cf-retenir__lien { min-height: 44px; }
@@ -1296,7 +1268,7 @@ abbr.cf-terme, abbr.cf-terme[title] {
   border: 1px solid currentColor;
 }
 .cf-statut--convention { color: var(--cf-texte-mention); }
-.cf-statut--indicatif  { color: var(--cf-bleu); }
+.cf-statut--indicatif  { color: var(--cf-vert); }
 .cf-refs {
   display: block; margin-top: var(--e-1);
   font-size: var(--t-xs); color: var(--cf-texte-mention);
@@ -1336,7 +1308,7 @@ abbr.cf-terme, abbr.cf-terme[title] {
 }
 .cf-carto__mode input { margin: 0; }
 .cf-carto__annee { display: flex; align-items: center; gap: var(--e-3); }
-.cf-carto__annee input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--cf-bleu); }
+.cf-carto__annee input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--cf-vert); }
 .cf-carto__annee .cf-btn { flex: 0 0 auto; min-width: 96px; }
 .cf-carto__annee input:disabled, .cf-carto__annee button:disabled { opacity: .45; cursor: not-allowed; }
 
@@ -1349,10 +1321,10 @@ abbr.cf-terme, abbr.cf-terme[title] {
   position: relative; min-height: 360px; height: clamp(360px, 64vh, 720px);
   background: var(--cf-fond-contraste); border: 1px solid var(--cf-bordure);
 }
-.cf-carto__carte:focus-visible { outline: 3px solid var(--cf-bleu); outline-offset: 2px; }
+.cf-carto__carte:focus-visible { outline: 3px solid var(--cf-vert); outline-offset: 2px; }
 .cf-carto__info {
   padding: var(--e-4); background: var(--cf-fond);
-  border: 1px solid var(--cf-bordure); border-top: 3px solid var(--cf-bleu);
+  border: 1px solid var(--cf-bordure);
   min-width: 0;
 }
 .cf-carto__info-titre { font-size: var(--t-md); margin: 0 0 var(--e-3); }
@@ -1374,9 +1346,9 @@ abbr.cf-terme, abbr.cf-terme[title] {
 
 /* Courbe de la maille choisie */
 .cf-carto__courbe { display: block; width: 100%; height: auto; margin: 0 0 var(--e-3); }
-.cf-carto__courbe-serie { fill: none; stroke: var(--cf-bleu); stroke-width: 1.5; }
+.cf-carto__courbe-serie { fill: none; stroke: var(--cf-vert); stroke-width: 1.5; }
 .cf-carto__courbe-normale { stroke: var(--cf-bordure-forte); stroke-width: 1; stroke-dasharray: 4 3; }
-.cf-carto__courbe-point { fill: var(--cf-bleu); stroke: #FFFFFF; stroke-width: 1.5; }
+.cf-carto__courbe-point { fill: var(--cf-vert); stroke: #FFFFFF; stroke-width: 1.5; }
 
 /* -- Legende ------------------------------------------------------------------------ */
 .cf-carto__legende {
@@ -1403,4 +1375,13 @@ abbr.cf-terme, abbr.cf-terme[title] {
 }
 @media print {
   .cf-carto__barre, .cf-carto__annee { display: none !important; }
+}
+
+/* =============================================================================
+   Angles légèrement arrondis (4 px) sur les blocs
+   ========================================================================== */
+.cf-carte, .cf-kpi, .cf-panneau, .cf-filtres, .cf-barre-action, .cf-contexte,
+.cf-carto__carte, .cf-carto__info, .cf-carto__legende, .cf-source, .cf-retenir,
+.cf-chips .checkbox-inline, .leaflet-container {
+  border-radius: var(--cf-rayon);
 }
