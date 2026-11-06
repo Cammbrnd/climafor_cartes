@@ -95,7 +95,30 @@ ui <- function(request) {
 # SERVEUR
 # ==============================================================================
 
+# Une erreur non rattrapee dans server() arrete la session ; sous RStudio la fenetre se
+# ferme alors sans un mot. On la rattrape donc : elle est ecrite dans la console R
+# ([ClimaFor] ...) ET montree a l'ecran, avec l'identifiant du profil en cours.
 server <- function(input, output, session) {
+  tryCatch(
+    serveur_demarrer(input, output, session),
+    error = function(e) {
+      journaliser_erreur("le demarrage de l'application", e)
+      shiny::showNotification(
+        shiny::tagList(
+          shiny::strong("ClimaFor n'a pas pu démarrer."),
+          shiny::tags$br(),
+          erreur_lisible(e, 240L),
+          shiny::tags$br(),
+          "Le détail est dans la console R ; à transmettre au mainteneur."
+        ),
+        type = "error", duration = NULL
+      )
+      invisible(NULL)
+    }
+  )
+}
+
+serveur_demarrer <- function(input, output, session) {
 
   # -- Profil ----------------------------------------------------------------
   # Sur la page d'entree il n'y a rien a calculer. Sinon le profil decide des modules.

@@ -1245,6 +1245,18 @@ année.
 `acces_local.csv` s'il existe). Ouvrir ensuite `https://<compte>.shinyapps.io/climafor/?profil=co` (ou
 `?id=demo-dsf`, `?id=demo-terrain`). Le paquet `sf` est requis (déjà dans `deploy.R`).
 
+### Sous RStudio : la fenêtre ne se ferme plus avec la session
+
+Chaque fois que la connexion se coupe, Shiny envoie « disconnected » à la fenêtre qui contient la page ;
+RStudio (volet Viewer, « Run in Window ») répond en **fermant sa fenêtre**, sans un mot. Une erreur du
+serveur, qui arrête la session, avait donc le même effet qu'un plantage silencieux. Deux garde-fous :
+`www/app.js` n'annonce plus la page qu'à elle-même (la fenêtre reste ouverte, le voile gris « Déconnecté du
+serveur » apparaît), et `server()` rattrape toute erreur de démarrage : elle est écrite dans la console R
+(`[ClimaFor] le demarrage de l'application en échec : …`) et montrée à l'écran. Une erreur survenue plus tard
+dans un `observe()` arrête toujours la session (comportement de Shiny), mais elle est dans la console.
+Pour diagnostiquer : `shiny::runApp(launch.browser = TRUE)` ouvre le navigateur habituel, et la console R
+affiche l'erreur en rouge.
+
 ### Organisation du code
 
 `app.R` n'assemble plus que la page et les modules du profil. Nouveaux fichiers : `src/utils_profils.R`

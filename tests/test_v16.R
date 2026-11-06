@@ -432,7 +432,7 @@ long_fonction <- function(fichier, motif) {
   NA_integer_
 }
 n_bilan <- long_fonction("src/mod_bilan.R", "^mod_bilan_server <-")
-n_app   <- long_fonction("app.R", "^server <-")
+n_app   <- long_fonction("app.R", "^serveur_demarrer <-")
 verifier(!is.na(n_bilan) && n_bilan <= 330L,
          sprintf("le serveur du Bilan ne grossit pas (%d lignes, 450 en v1.5)", n_bilan))
 verifier(!is.na(n_app) && n_app <= 290L,

@@ -1,7 +1,8 @@
 /* =============================================================================
    app.js — complément client
    -----------------------------------------------------------------------------
-   Sept fonctions que Shiny ne peut pas assurer côté serveur :
+   Huit fonctions que Shiny ne peut pas assurer côté serveur :
+     0. (v2.0) la fenêtre hôte (RStudio) ne se ferme plus avec la session ;
      1. la géolocalisation, qui est une API du navigateur ;
      2. la validation par la touche Entrée dans le champ commune ;
      3. le recalcul des composants qui étaient masqués au moment de leur
@@ -29,6 +30,20 @@
 
 (function () {
   "use strict";
+
+  /* -- 0. La fenêtre hôte ne doit pas se fermer avec la session ------------ */
+  /* À chaque fermeture de la connexion, Shiny envoie le message « disconnected »
+     à la fenêtre qui contient la page. RStudio (volet Viewer ou « Run in Window »)
+     y répond en fermant sa fenêtre : sans aucun message, la page « se ferme » dès
+     que la session s'arrête, y compris quand c'est une erreur du serveur qui l'a
+     arrêtée. On annonce donc la page à elle-même : la fenêtre reste ouverte et le
+     voile gris habituel de Shiny (« Déconnecté du serveur ») prend le relais. Aucun
+     autre code de l'application n'utilise window.parent. */
+  try {
+    Object.defineProperty(window, "parent", { value: window, configurable: true });
+  } catch (e) {
+    try { window.parent = window; } catch (e2) { /* navigateur sans cette possibilité */ }
+  }
 
 
   /* -- Utilitaire : forcer les composants visibles à se remesurer ---------- */

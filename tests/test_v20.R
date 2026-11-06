@@ -786,6 +786,27 @@ verifier(setequal(intersect(onglets20(h_ancien), onglets_connus20), PROFILS$dsf$
            grepl("value=\"1981-2010\" selected", h_ancien),
          "un lien partage d'avant la v2.0 ouvre l'interface complete, reference preselectionnee")
 
+# Une erreur au demarrage du serveur ne ferme pas la fenetre en silence : elle est journalisee
+# (console R) et montree a l'ecran.
+notifs20 <- list()
+session_stub20 <- shiny::MockShinySession$new()
+session_stub20$sendNotification <- function(type, message) notifs20[[length(notifs20) + 1L]] <<- list(type = type, message = message)
+app20b <- new.env(parent = app20)
+app20b$serveur_demarrer <- function(input, output, session) stop("fichier introuvable: /srv/donnees/x.rds")
+srv20 <- app20$server; environment(srv20) <- app20b
+journal20 <- character()
+retour20 <- withCallingHandlers(
+  shiny::withReactiveDomain(session_stub20, srv20(NULL, NULL, session_stub20)),
+  message = function(m) { journal20 <<- c(journal20, conditionMessage(m)); invokeRestart("muffleMessage") })
+verifier(is.null(retour20) && any(grepl("[ClimaFor]", journal20, fixed = TRUE) & grepl("fichier introuvable", journal20)),
+         "une erreur au demarrage du serveur est ecrite dans la console R, sans arreter la session")
+verifier(length(notifs20) == 1L && grepl("n'a pas pu d", paste(unlist(notifs20[[1]]$message), collapse = " ")) &&
+           !grepl("/srv/donnees", paste(unlist(notifs20[[1]]$message), collapse = " "), fixed = TRUE),
+         "elle est aussi montree a l'ecran, sans chemin du serveur")
+appjs20 <- lire20("www/app.js")
+verifier(grepl("defineProperty(window, \"parent\"", appjs20, fixed = TRUE),
+         "app.js empeche la fenetre hote (RStudio) de se fermer avec la session")
+
 # Les modules sont pilotes par le profil : le serveur DSF ne tourne que pour lui.
 src_app20 <- lire20("app.R")
 verifier(grepl("a_onglet(\"synthese\")", src_app20, fixed = TRUE) && grepl("a_onglet(\"terrain\")", src_app20, fixed = TRUE) &&
