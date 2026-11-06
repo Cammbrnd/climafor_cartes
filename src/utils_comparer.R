@@ -259,24 +259,21 @@ cmp_normaliser_nom_colonne <- function(x) {
   gsub("[^a-z0-9]", "", x)
 }
 
-#' Lit un CSV de points : nom, latitude, longitude (WGS84, degres decimaux).
-#'
-#' Separateur « ; », « , » ou tabulation, reconnu sur la ligne d'en-tete ; virgule
-#' decimale acceptee ; UTF-8 (avec ou sans marque d'ordre) ou Latin-1. Une ligne
-#' illisible ou hors de la France metropolitaine est ECARTEE ET NOMMEE : on ne
-#' compare pas en silence un point que l'on a perdu.
-#' @return list(lieux, problemes).
-#' @export
-cmp_lire_points_csv <- function(chemin) {
+#' Lit un tableau CSV : separateur « ; », « , » ou tabulation, reconnu sur la ligne
+#' d'en-tete ; UTF-8 (avec ou sans marque d'ordre) ou Latin-1 ; toutes les colonnes en
+#' texte. Les lignes en trop sont ecartees ET LE DIT.
+#' @return list(d = data.frame ou NULL, problemes, erreur = texte ou NULL).
+#' @keywords internal
+cmp_lire_table_csv <- function(chemin) {
   prob <- character(0)
   octets <- readBin(chemin, "raw", n = min(file.size(chemin), CONFIG$comparer$fichier_max_mo * 1024^2))
   txt <- rawToChar(octets); Encoding(txt) <- "UTF-8"
   if (!validUTF8(txt)) txt <- iconv(rawToChar(octets), "latin1", "UTF-8", sub = "")
-  txt <- sub("^﻿", "", txt)
+  txt <- sub("^\ufeff", "", txt)
   lignes <- strsplit(txt, "\r\n|\n|\r")[[1]]
   lignes <- lignes[nzchar(trimws(lignes)) & !grepl("^#", lignes)]
   if (length(lignes) < 2L) {
-    return(list(lieux = list(), problemes = "Le fichier ne contient pas de ligne de données."))
+    return(list(d = NULL, problemes = prob, erreur = "Le fichier ne contient pas de ligne de données."))
   }
   if (length(lignes) - 1L > CONFIG$comparer$lignes_max) {
     prob <- c(prob, sprintf("Plus de %d lignes : seules les %d premières sont lues.",
@@ -293,8 +290,21 @@ cmp_lire_points_csv <- function(chemin) {
                       na.strings = character(0)),
     error = function(e) NULL)
   if (is.null(d) || !nrow(d)) {
-    return(list(lieux = list(), problemes = "Le fichier n'a pas pu être lu comme un tableau."))
+    return(list(d = NULL, problemes = prob, erreur = "Le fichier n'a pas pu être lu comme un tableau."))
   }
+  list(d = d, problemes = prob, erreur = NULL)
+}
+
+#' Lit un CSV de points : nom, latitude, longitude (WGS84, degres decimaux).
+#'
+#' Une ligne illisible ou hors de la France metropolitaine est ECARTEE ET NOMMEE : on
+#' ne compare pas en silence un point que l'on a perdu. Virgule decimale acceptee.
+#' @return list(lieux, problemes).
+#' @export
+cmp_lire_points_csv <- function(chemin) {
+  t <- cmp_lire_table_csv(chemin)
+  if (!is.null(t$erreur)) return(list(lieux = list(), problemes = t$erreur))
+  d <- t$d; prob <- t$problemes
   noms_n <- cmp_normaliser_nom_colonne(names(d))
   col <- function(candidats) { i <- which(noms_n %in% candidats); if (length(i)) i[1] else NA_integer_ }
   i_lat <- col(.CMP_COL_LAT); i_lon <- col(.CMP_COL_LON); i_nom <- col(.CMP_COL_NOM)
@@ -348,24 +358,24 @@ cmp_extraire_zip <- function(zip, dossier = tempfile("shp")) {
   file.path(dossier, basename(shp))
 }
 
-#' Lit un fichier de zones (ou de points) geographique : GeoJSON, GeoPackage,
-#' shapefile zippe. Demande le paquet sf.
+#' Lit un fichier geographique (GeoJSON, GeoPackage, shapefile zippe) et le rend en
+#' WGS84, geometries reparees. Demande le paquet sf.
 #'
-#' Reprojete en WGS84. Un fichier sans systeme de coordonnees n'est PAS devine,
-#' sauf un GeoJSON (la norme impose WGS84) : un shapefile sans .prj peut etre en
-#' Lambert-93 ou en WGS84, et se tromper place les lieux a des centaines de km.
+#' Un fichier sans systeme de coordonnees n'est PAS devine, sauf un GeoJSON (la norme
+#' impose WGS84) : un shapefile sans .prj peut etre en Lambert-93 ou en WGS84, et se
+#' tromper place les lieux a des centaines de km.
 #' @param chemin fichier ; @param nom_origine nom d'origine (l'extension decide).
-#' @return list(lieux, problemes).
-#' @export
-cmp_lire_zones <- function(chemin, nom_origine = chemin) {
+#' @return list(x = objet sf ou NULL, problemes, erreur = texte ou NULL).
+#' @keywords internal
+cmp_lire_sf <- function(chemin, nom_origine = chemin) {
+  echec <- function(m) list(x = NULL, problemes = character(0), erreur = m)
   if (!requireNamespace("sf", quietly = TRUE)) {
-    return(list(lieux = list(), problemes = paste(
+    return(echec(paste(
       "L'import de zones demande le paquet R « sf », absent de ce serveur. Les points",
       "(CSV) restent utilisables.")))
   }
   ext <- tolower(tools::file_ext(nom_origine))
   prob <- character(0)
-  echec <- function(m) list(lieux = list(), problemes = m)
 
   src <- chemin
   if (identical(ext, "zip")) {
@@ -413,7 +423,18 @@ cmp_lire_zones <- function(chemin, nom_origine = chemin) {
     sf::st_transform(x, 4326)
   }, error = function(e) NULL)
   if (is.null(x) || !nrow(x)) return(echec("Les géométries du fichier sont inutilisables."))
+  list(x = x, problemes = prob, erreur = NULL)
+}
 
+#' Lit un fichier de zones (ou de points) geographique : GeoJSON, GeoPackage,
+#' shapefile zippe. Demande le paquet sf.
+#' @param chemin fichier ; @param nom_origine nom d'origine (l'extension decide).
+#' @return list(lieux, problemes).
+#' @export
+cmp_lire_zones <- function(chemin, nom_origine = chemin) {
+  g <- cmp_lire_sf(chemin, nom_origine)
+  if (!is.null(g$erreur)) return(list(lieux = list(), problemes = g$erreur))
+  x <- g$x; prob <- g$problemes
   attributs <- sf::st_drop_geometry(x)
   noms_n <- cmp_normaliser_nom_colonne(names(attributs))
   i_nom <- which(noms_n %in% .CMP_COL_NOM)

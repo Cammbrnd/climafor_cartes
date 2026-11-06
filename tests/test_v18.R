@@ -397,7 +397,9 @@ verifier(file.exists(chemin_ci("www/carte/lib/maplibre-gl.js")) && file.exists(c
 groupe("v1.8 — integration dans l'application")
 # ==============================================================================
 
-app18 <- paste(lire18("app.R"), collapse = "\n")
+# Depuis la v2.0 : le serveur de l'analyse d'un point est dans src/serveur_dsf.R, la page dans
+# src/ui_page.R ; app.R les assemble.
+app18 <- paste(c(lire18("app.R"), lire18("src/ui_page.R"), lire18("src/serveur_dsf.R")), collapse = "\n")
 verifier(grepl('value = "carte"', app18, fixed = TRUE) && grepl('mod_carte_ui("carte")', app18, fixed = TRUE) &&
            grepl('mod_carte_server\\(\\s*"carte"', app18), "l'onglet Carte est branche dans l'interface et le serveur")
 verifier(grepl('src = "carte/carte.js"', app18, fixed = TRUE), "app.R charge carte.js")

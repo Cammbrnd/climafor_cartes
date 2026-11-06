@@ -9,6 +9,11 @@ OGC EDR de **GeoSAS (INRAE)**.
 Destinataires : techniciens, ingénieurs et décideurs. Trois niveaux de rapport
 sont prévus pour cela.
 
+**Depuis la version 2.0**, trois interfaces (terrain sur téléphone, correspondant-observateur, permanent
+DSF) et un **bilan synthétique** par département, région, fiches importées ou point : voir
+[Version 2.0](#version-20--trois-profils-et-bilan-synthétique). Pour une démonstration :
+`?profil=co`, `?profil=dsf` ou `?profil=terrain` à la suite de l'adresse de l'application.
+
 ---
 
 ## Démarrage
@@ -1163,6 +1168,112 @@ bout (`testServer`) et raccord à l'application.
 
 ---
 
+## Version 2.0 — trois profils et bilan synthétique
+
+Un seul code, **trois interfaces** : ce que voit chaque personne dépend d'un *profil*, pas d'une
+autre application. Né d'un retour de terrain : les permanents du DSF, les correspondants-observateurs
+et l'équipe en tournée n'ont ni les mêmes besoins ni le même temps.
+
+| Profil | Pour qui | Onglets | Échelles du bilan |
+|---|---|---|---|
+| `terrain` | en tournée, sur téléphone | Autour de moi · Carte | un point |
+| `co` | correspondant-observateur | Carte · Synthèse · Sources | un point, un département |
+| `dsf` | permanents du DSF | Accueil · Carte · Comparer · Synthèse · Bilan · Rapport · Paramètres · Sources | départements (plusieurs), régions, fiches importées, un point |
+
+Un profil est une **configuration** (`PROFILS`, `src/utils_profils.R`) : les onglets, les échelles, les
+grandeurs offertes (`CONFIG$synthese$couches_co` pour `co` et `terrain`). Le même module sert les trois.
+
+### Comment on arrive dans un profil
+
+Par l'adresse : `?id=xxx`. La table des identifiants est `config/acces.csv`
+(`id;profil;nom`), complétée par `config/acces_local.csv` s'il existe : ce second fichier **n'est pas
+versionné** (`.gitignore`) et l'emporte pour un même identifiant. `deploy.R` l'envoie avec l'application.
+Sans identifiant reconnu, la page d'entrée le demande. Tant que `CONFIG$acces$demo` vaut `TRUE`,
+`?profil=co|dsf|terrain` ouvre aussi un profil sans identifiant : utile pour une démonstration, à passer à
+`FALSE` pour une exploitation.
+
+> **Ce n'est pas une authentification.** L'identifiant figure dans l'adresse ; quiconque la connaît (ou
+> reçoit un lien partagé) obtient le profil. Le mécanisme *oriente* chaque personne vers la bonne
+> interface, rien de plus : il ne protège aucune donnée. Les données affichées sont de toute façon les
+> mailles publiques (Licence ouverte). Le dépôt étant public, `acces.csv` ne contient que des
+> identifiants `demo-…` ; les vrais vont dans `acces_local.csv`. Une vraie authentification viendra avec
+> la version Python/TypeScript : seule `profil_resoudre()` change, le reste ne lit que le profil rendu.
+
+Les liens partagés d'avant la v2.0 (`?x=…&y=…`, sans profil) continuent d'ouvrir l'interface complète.
+Un identifiant donné mais inconnu n'est jamais rattrapé par un lien ancien ni par `?profil=`.
+
+### Le bilan synthétique
+
+Un bilan court, **quelques phrases par graphique ou tableau**, que l'on compose en cochant les grandeurs
+(graphiques d'un côté, lignes du tableau de l'autre ; « Jeu de base », « Tout cocher », « Tout décocher »).
+
+- **Départements et régions** : valeur = moyenne simple (poids égaux) des mailles de 8 km dont le **centre**
+  est dans le contour ; une pondération par la surface forestière pourra s'ajouter plus tard.
+  Contours dans `donnees_limites/` (voir son `LISEZMOI.md`, script `outils/limites_construire.R`).
+- **Point** : maille la plus proche, à 6 km au plus ; au-delà, pas de valeur (rien d'inventé).
+- **Fiches importées** : voir ci-dessous. Les fiches sont un *contexte*, pas un échantillon.
+- Pour chaque lieu et grandeur : valeur de l'année, normale (référence au choix, 10 ans au moins), écart et
+  sa lecture en mots (« proche de la normale » = moins d'un demi écart-type), rang dans la série, tendance
+  (Sen et Mann-Kendall, 20 ans au moins). Les phrases sont des **gabarits déterministes**, sans modèle de
+  langage : un même calcul donne toujours le même texte.
+- **Exports** : bilan à emporter en **HTML autonome** (images intégrées, aucune ressource externe), en
+  **Word** (conversion par pandoc ; le bouton n'apparaît que si pandoc est disponible) et tableaux en **CSV**
+  avec leurs lignes de provenance (source, échelle, référence, licence).
+- **Limites à connaître** : les valeurs sont celles des mailles précalculées, avec les seuils par défaut du
+  précalcul (les réglages de l'onglet Paramètres ne s'y appliquent pas) ; une maille n'est pas une station ;
+  un territoire plus petit qu'une maille est signalé.
+
+### Fiches et application de terrain (Sylvasan)
+
+ClimaFor **ne saisit aucune fiche** : c'est le rôle de l'application de terrain (en développement). Il lit
+des fiches déjà saisies et les replace dans leur contexte climatique : pour chaque fiche, la valeur de **sa
+propre année** à la maille la plus proche, l'écart à la normale, et la répartition par essence, problème et
+année.
+
+- Format : CSV (colonnes `latitude`, `longitude`, et si possible `fiche`, `date`, `essence`, `probleme`,
+  `nom`), GeoJSON, GeoPackage ou shapefile zippé. Dates lues : `2025-07-14`, `14/07/2025`, ou une année
+  seule (comptée au 1ᵉʳ juillet). Une fiche sans date lisible est analysée avec l'année du bilan. 500 fiches
+  au plus ; textes bornés et assainis ; un modèle de CSV se télécharge dans l'interface.
+- **Le raccord à l'API est une prise, pas un branchement** : `fiches_lire_api()` (`src/utils_fiches.R`) rend
+  aujourd'hui un message honnête ; quand l'API existera, elle devra produire le même tableau que
+  `fiches_vide()`. `CONFIG$sylvasan$url_saisie` ajoute un bouton « Saisir une fiche » dans l'écran terrain
+  (vide : pas de bouton) et `CONFIG$sylvasan$api_fiches` un bouton « Charger depuis l'application de terrain ».
+
+### Déployer cette démonstration
+
+`source("deploy.R")` suffit : il vérifie la liste d'accès et les contours, puis les envoie (avec
+`acces_local.csv` s'il existe). Ouvrir ensuite `https://<compte>.shinyapps.io/climafor/?profil=co` (ou
+`?id=demo-dsf`, `?id=demo-terrain`). Le paquet `sf` est requis (déjà dans `deploy.R`).
+
+### Organisation du code
+
+`app.R` n'assemble plus que la page et les modules du profil. Nouveaux fichiers : `src/utils_profils.R`
+(profils, acces), `src/ui_page.R` (page et page d'entrée), `src/serveur_dsf.R` (l'analyse d'un point :
+stations, SAFRAN, rapport, lien partagé — elle ne tourne que pour le profil `dsf`), `src/utils_territoires.R`,
+`src/utils_fiches.R`, `src/utils_synthese.R` (calcul, phrases, tableaux, graphiques),
+`src/utils_synthese_rendu.R` (CSV, HTML, Word), `src/mod_synthese.R` et `src/mod_terrain.R`. Le terrain et
+la synthèse ne lisent que les mailles précalculées : aucun appel à un service distant au choix d'un point.
+
+### Vérifications
+
+`tests/test_v20.R` (valeurs comptées à la main sur un jeu synthétique de 36 mailles autour de Toulouse :
+moyennes de territoire, normale, écart, rang, contexte des fiches, exports, module de bout en bout, interface
+de chaque profil, page d'entrée). L'audit axe-core automatisé a été rejoué sur la page d'entrée, sur le bilan de chaque profil
+(départements, régions, fiches, point) et sur l'écran terrain, sur grand écran et sur téléphone ;
+l'onglet Carte n'a pas été rejoué (fonds de carte inaccessibles dans l'environnement de test). Trois défauts ont été attrapés par ces tests avant livraison : un bilan HTML sans
+`<head>` (jeu de caractères et style perdus), un identifiant de fiche en `=…` non neutralisé dans le CSV, un
+identifiant illisible (`%00`) qui laissait la page d'entrée muette.
+
+### Passage à Python / TypeScript
+
+Prévu après cette version. Ce qui se porte tel quel : les **profils** (configuration pure, à passer en
+JSON), la **liste d'accès** (à remplacer par une vraie authentification), le **moteur de bilan** (fonctions
+pures sur les couches précalculées : moyenne des mailles d'un contour, normale, écart, rang, tendance), les
+**gabarits de phrases** et les **contours**. `tests/test_v20.R` sert de spécification : chaque valeur y est
+vérifiable à la main.
+
+---
+
 ## Architecture
 
 ```
@@ -1310,7 +1421,8 @@ les données radar de Météo-France sont librement accessibles depuis 2024.
 
 ### Module territoire
 
-Bilans départementaux et régionaux, cartographie en aplats de couleur.
+Bilans départementaux et régionaux : **faits en v2.0** (bilan synthétique, moyenne des mailles du contour).
+Reste la cartographie en aplats de couleur (carte choroplèthe), non faite.
 
 C'est l'évolution la plus structurante : elle change la nature de l'accès aux
 données. `src/_gabarit_extension.R` détaille trois stratégies (grille

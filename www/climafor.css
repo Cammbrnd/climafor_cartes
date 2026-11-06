@@ -106,6 +106,8 @@ html {
   font-size: 100%;
   scroll-behavior: smooth;
   scroll-padding-top: 130px;
+  /* La barre d'action collante (bilan, analyse) ne doit pas masquer un champ qui prend le focus. */
+  scroll-padding-bottom: 120px;
 }
 
 body {
@@ -1412,3 +1414,96 @@ abbr.cf-terme, abbr.cf-terme[title] {
 .cf-chips .checkbox-inline, .leaflet-container {
   border-radius: var(--cf-rayon);
 }
+
+/* =============================================================================
+   Version 2.0 — profils, page d'entrée, bilan synthétique, écran terrain
+   Seules les cinq tailles de l'échelle typographique sont employées.
+   ========================================================================== */
+
+/* Profil en cours, dans la barre d'application */
+.cf-profil {
+  margin-left: auto; display: flex; flex-direction: column; align-items: flex-end;
+  gap: 2px; font-size: var(--t-xs);
+}
+.cf-profil__nom { font-weight: 700; color: var(--cf-sapin); }
+.cf-profil__changer { color: var(--cf-vert); }
+@media (max-width: 640px) {
+  .cf-profil { margin-left: 0; flex: 1 1 100%; flex-direction: row; align-items: baseline;
+               justify-content: space-between; gap: var(--e-3); }
+}
+
+/* Page d'entrée */
+.cf-entree { max-width: 46rem; }
+.cf-entree__formulaire label { display: block; font-weight: 700; margin-bottom: var(--e-2); }
+.cf-entree__champ { display: flex; flex-wrap: wrap; gap: var(--e-2); }
+.cf-entree__champ input { flex: 1 1 14rem; min-height: 44px; min-width: 0; }
+.cf-entree__demo { margin-top: var(--e-6); }
+.cf-entree__profils {
+  list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e-3);
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+.cf-entree__profil {
+  display: block; height: 100%; padding: var(--e-4); background: var(--cf-fond);
+  border: 1px solid var(--cf-bordure); border-radius: var(--cf-rayon);
+  text-decoration: none; color: var(--cf-texte);
+}
+.cf-entree__profil:hover { background: var(--cf-vert-pale); border-color: var(--cf-vert); }
+.cf-entree__libelle { display: block; font-weight: 700; color: var(--cf-vert);
+                      font-size: var(--t-md); margin-bottom: var(--e-1); }
+.cf-entree__resume { display: block; font-size: var(--t-xs); color: var(--cf-texte-mention); }
+
+/* Bilan synthétique : réglages, catalogue à deux colonnes, phrases, tableaux */
+.cf-synt__reglages { display: flex; flex-wrap: wrap; gap: var(--e-4); }
+.cf-synt__reglages .form-group { margin-bottom: var(--e-2); }
+.cf-synt__actions { display: flex; flex-wrap: wrap; gap: var(--e-2); align-items: center; margin: var(--e-3) 0; }
+/* Colonne de cases : min-width 0, sinon un libelle long etire la grille au-dela de l'ecran. */
+.cf-synt__colonne { min-width: 0; }
+/* Boutons d'export sous les resultats (masques a l'impression avec .cf-synt__actions). */
+.cf-synt__export { margin-top: var(--e-4); }
+.cf-synt__catalogue { display: grid; gap: var(--e-6); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cf-synt__soustitre {
+  font-size: var(--t-sm); margin: 0 0 var(--e-2); color: var(--cf-sapin);
+  border-bottom: 1px solid var(--cf-bordure); padding-bottom: var(--e-1);
+}
+.cf-synt__catalogue .shiny-input-container > label.control-label {
+  font-size: var(--t-xs); font-weight: 700; color: var(--cf-texte-mention); margin-top: var(--e-2);
+}
+.cf-synt__bref {
+  background: var(--cf-vert-pale); border-left: 4px solid var(--cf-vert);
+  padding: var(--e-3) var(--e-4); border-radius: 0 var(--cf-rayon) var(--cf-rayon) 0;
+}
+.cf-synt__bref p { margin: 0 0 var(--e-2); }
+.cf-synt__bref p:last-child { margin-bottom: 0; }
+.cf-synt__phrases { margin: 0 0 var(--e-3); padding-left: var(--e-6); }
+.cf-synt__phrases li { margin-bottom: var(--e-1); }
+.cf-synt__defile { overflow-x: auto; margin-bottom: var(--e-3); }
+.cf-synt__table th, .cf-synt__table td { white-space: normal; vertical-align: top; }
+.cf-synt__table thead th { text-align: left; }
+.cf-synt__table tbody th { position: static; background: transparent; text-align: left; font-weight: 700; min-width: 10rem; }
+.cf-synt__compte { margin: var(--e-2) 0; }
+.cf-synt__compte a { text-decoration: underline; }
+.cf-synt__perime { color: var(--cf-attention); font-weight: 700; }
+.cf-synt__graphe .shiny-plot-output { max-width: 100%; }
+@media (max-width: 640px) { .cf-synt__catalogue { grid-template-columns: minmax(0, 1fr); } }
+@media print { .cf-synt__actions, .cf-synt__action { display: none !important; } }
+
+/* Écran terrain : cartes de grandeurs, une colonne sur téléphone */
+.cf-terrain__liste {
+  list-style: none; margin: var(--e-4) 0; padding: 0; display: grid; gap: var(--e-3);
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+.cf-terrain__carte {
+  background: var(--cf-fond); border: 1px solid var(--cf-bordure); border-radius: var(--cf-rayon);
+  padding: var(--e-3) var(--e-4);
+}
+.cf-terrain__titre { font-size: var(--t-xs); font-weight: 700; color: var(--cf-texte-mention); }
+.cf-terrain__valeur { font-size: var(--t-xl); font-weight: 700; color: var(--cf-sapin);
+                      line-height: 1.2; font-variant-numeric: tabular-nums; }
+.cf-terrain__ecart { font-size: var(--t-sm); }
+.cf-terrain__lecture { font-size: var(--t-xs); font-weight: 700; color: var(--cf-texte-mention); }
+@media (max-width: 640px) { .cf-terrain__liste { grid-template-columns: minmax(0, 1fr); } }
+.cf-synt__choix .shiny-options-group {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0 var(--e-4);
+}
+.cf-synt__choix .checkbox { margin: 0; }
+.cf-synt__choix .checkbox label { min-height: 32px; display: flex; align-items: center; }

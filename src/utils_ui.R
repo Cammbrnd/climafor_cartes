@@ -24,6 +24,7 @@
 CF_ICONES <- list(
   # Navigation principale
   accueil    = '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
+  synthese   = '<path d="M5 20V11M12 20V4M19 20v-6"/><path d="M3 20h18"/>',
   comparer   = '<path d="M4 8h14M14 4l4 4-4 4"/><path d="M20 16H6M10 12l-4 4 4 4"/>',
   bilan      = '<path d="M3 3v18h18"/><path d="M7 15l3.5-4.5 3 3L19 6"/>',
   rapport    = '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',

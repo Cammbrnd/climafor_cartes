@@ -8,3 +8,4 @@ public/
 essai/
 __pycache__/
 *.pyc
+config/acces_local.csv

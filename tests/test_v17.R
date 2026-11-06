@@ -597,7 +597,7 @@ for (n in ls(.ETAT_LIMITES)) rm(list = n, envir = .ETAT_LIMITES)
 verifier(all(c("fenetre_min", "analyses_session", "rapports_session", "telechargements_proc") %in% names(CONFIG$limites)) &&
            CONFIG$limites$analyses_session >= 5,
          "la configuration par defaut laisse un usage normal (au moins 5 analyses par fenetre)")
-verifier(grepl('limite_controler("analyses"', code_sans_commentaires17("app.R"), fixed = TRUE) &&
+verifier(grepl('limite_controler("analyses"', code_sans_commentaires17("src/serveur_dsf.R"), fixed = TRUE) &&
            grepl('limite_controler("rapports"', code_sans_commentaires17("src/mod_rapport.R"), fixed = TRUE),
          "le lancement d'une analyse et la preparation d'un rapport passent par le controle")
 

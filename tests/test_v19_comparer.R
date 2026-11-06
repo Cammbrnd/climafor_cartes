@@ -654,7 +654,8 @@ groupe("v1.9 — comparer : raccord a l'application")
 # ==============================================================================
 
 lire19 <- function(f) paste(readLines(chemin_ci(f), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
-app19 <- lire19("app.R"); css19 <- lire19("www/climafor.css"); mod19 <- lire19("src/mod_comparer.R")
+app19 <- paste(c(lire19("app.R"), lire19("src/ui_page.R"), lire19("src/serveur_dsf.R")), collapse = "\n")
+css19 <- lire19("www/climafor.css"); mod19 <- lire19("src/mod_comparer.R")
 verifier(grepl('mod_comparer_ui("comparer")', app19, fixed = TRUE) &&
            grepl('mod_comparer_server("comparer"', app19, fixed = TRUE) &&
            grepl('value = "comparer"', app19, fixed = TRUE) &&

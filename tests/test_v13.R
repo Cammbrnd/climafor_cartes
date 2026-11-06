@@ -13,7 +13,9 @@ app_env <- new.env()
 sys.source("app.R", envir = app_env)
 # Depuis la v1.4, `ui` est une fonction de la requete (lien partage) : on lui
 # presente une requete sans parametre, c'est-a-dire l'ouverture habituelle.
-ui_app <- app_env$ui(list(QUERY_STRING = ""))
+# Depuis la v2.0, une requete sans profil donne la page d'entree : on ouvre le profil DSF,
+# qui porte l'interface complete de la v1.x.
+ui_app <- app_env$ui(list(QUERY_STRING = "?profil=dsf"))
 rendu_app <- htmltools::renderTags(ui_app)
 # <head> et <body> : les liens d'icone sont declares dans tags$head().
 html_app <- paste(c(as.character(rendu_app$head), as.character(rendu_app$html)), collapse = "\n")

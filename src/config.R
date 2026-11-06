@@ -19,7 +19,7 @@ CONFIG <- list(
   app = list(
     nom          = "ClimaFor",
     sous_titre   = "Bilan météorologique et climatique pour la gestion forestière",
-    version     = "1.9.0",
+    version     = "2.0.0",
     organisme    = "DSF — Département de la santé des forêts",
     annee        = format(Sys.Date(), "%Y"),
     # Detail technique d'un indicateur en echec, affiche sur sa carte (message
@@ -472,7 +472,61 @@ CONFIG <- list(
     # daltonien. Au-dela de huit lieux, le graphique ne trace que les huit premiers.
     palette = c("#0072B2", "#D55E00", "#009E73", "#CC79A7",
                 "#E69F00", "#56B4E9", "#444444", "#8C510A")
-  )
+  ),
+
+  # ---------------------------------------------------------------------------
+  # 14. Profils et acces (v2.0)
+  # ---------------------------------------------------------------------------
+  # TROIS PROFILS : « terrain » (telephone, consultation), « co » (correspondant-
+  # observateur, vue simplifiee) et « dsf » (permanents, tous les outils). Le profil
+  # se lit dans l'adresse (?id=...) : la liste des identifiants est un fichier,
+  # config/acces.csv (et config/acces_local.csv s'il existe, qui n'est pas versionne
+  # et qui l'emporte). CECI ORIENTE, NE PROTEGE PAS : un identifiant est lisible dans
+  # l'adresse, et quiconque le connait obtient le profil. Une vraie authentification
+  # viendra avec l'API (voir README).
+  acces = list(
+    fichier       = "config/acces.csv",
+    fichier_local = "config/acces_local.csv",
+    # TRUE : la page d'entree propose les trois profils et accepte ?profil=co, utile
+    # pour une demonstration. FALSE en exploitation : seuls les identifiants du
+    # fichier ouvrent un profil.
+    demo          = TRUE,
+    id_long_max   = 40L
+  ),
+
+  # ---------------------------------------------------------------------------
+  # 15. Territoires et bilan synthetique (v2.0)
+  # ---------------------------------------------------------------------------
+  territoires = list(dossier = "donnees_limites"),
+
+  synthese = list(
+    fiches_max      = 500L,    # fiches lues dans un import
+    territoires_max = 12L,     # departements ou regions compares a la fois
+    # Jeu de base de chaque profil : grandeurs dont le graphique (g) et le tableau (t)
+    # sont coches d'emblee. Les autres se cochent a la main.
+    base = list(
+      terrain = list(g = c("tmp", "can", "vag", "pre", "petp"),
+                     t = c("tmp", "can", "vag", "pre", "petp")),
+      co      = list(g = c("tmp", "can", "pre", "petp"),
+                     t = c("tmp", "can", "vag", "pre", "petp", "swi")),
+      dsf     = list(g = c("tmp", "can", "vag", "pre", "petp", "swi"),
+                     t = c("tmp", "can", "vag", "gel", "pre", "petp", "swi", "dry"))
+    ),
+    # Territoires preselectionnes quand aucun point n'est choisi : un bilan s'affiche
+    # des l'ouverture, ce qui sert la demonstration. Le departement du point choisi,
+    # s'il y en a un, l'emporte.
+    defaut = list(departement = "31", region = "76"),
+    # Grandeurs offertes au correspondant-observateur et au terrain (le profil dsf
+    # voit tout le jeu publie).
+    couches_co = c("tmp", "jja_t", "can", "can3", "vag", "pre", "jja_p", "petp", "swi", "dry",
+                   "gel", "geltd")
+  ),
+
+  # Application de saisie terrain (Sylvasan) : le bilan ne saisit rien, il s'y rattache.
+  # url_saisie : adresse ouverte par le bouton « Saisir une fiche » (vide : pas de
+  # bouton). api_fiches : adresse de l'API de lecture des fiches (vide : import de
+  # fichier seulement).
+  sylvasan = list(url_saisie = "", api_fiches = "")
 )
 
 # ------------------------------------------------------------------------------

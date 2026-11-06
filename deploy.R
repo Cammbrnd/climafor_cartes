@@ -41,7 +41,13 @@ stopifnot(
                                  file.exists("www/fonts/open-sans-latin-400-normal.woff2"),
   "Script client manquant"     = file.exists("www/app.js"),
   "Composant carte manquant"   = file.exists("www/carte/carte.js") &&
-                                 file.exists("www/carte/lib/maplibre-gl.js")
+                                 file.exists("www/carte/lib/maplibre-gl.js"),
+  # v2.0 : trois profils (terrain, correspondant-observateur, permanent DSF) et bilan
+  # synthetique. Sans la liste d'identifiants ni les contours, la page d'entree ne
+  # reconnait personne et le bilan par departement ou region est vide.
+  "Liste d'acces manquante"    = file.exists(CONFIG$acces$fichier),
+  "Contours manquants"         = file.exists(file.path(CONFIG$territoires$dossier, "departements.geojson")) &&
+                                 file.exists(file.path(CONFIG$territoires$dossier, "regions.geojson"))
 )
 message(sprintf("  %d indicateurs declares : OK", length(INDICATEURS)))
 
@@ -58,6 +64,19 @@ if (file.exists(file.path(chemin_ci(CONFIG$carte$dossier_local), "meta.json"))) 
          "Supprimez ce dossier ou remplacez-le par un jeu reel avant de deployer.")
   }
   message("  Donnees cartographiques embarquees : OK")
+}
+
+# Acces : la liste versionnee ne contient que des identifiants de DEMONSTRATION. Les vrais
+# identifiants vont dans config/acces_local.csv (non versionne) ; s'il existe, il est
+# envoye avec l'application. Ce n'est pas une authentification : voir README.
+if (file.exists(CONFIG$acces$fichier_local)) {
+  message("  Identifiants locaux (", CONFIG$acces$fichier_local, ") : envoyes avec l'application")
+} else {
+  message("  Pas de ", CONFIG$acces$fichier_local, " : seuls les identifiants de demonstration ouvrent un profil")
+}
+if (isTRUE(CONFIG$acces$demo)) {
+  message("  CONFIG$acces$demo = TRUE : ?profil=co|dsf|terrain est accepte. ",
+          "Mettez FALSE (src/config.R) pour une exploitation hors demonstration.")
 }
 
 # Chaque entree du registre doit exposer les champs attendus par les modules.
@@ -86,12 +105,20 @@ fichiers_app <- c(
   list.files("rapport", full.names = TRUE, recursive = TRUE),
   # Jeu cartographique embarque (facultatif : sinon l'application lit l'adresse
   # CONFIG$carte$url_donnees). Vide si le dossier n'existe pas.
-  list.files(CONFIG$carte$dossier_local, full.names = TRUE, recursive = TRUE)
+  list.files(CONFIG$carte$dossier_local, full.names = TRUE, recursive = TRUE),
+  # v2.0 : identifiants d'acces (dont la liste locale, si elle existe) et contours
+  # des departements et regions du bilan synthetique.
+  CONFIG$acces$fichier,
+  if (file.exists(CONFIG$acces$fichier_local)) CONFIG$acces$fichier_local,
+  list.files(CONFIG$territoires$dossier, full.names = TRUE, recursive = TRUE)
 )
 fichiers_app <- sub("^\\./", "", fichiers_app)
 stopifnot(
   "Le paquet n'embarque pas www/carte/carte.js"        = "www/carte/carte.js" %in% fichiers_app,
-  "Le paquet n'embarque pas MapLibre (www/carte/lib/)" = "www/carte/lib/maplibre-gl.js" %in% fichiers_app
+  "Le paquet n'embarque pas MapLibre (www/carte/lib/)" = "www/carte/lib/maplibre-gl.js" %in% fichiers_app,
+  "Le paquet n'embarque pas la liste d'acces"          = CONFIG$acces$fichier %in% fichiers_app,
+  "Le paquet n'embarque pas les contours (donnees_limites/)" =
+    file.path(CONFIG$territoires$dossier, "departements.geojson") %in% fichiers_app
 )
 message(sprintf("  %d fichiers a envoyer (dont %d pour la carte)", length(fichiers_app),
                 sum(grepl("^www/carte/", fichiers_app))))

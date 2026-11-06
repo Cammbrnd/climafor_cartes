@@ -146,16 +146,18 @@ ui14 <- function(qs) gsub("data-tabsetid=\"[0-9]+\"", "data-tabsetid=\"N\"",
   gsub("tab-[0-9]+-[0-9]+", "tab-N",
        html_de14(app14$ui(if (is.null(qs)) list() else list(QUERY_STRING = qs)))))
 
-h_defaut <- ui14("")
+# Depuis la v2.0, une requete sans profil donne la page d'entree : l'interface « habituelle »
+# est celle du profil permanent DSF (?profil=dsf), et un lien partage sans profil l'ouvre.
+h_defaut <- ui14("?profil=dsf")
 qs_lien <- paste0("?x=1.4727&y=43.35&n=Auterive&s=safran&r=1981-2010&a=2019",
                   "&p=1980-2025&f=7-9&c=1975-2026&t=chaleur_t2%3A28")
 h_lien <- ui14(qs_lien)
 
 verifier(is.function(app14$ui) && is.function(app14$ui_construire),
          "ui est une fonction de la requete (ui_construire gere l'etat)")
-verifier(identical(ui14("?x=oops&y=1"), h_defaut) && identical(ui14("?v=1&junk=%00"), h_defaut) &&
-           identical(ui14(NULL), h_defaut),
-         "une adresse sans point exploitable, ou sans requete, donne l'interface habituelle")
+verifier(identical(ui14("?profil=dsf&x=oops&y=1"), h_defaut) && identical(ui14("?profil=dsf&v=1&junk=%00"), h_defaut) &&
+           identical(ui14("?profil=dsf&"), h_defaut),
+         "une adresse sans point exploitable donne l'interface habituelle du profil")
 verifier(grepl("value=\"1991-2020\" selected", h_defaut) &&
            grepl("value=\"1981-2010\" selected", h_lien),
          "la reference du lien est preselectionnee")
@@ -178,9 +180,12 @@ verifier(!grepl("<details class=\"cf-repli\" open", h_defaut) &&
          "les blocs repliés qui contiennent un reglage du lien s'ouvrent (avance, seuils)")
 
 src_app <- paste(readLines(chemin_ci("app.R"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
-# Depuis la v1.6 (C7), la barre de contexte est construite dans src/utils_ui.R.
-src_app <- paste(src_app, paste(readLines(chemin_ci("src/utils_ui.R"), warn = FALSE,
-                                          encoding = "UTF-8"), collapse = "\n"), sep = "\n")
+# Depuis la v1.6 (C7), la barre de contexte est construite dans src/utils_ui.R ; depuis la
+# v2.0, l'analyse d'un point (dont le lien partage) vit dans src/serveur_dsf.R.
+for (f14 in c("src/utils_ui.R", "src/serveur_dsf.R", "src/ui_page.R")) {
+  src_app <- paste(src_app, paste(readLines(chemin_ci(f14), warn = FALSE, encoding = "UTF-8"),
+                                  collapse = "\n"), sep = "\n")
+}
 verifier(grepl("updateQueryString", src_app) && grepl("mode = \"replace\"", src_app),
          "l'adresse est mise a jour apres chaque analyse, sans entree d'historique")
 verifier(grepl("data-copier-lien", src_app) && grepl("a_restaurer", src_app),

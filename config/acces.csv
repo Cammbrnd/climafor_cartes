@@ -1,0 +1,8 @@
+# Identifiants d'acces (oriente vers un profil, ne protege pas : voir CONFIG$acces).
+# Colonnes : id;profil;nom      profil = terrain | co | dsf
+# Ce fichier est dans un depot public : n'y mettez que des identifiants de demonstration.
+# La vraie liste va dans config/acces_local.csv (meme format, non versionne, prioritaire).
+id;profil;nom
+demo-terrain;terrain;Demonstration terrain
+demo-co;co;Demonstration correspondant-observateur
+demo-dsf;dsf;Demonstration permanent DSF
