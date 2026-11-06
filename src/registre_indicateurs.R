@@ -305,13 +305,13 @@ INDICATEURS <- list(
   can = list(
     id = "can", titre = "Jours de chaleur", famille = "thermique",
     calc = calc_chaleur, plot = plot_chaleur,
-    colonnes = c("annee", "n_t1", "n_t2", "n_t3", "n_vagues", "normale", "anomalie", "ecart_type_ref", "n_manquants", "partielle"),
+    colonnes = c("annee", "n_t1", "n_t2", "n_t3", "normale", "anomalie", "ecart_type_ref", "n_manquants", "partielle"),
     comparaison = TRUE, fenetre = FALSE,
     methode = paste(
       "Dénombrement annuel des journées dont la température maximale dépasse",
       "trois seuils emboîtés (25, 30 et 35 °C par défaut, modifiables dans",
-      "l'onglet Paramètres). Une vague de chaleur est comptée dès que trois",
-      "jours consécutifs franchissent le seuil intermédiaire."),
+      "l'onglet Paramètres). Les épisodes de chaleur (vagues) ont leur propre",
+      "indicateur : un seuil absolu ne tient pas compte de la saison."),
     lecture = paste(
       "Vers 35 °C et au-delà, l'assimilation nette des essences tempérées diminue",
       "le plus souvent : l'optimum se situe en général entre 20 et 30 °C, selon",
@@ -322,6 +322,43 @@ INDICATEURS <- list(
     resume = function(dat, ctx) resume_standard(
       dat, ctx, "n_t2", sprintf("Nombre de jours à plus de %g °C", ctx$seuils$chaleur_t2),
       "jours", 0)
+  ),
+
+  vag = list(
+    id = "vag", titre = "Vagues de chaleur", famille = "thermique",
+    calc = calc_vagues, plot = plot_vagues,
+    colonnes = c("annee", "n_vagues", "n_jours_vague", "duree_max", "ecart_max", "lissee",
+                 "normale", "anomalie", "ecart_type_ref", "n_manquants", "partielle"),
+    comparaison = TRUE, fenetre = FALSE,
+    methode = paste(
+      "Une vague de chaleur est une suite d'au moins cinq jours consécutifs dont la",
+      "température maximale dépasse d'au moins 5 °C la normale du jour (définition de",
+      "l'indice HWDI, Frich et al. 2002 ; écart et durée modifiables dans l'onglet",
+      "Paramètres). La normale du jour est la moyenne de la température maximale de ce",
+      "jour du calendrier sur la période de référence, lissée sur cinq jours.",
+      "Deux choix propres à l'application : seuls les mois de mai à septembre sont",
+      "examinés (en hiver, +5 °C pendant cinq jours est un redoux) ; et l'on compte les",
+      "vagues de chaque année, là où l'indice d'origine donne la durée de la plus longue.",
+      "Un jour sans mesure interrompt la suite."),
+    lecture = paste(
+      "Le seuil étant relatif à la normale du jour, la même vague est plus chaude en",
+      "juillet qu'en mai : elle mesure un écart au climat de saison, pas une",
+      "température absolue (les jours à 30 ou 35 °C sont comptés à part). Le nombre de",
+      "vagues dit leur fréquence ; leur durée maximale et leur écart maximal à la",
+      "normale, dans le tableau exporté, disent leur gravité. Une vague longue pèse",
+      "surtout quand elle coïncide avec un sol déjà sec : à lire avec le SWI et les",
+      "séquences sèches."),
+    resume = function(dat, ctx) {
+      base <- resume_standard(dat, ctx, "n_vagues", "Nombre de vagues de chaleur", "", 0,
+                              "supérieur à", "inférieur à",
+                              tendance_txt = texte_tendance(dat, ctx, "n_vagues", "vagues", 2))
+      d <- dat[dat$annee == ctx$courante & !(dat$partielle %in% TRUE), , drop = FALSE]
+      if (!nrow(d) || !isTRUE(d$n_vagues[1] > 0)) return(base)
+      paste(base, sprintf(
+        "En %d, %d jour%s en vague ; la plus longue a duré %d jours, et l'écart à la normale du jour a atteint %s au plus.",
+        ctx$courante, d$n_jours_vague[1], if (d$n_jours_vague[1] > 1) "s" else "",
+        d$duree_max[1], fmt_ecart(d$ecart_max[1], "°C", 1)))
+    }
   ),
 
   # ---- Gel -----------------------------------------------------------------
@@ -805,7 +842,7 @@ INDICATEURS <- list(
 #' Modifier ce vecteur suffit a reorganiser toute l'interface.
 #' @export
 ORDRE_INDICATEURS <- c(
-  "bh", "ombro", "tmp", "tmp_mois", "tmp_jour", "gel", "can", "pre", "pre_mois",
+  "bh", "ombro", "tmp", "tmp_mois", "tmp_jour", "gel", "can", "vag", "pre", "pre_mois",
   "jja", "swi", "dry", "mart", "vpd", "vpd_mois", "gdd", "veg",
   "petp", "neige", "neige_mois", "vent", "vent_mois", "vent_soutenu", "vent_sol"
 )
@@ -854,6 +891,7 @@ REQUIS <- list(
   swi = "swi",                    dry = "p_tot",
   tmp = "t_moy",                  jja = c("t_moy", "p_tot"),
   can = "t_max",                  gel = "t_min",
+  vag = "t_max",
   pre = "p_tot",                  neige = "p_sol",
   mart = c("p_tot", "t_moy"),     gdd = "t_moy",
   veg = "t_moy",                  ombro = c("p_tot", "t_moy"),

@@ -12,7 +12,7 @@
 
 # -- 1. Verification des dependances ------------------------------------------
 paquets <- c("shiny", "htmltools", "ggplot2", "leaflet", "plotly", "httr2", "jsonlite",
-             "rmarkdown", "knitr", "base64enc", "rsconnect")
+             "rmarkdown", "knitr", "base64enc", "sf", "rsconnect")
 
 manquants <- paquets[!paquets %in% rownames(installed.packages())]
 if (length(manquants)) {

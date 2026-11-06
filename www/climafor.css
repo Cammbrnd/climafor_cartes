@@ -625,7 +625,34 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
   letter-spacing: 0.04em; color: var(--cf-texte-mention);
 }
 .cf-filtres__raccourcis { display: flex; gap: var(--e-4); }
+
+/* Export du bilan : deux boutons CSV sous la synthèse. */
+.cf-export {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3);
+  margin: var(--e-4) 0;
+}
+.cf-export__legende { font-size: var(--t-sm); font-weight: 600; color: var(--cf-texte-mention); }
 .cf-filtres__raccourcis a { font-size: var(--t-xs); font-weight: 700; }
+
+/* Comparer (v1.9) : tableau lieux x grandeurs, boutons d'action, bilan en phrases. */
+.cf-comp__actions {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e-3);
+  margin: var(--e-3) 0;
+}
+.cf-comp__actions .form-group { margin-bottom: 0; }
+.cf-comp__defile { overflow-x: auto; margin-bottom: var(--e-3); }
+.cf-comp__tableau th, .cf-comp__tableau td { white-space: normal; vertical-align: top; }
+.cf-comp__tableau thead th { text-align: left; min-width: 9rem; }
+.cf-comp__tableau tbody th {
+  position: static; background: transparent; text-align: left; font-weight: 400;
+  min-width: 10rem;
+}
+.cf-comp__tableau td.cf-comp__val { text-align: left; }
+.cf-comp__nom { font-size: var(--t-sm); font-weight: 700; }
+.cf-comp__chiffre { font-size: var(--t-sm); font-weight: 700; }
+.cf-comp__ecart { font-size: var(--t-xs); font-weight: 400; color: var(--cf-texte-mention); }
+.cf-comp__bilan { margin: var(--e-2) 0 0; padding-left: var(--e-6); }
+.cf-comp__bilan li { margin-bottom: var(--e-2); }
 
 /* La case à cocher reste visible : le motif fonctionne même si le navigateur
    ne gère pas :has(). Ce dernier n'ajoute qu'un remplissage de confort. */
@@ -1047,7 +1074,7 @@ label {
    de barre.
    ========================================================================== */
 @media print {
-  .cf-barre, .nav-tabs, .cf-filtres, .cf-barre-action,
+  .cf-barre, .nav-tabs, .cf-filtres, .cf-export, .cf-comp__actions, .cf-barre-action,
   .cf-carte__actions, .cf-details, .cf-pied, .cf-contexte {
     display: none !important;
   }

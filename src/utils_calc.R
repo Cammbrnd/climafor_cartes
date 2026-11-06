@@ -646,14 +646,143 @@ calc_chaleur <- function(don, ctx) {
                 list(cpt(s$chaleur_t1, "n_t1"),
                      cpt(s$chaleur_t2, "n_t2"),
                      cpt(s$chaleur_t3, "n_t3")))
-  # Vague de chaleur : au moins 3 jours consecutifs au-dessus du seuil 2
-  vagues <- tapply(don$t_max > s$chaleur_t2, don$annee, function(x) {
-    x[is.na(x)] <- FALSE
-    r <- rle(x)
-    sum(r$lengths[r$values] >= 3)
-  })
-  res$n_vagues <- as.integer(vagues[as.character(res$annee)])
   enrichir_annuel(res, don, ctx, "n_t2", vars = "t_max")
+}
+
+#' Les 366 jours du calendrier, « MM-JJ », 29 fevrier compris.
+#' Une annee bissextile sert de modele : la normale d'un jour se lit par sa date
+#' civile, pas par son rang dans l'annee (le rang decale d'un jour apres fevrier).
+#' @keywords internal
+CLES_JOUR <- format(seq(as.Date("2000-01-01"), as.Date("2000-12-31"), by = "day"), "%m-%d")
+
+#' Normale de la temperature maximale pour chaque jour du calendrier.
+#'
+#' Moyenne, sur les annees de reference, de la T max de ce jour, lissee sur une
+#' fenetre centree de cinq jours (Frich et al. 2002). Sans lissage, trente valeurs
+#' par jour donneraient une courbe en dents de scie, et les ecarts a cette courbe
+#' autant de « jours chauds » qui n'en sont pas.
+#' @param don tableau journalier (date, annee, t_max).
+#' @return vecteur de 366 valeurs nomme par CLES_JOUR, ou NULL si la reference
+#'   compte moins d'annees renseignees que CONFIG$methode$vague_ref_annees_min.
+#' @keywords internal
+vague_normale_jour <- function(don, ctx) {
+  ref <- don[don$annee %in% ctx$ref & is.finite(don$t_max), c("date", "annee", "t_max"),
+             drop = FALSE]
+  if (!nrow(ref)) return(NULL)
+  n_an <- tabulate(match(ref$annee, sort(unique(ref$annee))))
+  if (sum(n_an >= 300L) < CONFIG$methode$vague_ref_annees_min) return(NULL)
+
+  moy <- as.numeric(tapply(ref$t_max, factor(format(ref$date, "%m-%d"), levels = CLES_JOUR),
+                           mean))
+  n <- length(moy)
+  demi <- (CONFIG$methode$vague_fenetre_normale - 1L) %/% 2L
+  # Fenetre circulaire : le 31 decembre voisine du 1er janvier. Un jour sans
+  # valeur (29 fevrier, hors annee bissextile de la reference) est lisse par ses
+  # voisins.
+  voisins <- vapply(seq.int(-demi, demi), function(k) moy[((seq_len(n) - 1L + k) %% n) + 1L],
+                    numeric(n))
+  lisse <- rowMeans(voisins, na.rm = TRUE)
+  lisse[is.nan(lisse)] <- NA_real_
+  stats::setNames(lisse, CLES_JOUR)
+}
+
+#' Jours de vague de chaleur : ecart a la normale du jour et appartenance a une suite.
+#'
+#' DEFINITION (indice HWDI, Frich et al. 2002, tel que le reprend l'application) :
+#' un jour est « chaud » si sa T max depasse d'au moins `vague_ecart` degres la
+#' normale du jour ; une VAGUE est une suite d'au moins `vague_duree` jours chauds
+#' consecutifs. Deux choix propres a l'application :
+#'  - la saison : seuls les mois de CONFIG$methode$vague_mois comptent (mai a
+#'    septembre). En hiver, +5 degC pendant cinq jours est un redoux ;
+#'  - le DENOMBREMENT : l'indice d'origine rend la duree de la plus longue vague ;
+#'    ici on compte les vagues, et on garde la duree maximale a cote.
+#' Une suite est rompue par un jour froid, un jour SANS MESURE ou un trou dans
+#' les dates : un jour inconnu n'est pas compte comme chaud.
+#'
+#' @param don tableau journalier (date, annee, t_max).
+#' @return data.frame(date, annee, ecart, chaud, vague, debut, id) ou id numerote
+#'   chaque vague (0 hors vague) ; NULL si la normale du jour n'est pas calculable.
+#' @keywords internal
+vagues_detecter <- function(don, ctx) {
+  if (is.null(don) || !nrow(don) || is.null(don$t_max)) return(NULL)
+  don <- don[order(don$date), c("date", "annee", "t_max"), drop = FALSE]
+  normale <- vague_normale_jour(don, ctx)
+  if (is.null(normale)) return(NULL)
+
+  # Un contexte construit a la main peut ne pas porter ces deux reglages.
+  ecart_min <- ctx$seuils$vague_ecart %||% CONFIG$seuils$vague_ecart
+  duree_min <- ctx$seuils$vague_duree %||% CONFIG$seuils$vague_duree
+  mois <- as.integer(format(don$date, "%m"))
+  ecart <- don$t_max - normale[match(format(don$date, "%m-%d"), CLES_JOUR)]
+  m <- CONFIG$methode$vague_mois
+  chaud <- is.finite(ecart) & ecart >= ecart_min & mois >= m[1] & mois <= m[2]
+
+  # Debut d'une suite de jours chauds : jour chaud dont la veille ne l'est pas, ou
+  # n'est pas la veille calendaire.
+  veille_chaude <- c(FALSE, chaud[-length(chaud)]) & c(FALSE, diff(as.integer(don$date)) == 1L)
+  debut_suite <- chaud & !veille_chaude
+  suite <- cumsum(debut_suite)
+  longueur <- tabulate(suite[chaud], nbins = max(suite, 0L))
+  vague <- chaud & (longueur[pmax(suite, 1L)] >= duree_min) %in% TRUE
+
+  id <- integer(nrow(don))
+  id[vague] <- match(suite[vague], unique(suite[vague]))
+  data.frame(date = don$date, annee = as.integer(don$annee), ecart = ecart,
+             chaud = chaud, vague = vague, debut = vague & debut_suite, id = id)
+}
+
+#' Les vagues une a une : debut, fin, duree, ecart moyen et maximal a la normale.
+#' @param det resultat de vagues_detecter().
+#' @return data.frame(annee, debut, fin, duree, ecart_moy, ecart_max), une ligne par
+#'   vague, dans l'ordre du temps ; zero ligne s'il n'y en a pas. Les vagues ne
+#'   franchissent jamais une fin d'annee : la saison s'arrete en septembre.
+#' @keywords internal
+vagues_episodes <- function(det) {
+  v <- det[det$vague, , drop = FALSE]
+  if (!nrow(v)) {
+    return(data.frame(annee = integer(0), debut = as.Date(character(0)),
+                      fin = as.Date(character(0)), duree = integer(0),
+                      ecart_moy = numeric(0), ecart_max = numeric(0)))
+  }
+  i1 <- !duplicated(v$id)
+  i2 <- !duplicated(v$id, fromLast = TRUE)
+  rang <- match(v$id, v$id[i1])
+  data.frame(annee = v$annee[i1], debut = v$date[i1], fin = v$date[i2],
+             duree = tabulate(rang),
+             ecart_moy = as.numeric(rowsum(v$ecart, rang)) / tabulate(rang),
+             ecart_max = as.numeric(tapply(v$ecart, rang, max)),
+             stringsAsFactors = FALSE)
+}
+
+#' 05 bis — Vagues de chaleur : nombre, jours cumules, duree et intensite.
+#' @export
+calc_vagues <- function(don, ctx) {
+  if (is.null(don) || !nrow(don)) return(data.frame())
+  det <- vagues_detecter(don, ctx)
+  if (is.null(det)) {
+    r <- data.frame()
+    attr(r, "raison") <- "reference_insuffisante"
+    attr(r, "message") <- sprintf(paste(
+      "Normale du jour non calculable : la référence %s compte moins de %d années",
+      "renseignées dans les données chargées."),
+      ctx$ref_label, CONFIG$methode$vague_ref_annees_min)
+    return(r)
+  }
+  ep <- vagues_episodes(det)
+  annees <- sort(unique(as.integer(don$annee)))
+  f <- factor(ep$annee, levels = annees)
+  zero <- function(x) { x[is.na(x)] <- 0; x }
+
+  res <- data.frame(
+    annee         = annees,
+    n_vagues      = as.integer(tabulate(f, nbins = length(annees))),
+    n_jours_vague = as.integer(zero(as.numeric(tapply(ep$duree, f, sum)))),
+    duree_max     = as.integer(zero(as.numeric(tapply(ep$duree, f, max)))),
+    # Sans vague, pas d'ecart : NA et non 0, qui serait une intensite.
+    ecart_max     = as.numeric(tapply(ep$ecart_max, f, max)))
+  res <- enrichir_annuel(res, don, ctx, "n_vagues", vars = "t_max")
+  res$lissee <- lissage_annuel(res$annee, res$n_vagues, exclure = res$partielle)
+  res
 }
 
 #' 06 — Precipitations annuelles, decomposees liquide / solide.
@@ -1022,6 +1151,20 @@ calc_synthese <- function(don, ctx) {
     }
   }
 
+  # Vagues de chaleur : detectees sur toute la serie (la normale du jour vient de la
+  # reference entiere), puis comptees a periode egale comme les autres lignes. Une
+  # normale non calculable (reference trop courte) retire la ligne, sans erreur.
+  vag <- tryCatch(vagues_detecter(don, ctx), error = function(e) NULL)
+  st_vag <- c(moy = NA_real_, sd = NA_real_, n = 0)
+  if (!is.null(vag)) {
+    vag$doy <- as.integer(format(vag$date, "%j"))
+    ans <- sort(intersect(unique(ref_t$annee), vag$annee))
+    v <- vapply(ans, function(a) sum(vag$debut[vag$annee == a & vag$doy <= doy_max]),
+                numeric(1))
+    if (length(v)) st_vag <- c(moy = mean(v), sd = if (length(v) >= 3L) stats::sd(v) else NA_real_,
+                               n = length(v))
+  }
+
   res <- rbind(
     ligne("Température moyenne", "°C",
           ou_na(cur_ok("t"), moy(cur$t_moy)), stat_an(ref_t, "t_moy", moy), "chaud",
@@ -1042,6 +1185,10 @@ calc_synthese <- function(don, ctx) {
           ou_na(cur_ok("t"), som(cur$t_max > ctx$seuils$chaleur_t2)),
           stat_an(ref_t, "t_max", function(x) sum(x > ctx$seuils$chaleur_t2, na.rm = TRUE)),
           "chaud", "%.0f", famille = "thermique"),
+    if (!is.null(vag) && st_vag[["n"]] > 0)
+      ligne("Vagues de chaleur", "vagues",
+            ou_na(cur_ok("t"), sum(vag$debut[vag$annee == ctx$courante])),
+            st_vag, "chaud", "%.0f", famille = "thermique"),
     # Le gel n'a pas de bon sens : moins de gel, c'est un hiver plus doux, donc un
     # debourrement plus precoce et, souvent, davantage de gel tardif.
     ligne("Jours de gel", "j",

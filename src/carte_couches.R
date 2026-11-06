@@ -57,6 +57,11 @@ CARTE_COUCHES <- list(
                        sprintf("Jours de chaleur extrême (au-dessus de %g °C)", CONFIG$seuils$chaleur_t3),
                        "jours", 0, 0, "chaud", "positif_rouge"),
 
+  vag   = carte_couche("vag", "vag", "n_vagues", "Vagues de chaleur (nombre par an)",
+                       "vagues", 0, 0, "chaud", "positif_rouge", "normale"),
+  vagj  = carte_couche("vagj", "vag", "n_jours_vague", "Jours en vague de chaleur",
+                       "jours", 0, 0, "chaud", "positif_rouge"),
+
   # ---- Eau et bilan hydrique ----------------------------------------------
   pre   = carte_couche("pre", "pre", "p_tot", "Précipitations annuelles",
                        "mm", 0, 0, "eau", "positif_vert", "normale"),

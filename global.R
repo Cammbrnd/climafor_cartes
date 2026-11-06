@@ -96,9 +96,11 @@ FICHIERS_R <- c(
   "src/utils_partage.R",          # 6c. etat partageable d'une analyse (lien)
   "src/carte_couches.R",          # 6d. couches cartographiables (v1.8)
   "src/utils_carte.R",            # 6e. fichiers de la carte : validation, transport
+  "src/utils_comparer.R",         # 6f. comparaison de lieux importes (v1.9)
   "src/mod_localisation.R",       # 7. modules Shiny
   "src/mod_station.R",
   "src/mod_carte.R",              # onglet Carte (v1.8)
+  "src/mod_comparer.R",           # onglet Comparer (v1.9)
   "src/mod_periode.R",
   "src/mod_graphique.R",
   "src/mod_bilan.R",

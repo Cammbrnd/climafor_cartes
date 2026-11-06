@@ -53,7 +53,7 @@ tous <- stats::setNames(as.list(DESCRIPTIF_SEUILS$min), DESCRIPTIF_SEUILS$id)
 etat_tous <- etat0; etat_tous$seuils <- tous
 q_tous <- partage_encoder(etat_tous)
 verifier(identical(partage_decoder(q_tous)$seuils, lapply(tous, as.numeric)),
-         "les dix-neuf seuils modifies a la fois font l'aller-retour")
+         "les vingt et un seuils modifies a la fois font l'aller-retour")
 verifier(nchar(q_tous) < 900L,
          "meme avec tous les seuils modifies, l'adresse reste courte (moins de 900 caracteres)")
 
@@ -326,7 +326,7 @@ verifier(grepl("id=\"parametres-etat_seuils\"", h_par_def),
          "Parametres : une ligne d'etat dit ce que contient le bloc replie")
 verifier(all(vapply(DESCRIPTIF_SEUILS$id, function(i)
   grepl(sprintf("id=\"parametres-seuil_%s\"", i), h_par_def), logical(1))),
-  "aucun des dix-neuf seuils n'est retire de la page (replie, pas supprime)")
+  "aucun des vingt et un seuils n'est retire de la page (replie, pas supprime)")
 
 src_rap <- paste(readLines(chemin_ci("src/mod_rapport.R"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
 verifier(!grepl("input\\$indicateurs %\\|\\|% ORDRE_INDICATEURS", src_rap),

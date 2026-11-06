@@ -62,6 +62,9 @@ mod_bilan_ui <- function(id) {
     # -- Synthese chiffree ----------------------------------------------------
     shiny::uiOutput(ns("synthese")),
 
+    # -- Export du bilan (CSV) ---------------------------------------------------
+    shiny::uiOutput(ns("export")),
+
     # -- Filtre par famille thematique ---------------------------------------
     shiny::uiOutput(ns("filtres")),
 
@@ -284,6 +287,62 @@ qualite_serie_ui <- function(q, st, ref_label) {
   )
 }
 
+#' Export CSV du bilan : le bouton et les deux fichiers.
+#'
+#' Sorti du serveur du Bilan, qui ne doit pas grossir (tests/test_v16.R). Les
+#' sorties sont posees sur `output` du module appelant.
+#' @param output,ns sorties et espace de noms du module ; @param donnees,resultats,ctx,lieu reactives.
+#' @keywords internal
+mod_bilan_export_server <- function(output, ns, donnees, resultats, ctx, lieu) {
+  # -- Export CSV du bilan ------------------------------------------------------
+  # Deux fichiers : la synthese chiffree (ce que montrent les cartes du haut) et
+  # toutes les series annuelles en un seul tableau long. Les profils mensuels
+  # gardent le CSV de leur graphique. Chaque fichier porte ses lignes de
+  # provenance (source, reference, seuils, date, licence).
+  output$export <- shiny::renderUI({
+    shiny::req(donnees(), nrow(donnees()) > 0)
+    shiny::div(
+      class = "cf-export",
+      shiny::span(class = "cf-export__legende", "Exporter ce bilan"),
+      shiny::downloadButton(ns("csv_synthese"), "Synthèse chiffrée (CSV)",
+                            class = "cf-btn cf-btn--sec"),
+      shiny::downloadButton(ns("csv_series"), "Toutes les séries annuelles (CSV)",
+                            class = "cf-btn cf-btn--sec"))
+  })
+
+  # Le pseudo-indicateur ne sert qu'a titrer les lignes de provenance.
+  entete_export <- function(titre) {
+    lignes_metadonnees_csv(list(titre = titre, fenetre = FALSE), ctx(), don = donnees(),
+                           lieu = lieu(), dat = NULL)
+  }
+
+  output$csv_synthese <- shiny::downloadHandler(
+    filename = function() nom_fichier_export("synthese", lieu()),
+    content = function(file) {
+      s <- synthese_securisee(donnees(), ctx())
+      shiny::req(nrow(s) > 0)
+      ecrire_csv_avec_metadonnees(
+        bilan_synthese_export(s), file,
+        c(entete_export("Synthèse chiffrée de l'année comparée"),
+          sprintf("Comparaison à période égale : jusqu'au jour %d de l'année %d",
+                  attr(s, "doy_max"), ctx()$courante)))
+    }
+  )
+
+  output$csv_series <- shiny::downloadHandler(
+    filename = function() nom_fichier_export("series_annuelles", lieu()),
+    content = function(file) {
+      d <- bilan_series_longues(resultats())
+      shiny::req(nrow(d) > 0)
+      ecrire_csv_avec_metadonnees(
+        d, file,
+        c(entete_export("Séries annuelles de tous les indicateurs"),
+          "Format long : une ligne par indicateur, grandeur et année. Profils mensuels et journaliers : voir le CSV de chaque graphique"))
+    }
+  )
+  invisible(NULL)
+}
+
 #' @param donnees reactive() -> tableau journalier SAFRAN.
 #' @param ctx reactive() -> contexte de calcul.
 #' @param lieu reactive() -> point courant.
@@ -369,6 +428,9 @@ mod_bilan_server <- function(id, donnees, ctx, lieu, mobile = shiny::reactive(FA
       synthese_ui(s, don, en_station = est_station(), familles = familles_dispo(),
                   seuils = ctx()$seuils, ns = ns)
     })
+
+    # -- Export CSV du bilan (voir mod_bilan_export_server) ------------------------
+    mod_bilan_export_server(output, ns, donnees, resultats, ctx, lieu)
 
     # -- Indicateurs dont le calcul a echoue ------------------------------------
     # Avant : une carte generique par indicateur, et le detail dans le seul

@@ -19,7 +19,7 @@ CONFIG <- list(
   app = list(
     nom          = "ClimaFor",
     sous_titre   = "Bilan météorologique et climatique pour la gestion forestière",
-    version     = "1.8.0",
+    version     = "1.9.0",
     organisme    = "DSF — Département de la santé des forêts",
     annee        = format(Sys.Date(), "%Y"),
     # Detail technique d'un indicateur en echec, affiche sur sa carte (message
@@ -227,6 +227,11 @@ CONFIG <- list(
     chaleur_t1        = 25,   # degC — jour d'ete (t_max)
     chaleur_t2        = 30,   # degC — forte chaleur
     chaleur_t3        = 35,   # degC — chaleur extreme (seuil de stress majeur)
+    vague_ecart       = 5,    # degC — un jour de vague de chaleur a une T max d'au
+                              # moins cet ecart AU-DESSUS DE LA NORMALE DU JOUR
+                              # (seuil RELATIF, contrairement a chaleur_t1 a t3)
+    vague_duree       = 5,    # jours consecutifs requis pour parler de vague
+                              # (indice HWDI : Frich et al. 2002)
     gdd_base          = 5,    # degC — temperature de base des degres-jours
     gdd_plafond       = 30,   # degC — plafonnement de la t_moy journaliere
     veg_seuil_t       = 5,    # degC — seuil de demarrage/arret de vegetation
@@ -261,7 +266,17 @@ CONFIG <- list(
     # Dernier jour de l'annee (jour julien 181 = 30 juin) retenu pour « date du
     # dernier gel de printemps ». Au-dela, un gel est tardif pour une autre raison
     # (altitude) et fausserait la date de fin de la saison de gel.
-    gel_printemps_doy_max = 181L
+    gel_printemps_doy_max = 181L,
+    # Vagues de chaleur : la saison ou on les cherche (mai a septembre) et la
+    # fenetre qui lisse la normale du jour. Hors de ces mois, +5 degC pendant cinq
+    # jours est un redoux, pas une vague de chaleur, et la compter fausserait le
+    # nombre de vagues. La fenetre de cinq jours est celle de l'indice HWDI.
+    vague_mois = c(5L, 9L),
+    vague_fenetre_normale = 5L,
+    # Annees de reference (de plus de 300 jours renseignes) sans lesquelles la
+    # normale du jour n'est pas calculee : chaque jour du calendrier n'a que
+    # trente valeurs au mieux, dix est un plancher.
+    vague_ref_annees_min = 10L
   ),
 
   # ---------------------------------------------------------------------------
@@ -429,6 +444,34 @@ CONFIG <- list(
     # Garde-fou de lecture : un meta.json qui annonce plus de mailles que cela
     # est refuse (la grille SAFRAN de la France metropolitaine en compte environ 9 900).
     n_mailles_max = 20000L
+  ),
+
+  # ---------------------------------------------------------------------------
+  # 13. Onglet Comparer (v1.9)
+  # ---------------------------------------------------------------------------
+  # Points et zones importes par l'utilisateur, ramenes aux mailles de la carte.
+  # Ces bornes protegent le serveur (un seul processus R pour toutes les sessions) :
+  # elles ne sont pas des reglages d'analyse.
+  comparer = list(
+    lieux_max         = 40L,    # lieux comparables a la fois
+    lignes_max        = 500L,   # lignes lues dans un CSV de points
+    entites_max       = 100L,   # entites lues dans un fichier de zones
+    fichier_max_mo    = 10,     # taille d'un fichier importe (= shiny.maxRequestSize)
+    zip_fichiers_max  = 30L,    # fichiers dans une archive de shapefile
+    zip_taille_max_mo = 100,    # taille de l'archive une fois decompressee
+    # Un point a plus de 6 km du centre de la maille la plus proche n'est pas dans la
+    # grille SAFRAN : une maille de 8 km est a 5,7 km de ses coins, au plus. Au-dela,
+    # c'est la mer ou l'etranger.
+    distance_max_m    = 6000,
+    mailles_zone_max  = 3000L,  # une zone plus grande est refusee (la France en compte ~9 900)
+    taille_carte_max_mo = 30,   # un fichier de la carte telecharge par le serveur
+    cache_h           = 24,     # duree de conservation des fichiers de la carte telecharges
+    annees_ref_min    = 10L,    # annees de reference sans lesquelles il n'y a pas de normale
+    couches_defaut    = c("tmp", "can", "vag", "gel", "pre", "petp"),
+    # Okabe-Ito (sans le jaune, illisible sur fond blanc) : distinguables par un
+    # daltonien. Au-dela de huit lieux, le graphique ne trace que les huit premiers.
+    palette = c("#0072B2", "#D55E00", "#009E73", "#CC79A7",
+                "#E69F00", "#56B4E9", "#444444", "#8C510A")
   )
 )
 

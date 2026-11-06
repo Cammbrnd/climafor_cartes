@@ -289,6 +289,77 @@ ecrire_csv_avec_metadonnees <- function(d, file, lignes = character(0)) {
   invisible(file)
 }
 
+#' Nom d'un fichier d'export : sans accent ni espace, avec le lieu et la date.
+#' @param prefixe debut du nom ; @param lieu liste(nom = ...) ou NULL ; @param ext extension.
+#' @export
+nom_fichier_export <- function(prefixe, lieu = NULL, ext = "csv") {
+  nom <- iconv((lieu %||% list(nom = "point"))$nom %||% "point", to = "ASCII//TRANSLIT")
+  nom <- gsub("^_+|_+$", "", gsub("[^A-Za-z0-9]+", "_", if (is.na(nom)) "point" else nom))
+  sprintf("%s_%s_%s.%s", prefixe, if (nzchar(nom)) nom else "point",
+          format(Sys.Date(), "%Y%m%d"), ext)
+}
+
+#' Toutes les series ANNUELLES du bilan dans un seul tableau « long ».
+#'
+#' Une ligne par indicateur, grandeur et annee : le format que lisent sans effort
+#' R (`read.csv2`), Excel (tableau croise dynamique) et tout outil de graphiques.
+#' Les profils mensuels et journaliers (bilan hydrique, diagramme ombrothermique,
+#' normales par mois...) n'ont pas d'annee : ils restent dans le CSV de leur
+#' graphique. Les colonnes de texte (classe de De Martonne) et les colonnes de
+#' calcul sans interet pour la lecture (nombre de jours, dernier jour) sont
+#' laissees de cote ; l'etat de completude, lui, est garde : `partielle`.
+#'
+#' @param resultats liste de calculer_indicateurs().
+#' @param ids indicateurs a exporter, dans cet ordre.
+#' @return data.frame(indicateur_id, indicateur, grandeur, annee, valeur, partielle),
+#'   zero ligne si aucune serie annuelle n'est calculable.
+#' @export
+bilan_series_longues <- function(resultats, ids = ORDRE_INDICATEURS) {
+  vide <- data.frame(indicateur_id = character(0), indicateur = character(0),
+                     grandeur = character(0), annee = integer(0), valeur = numeric(0),
+                     partielle = logical(0), stringsAsFactors = FALSE)
+  morceaux <- lapply(ids, function(id) {
+    d <- resultats[[id]]; ind <- INDICATEURS[[id]]
+    if (is.null(d) || is.null(ind) || !nrow(d) || !"annee" %in% names(d)) return(NULL)
+    cols <- setdiff(colonnes_valeurs(d, ind), c("annee", "partielle", "n_manquants",
+                                                COLONNES_TECHNIQUES))
+    cols <- cols[vapply(cols, function(c) is.numeric(d[[c]]), logical(1))]
+    if (!length(cols)) return(NULL)
+    part <- if ("partielle" %in% names(d)) d$partielle %in% TRUE else rep(FALSE, nrow(d))
+    do.call(rbind, lapply(cols, function(c) {
+      data.frame(indicateur_id = id, indicateur = ind$titre, grandeur = c,
+                 annee = as.integer(d$annee), valeur = round(as.numeric(d[[c]]), 3),
+                 partielle = part, stringsAsFactors = FALSE)
+    }))
+  })
+  morceaux <- Filter(Negate(is.null), morceaux)
+  if (!length(morceaux)) return(vide)
+  res <- do.call(rbind, morceaux)
+  rownames(res) <- NULL
+  res
+}
+
+#' La synthese chiffree, telle que l'ecran la montre, prete a etre exportee.
+#' @param s resultat de calc_synthese().
+#' @return data.frame(indicateur, unite, valeur, normale, ecart, ecart_type_reference,
+#'   annees_reference, lecture) ; `lecture` : « au-dessus », « en dessous » ou
+#'   « proche de la normale » (une demi ecart-type de la reference), vide si
+#'   l'indicateur n'a pas de ecart-type.
+#' @export
+bilan_synthese_export <- function(s) {
+  if (is.null(s) || !nrow(s)) return(data.frame())
+  lecture <- ifelse(!is.finite(s$ecart) | !is.finite(s$sd_ref), "",
+             ifelse(s$classe == "haut", "au-dessus",
+             ifelse(s$classe == "bas", "en dessous", "proche de la normale")))
+  d <- data.frame(indicateur = s$indicateur, unite = ifelse(s$unite == "-", "", s$unite),
+                  valeur = s$valeur, normale = s$normale, ecart = s$ecart,
+                  ecart_type_reference = s$sd_ref, annees_reference = s$n_ref,
+                  lecture = lecture, stringsAsFactors = FALSE)
+  num <- vapply(d, is.double, logical(1))
+  d[num] <- lapply(d[num], round, 3)
+  d
+}
+
 
 # ------------------------------------------------------------------------------
 # 4b. Tableau des valeurs d'un indicateur (ecran et rapport)

@@ -167,8 +167,42 @@ carte_transport <- function(url = CONFIG$carte$url_donnees,
   if (!identical(unname(shiny::resourcePaths()[nom]), normalizePath(dossier))) {
     shiny::addResourcePath(nom, dossier)
   }
-  list(mode = "local", base = paste0(nom, "/"), erreurs = character(0))
+  list(mode = "local", base = paste0(nom, "/"), dossier = dossier, erreurs = character(0))
 }
+
+# ------------------------------------------------------------------------------
+# Relecture d'une couche (onglet Comparer, tests)
+# ------------------------------------------------------------------------------
+
+CARTE_MANQUANT <- -32768L
+
+#' Entiers 16 bits -> valeurs reelles (-32768 = absente).
+#' @keywords internal
+carte_decoder_valeurs <- function(e, stock) {
+  x <- as.numeric(e) / 10^stock
+  x[e == CARTE_MANQUANT] <- NA_real_
+  x
+}
+
+#' Relit une couche : normale, pente, significativite et valeurs annee par annee.
+#' @param n nombre de mailles ; @param n_annees ; @param stock decimales conservees.
+#' @return liste(normale, pente, signif, valeurs = matrice n_annees x n,
+#'   taille_exacte = le fichier ne contient ni plus ni moins que prevu).
+#' @keywords internal
+carte_lire_couche <- function(fichier, n, n_annees, stock) {
+  con <- gzfile(fichier, "rb"); on.exit(close(con))
+  normale <- readBin(con, "numeric", n, size = 4L, endian = "little")
+  pente   <- readBin(con, "numeric", n, size = 4L, endian = "little")
+  signif  <- as.integer(readBin(con, "raw", n))
+  pad <- (4L - (n %% 4L)) %% 4L
+  if (pad) readBin(con, "raw", pad)
+  e <- readBin(con, "integer", n_annees * n, size = 2L, endian = "little")
+  reste <- length(readBin(con, "raw", 1L))
+  list(normale = normale, pente = pente, signif = signif,
+       valeurs = matrix(carte_decoder_valeurs(e, stock), nrow = n_annees, byrow = TRUE),
+       taille_exacte = reste == 0L && length(e) == n_annees * n)
+}
+
 
 #' Nom affiche pour une maille choisie sur la carte.
 #' @keywords internal

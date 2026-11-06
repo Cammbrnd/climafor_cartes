@@ -175,7 +175,14 @@ ui_construire <- function(etat = NULL) shiny::bootstrapPage(
         title = cf_onglet_titre("carte", "Carte"), value = "carte",
         shiny::div(class = "cf-conteneur", mod_carte_ui("carte"))),
 
-      # ---- Onglet 3 : le bilan ---------------------------------------------
+      # ---- Onglet 3 : comparer des lieux (v1.9) ----------------------------
+      # Points et zones importes, rattaches aux mailles de la carte : un bilan
+      # par lieu et une comparaison, sans telecharger de serie.
+      shiny::tabPanel(
+        title = cf_onglet_titre("comparer", "Comparer"), value = "comparer",
+        shiny::div(class = "cf-conteneur", mod_comparer_ui("comparer"))),
+
+      # ---- Onglet 4 : le bilan ---------------------------------------------
       shiny::tabPanel(
         title = cf_onglet_titre("bilan", "Bilan climatique"), value = "bilan",
         shiny::div(
@@ -186,19 +193,19 @@ ui_construire <- function(etat = NULL) shiny::bootstrapPage(
         )
       ),
 
-      # ---- Onglet 4 : rapport ----------------------------------------------
+      # ---- Onglet 5 : rapport ----------------------------------------------
       shiny::tabPanel(
         title = cf_onglet_titre("rapport", "Rapport"), value = "rapport",
         shiny::div(class = "cf-conteneur", mod_rapport_ui("rapport"))),
 
-      # ---- Onglet 5 : parametres -------------------------------------------
+      # ---- Onglet 6 : parametres -------------------------------------------
       shiny::tabPanel(
         title = cf_onglet_titre("parametres", "Paramètres"), value = "parametres",
         shiny::div(class = "cf-conteneur", mod_parametres_ui("parametres", etat))),
 
-      # ---- Onglet 6 : sources ----------------------------------------------
-      # Libelle court : six onglets doivent tenir sur la largeur d'un
-      # telephone. Le titre complet figure en tete de l'onglet lui-meme.
+      # ---- Onglet 7 : sources ----------------------------------------------
+      # Libelle court : sept onglets defilent sur la largeur d'un
+      # telephone ; un libelle court limite le defilement. Le titre complet figure en tete de l'onglet lui-meme.
       shiny::tabPanel(
         title = cf_onglet_titre("sources", "Sources"), value = "sources",
         shiny::div(class = "cf-conteneur", mod_sources_ui("sources")))
@@ -272,6 +279,7 @@ server <- function(input, output, session) {
   mod_carte_server("carte", onglet = shiny::reactive(input$onglets),
                    ouvrir_maille = mod_carte_ouverture_server(
                      lieu, choix_initial, source_donnees, function() lancer_analyse()))
+  mod_comparer_server("comparer", ctx = ctx, lieu = lieu, mobile = mobile)  # v1.9 : points et zones
 
   # -- Navigation ------------------------------------------------------------
   aller_a <- function(onglet) {

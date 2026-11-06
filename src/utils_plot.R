@@ -608,6 +608,25 @@ plot_chaleur <- function(dat, ctx, mobile = FALSE) {
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
 }
 
+#' 05 bis — Vagues de chaleur : nombre par an, moyenne mobile en surimpression.
+#' @export
+plot_vagues <- function(dat, ctx, mobile = FALSE) {
+  s <- ctx$seuils
+  g <- graphe_annuel(dat, "n_vagues", "Nombre de vagues de chaleur", ctx,
+                     type = "barres", sens = "chaud", lissage = "lissee",
+                     montrer_tendance = TRUE, unite_tendance = "vagues", mobile = mobile)
+  # Un graphique d'explication (donnees absentes) n'a ni axe ni sous-titre a regler.
+  if (!"val_y" %in% names(g$data)) return(g)
+  g +
+    # Un nombre de vagues est entier : pas de graduation a 0,5.
+    ggplot2::scale_y_continuous(breaks = function(lim) {
+      b <- pretty(c(0, lim[2])); b[b == round(b)]
+    }) +
+    ggplot2::labs(subtitle = sprintf(
+      "Au moins %d jours de suite à %g °C ou plus au-dessus de la normale du jour, de mai à septembre",
+      s$vague_duree, s$vague_ecart))
+}
+
 #' 06 — Precipitations annuelles, phase liquide et solide empilees.
 #' @export
 plot_precipitations <- function(dat, ctx, mobile = FALSE) {

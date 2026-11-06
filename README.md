@@ -66,6 +66,9 @@ mois, y compris à cheval sur deux années civiles.
 
 **Rapport** — HTML autonome ou Word modifiable, à trois niveaux de détail.
 
+**Export CSV** du bilan (synthèse et séries annuelles) et **comparaison de lieux**
+importés (points ou zones) avec leur bilan climatique : voir « Version 1.9 ».
+
 ---
 
 ## Stations Météo-France
@@ -1066,6 +1069,100 @@ raccord squelette R / `carte.js`, comportement du raccord « clic → analyse »
 
 ---
 
+## Version 1.9 — vagues de chaleur, export CSV, onglet Comparer
+
+Trois ajouts, issus de la question « que manque-t-il à l'application ? » :
+
+### 1. Vagues de chaleur (25ᵉ indicateur, `vag`)
+
+L'ancien compte « vagues » de l'indicateur *Jours de chaleur* (trois jours de suite
+au-dessus du seuil absolu `chaleur_t2`) est remplacé par un indicateur à part entière,
+qui suit la logique du HWDI (Frich et al. 2002) : une **vague** est une suite d'**au moins
+5 jours** dont la température maximale dépasse de **5 °C ou plus la normale du jour**.
+
+- La **normale du jour** est la moyenne des T max de chaque jour du calendrier sur la période
+  de référence choisie (10 années au moins), lissée sur 5 jours. Sans référence suffisante,
+  l'indicateur le dit au lieu de compter sur une normale bancale.
+- Les deux seuils (`vague_ecart`, `vague_duree`) sont réglables dans **Paramètres**.
+- Le graphique donne, par année, le **nombre de vagues** ; la lecture ajoute le nombre de
+  jours en vague, la durée de la plus longue et l'écart maximal.
+- Deux couches de la carte, `vag` (nombre de vagues) et `vagj` (jours en vague).
+
+**Deux choix d'implémentation, à connaître** (le HWDI d'origine ne les fait pas) :
+les jours chauds ne sont cherchés que de **mai à septembre** (`CONFIG$methode$vague_mois`),
+et l'on **compte les vagues** par année au lieu de ne retenir que la plus longue. Un jour
+sans mesure interrompt la suite : on ne devine pas qu'il était chaud.
+
+### 2. Export CSV du bilan
+
+Sous les filtres de l'onglet **Bilan** : la **synthèse** (une ligne par indicateur : valeur,
+normale, écart, lecture) et les **séries annuelles** de tous les indicateurs (format long).
+Les fichiers s'ouvrent dans Excel (UTF-8 avec marque d'ordre des octets, séparateur « ; »,
+virgule décimale) et commencent par des lignes `#` de provenance : lieu, source, référence,
+seuils, licence.
+
+### 3. Onglet Comparer
+
+Importez des **points** (CSV) ou des **zones** (GeoJSON, GeoPackage, shapefile zippé) et
+obtenez, par lieu, la valeur d'une année, son écart à la normale et sa tendance depuis 1959,
+sur les grandeurs de la carte. Aucune série n'est téléchargée : tout vient des **mailles
+précalculées** de l'onglet Carte (les mêmes fichiers, lus par le serveur).
+
+- **Point** → maille SAFRAN la plus proche (6 km au plus, sinon « hors de la grille »).
+  **Zone** → moyenne des mailles dont le **centre** est dans la zone ; une zone plus petite
+  qu'une maille prend la maille la plus proche, et le dit.
+- La **normale** est recalculée sur la série du lieu, avec la période de référence choisie sur
+  l'accueil (10 années au moins) ; la **tendance** est la pente de Sen avec le test de
+  Mann-Kendall corrigé de l'autocorrélation (20 années au moins), comme pour un point.
+- Le **bilan par lieu** donne les cinq écarts les plus marqués de l'année, rapportés à
+  l'écart-type de la référence, chacun avec sa tendance. Un tableau compare les lieux, un
+  graphique superpose leurs séries (en valeur, ou en **écart à la normale de chaque lieu**,
+  seule lecture qui compare des climats différents).
+- Deux exports CSV (comparaison, séries) avec leurs lignes de provenance.
+- Un bouton ajoute le **point choisi sur l'accueil** ; un modèle de CSV est téléchargeable.
+
+**Un fichier importé est une entrée non fiable.** Taille (10 Mo), nombre de lignes (500),
+d'entités (100) et de lieux (40) sont bornés ; seuls trois pilotes de lecture sont autorisés
+(`GeoJSON`, `GPKG`, `ESRI Shapefile`) ; une archive est refusée si elle sort de son dossier
+(`..`, chemin absolu), compte plus de 30 fichiers, se décompresse au-delà de 100 Mo ou ne
+porte pas exactement un `.shp` ; un shapefile **sans `.prj`** est refusé plutôt que deviné
+(Lambert-93 ou WGS84 : se tromper place les lieux à des centaines de kilomètres) ; les noms
+de lieux sont assainis, et ceux qui commenceraient par `=`, `+`, `-` ou `@` sont neutralisés
+dans les CSV exportés (injection de formule).
+
+**Nouvelle dépendance : `sf`** (lecture de GeoJSON, GeoPackage, shapefile et rattachement
+aux mailles). Sans elle, l'onglet l'explique et l'application reste utilisable ; seul
+l'import de zones et le rattachement sont perdus.
+
+### Limites connues
+
+- Les valeurs de Comparer et de la carte sont des **valeurs de maille** (8 km), calculées
+  avec les **seuils par défaut** : les réglages de l'onglet Paramètres ne s'y appliquent pas.
+  En terrain accidenté, la valeur d'une maille peut s'écarter de celle d'une station.
+- Les couches `vag` et `vagj` **n'existent qu'après un nouveau précalcul** : relancer le
+  workflow « Construire la carte » (≈ 75 min de calcul). Jusque-là, la carte et Comparer
+  n'offrent que les 18 couches déjà publiées.
+- L'année comparée par défaut est la dernière du jeu publié, qui peut précéder l'année
+  courante de l'application.
+- Le rendu dans un vrai navigateur (tableau de comparaison, graphique, mobile) n'a pas
+  été vérifié : les tests couvrent les calculs, le module Shiny et le HTML produit.
+- **SPI et SPEI** (indices de sécheresse) : calculables avec les données déjà disponibles
+  (précipitations et ETP, ou P − ETP, cumulés sur 1 à 12 mois puis normalisés sur la période
+  de référence), mais **non implémentés** ; ils feraient l'objet d'une version suivante.
+
+### Tests
+
+`tests/test_v19.R` : décompte des vagues sur des séries dont le résultat se calcule à la main
+(bornes, jours manquants, saison, réglages), raccord au registre, aux paramètres, aux
+références, au glossaire et à la carte, export CSV. `tests/test_v19_comparer.R` : import de
+points (séparateurs, encodages, BOM, inversions, bornes), de zones (GeoJSON, Lambert-93,
+GeoPackage, shapefile zippé) et archives piégées écrites à la main, téléchargement des
+fichiers de la carte sans réseau (redirection, 404, taille, cache de 24 h), rattachement aux
+mailles, bilan à valeurs vérifiables, exports, échappement du HTML, module Shiny de bout en
+bout (`testServer`) et raccord à l'application.
+
+---
+
 ## Architecture
 
 ```
@@ -1080,7 +1177,8 @@ climafor/
 │                               + simulation_vpd.R (VPD : ancienne formule et FAO-56)
 │                               test_v12.R … test_v17.R, test_v171.R (correctifs et revue)
 │                               test_v18.R + carte_verif_js.js (onglet Carte)
-├── DESCRIPTION                 Paquets et versions requis (v1.8.0)
+│                               test_v19.R, test_v19_comparer.R (vagues, export, Comparer)
+├── DESCRIPTION                 Paquets et versions requis (v1.9.0)
 ├── .github/workflows/          Diagnostic GeoSAS, Construire la carte, Veille (v1.8)
 ├── outils/                     carte_*.R : précalcul de la carte (format, géométrie, calcul,
 │                               sources, SIM, démo, ligne de commande, veille, diagnostic)
@@ -1098,6 +1196,8 @@ climafor/
 │   ├── carte_couches.R         Indicateurs cartographiables (v1.8)
 │   ├── utils_carte.R           Format des fichiers de la carte, validation, transport (v1.8)
 │   ├── mod_carte.R             Onglet Carte : squelette, passerelle, ouverture d'une maille (v1.8)
+│   ├── utils_comparer.R        Comparer : import de lieux, mailles, séries, bilan, exports (v1.9)
+│   ├── mod_comparer.R          Onglet Comparer : interface et serveur (v1.9)
 │   ├── glossaire.R             Définitions et infobulles des termes techniques (v1.4)
 │   ├── references.R            Références, statut des seuils, corrections de méthode (v1.5)
 │   ├── utils_calc.R            Calcul des indicateurs

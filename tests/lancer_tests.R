@@ -426,6 +426,8 @@ source("tests/test_v16.R")
 source("tests/test_v17.R")
 source("tests/test_v171.R")
 source("tests/test_v18.R")
+source("tests/test_v19.R")
+source("tests/test_v19_comparer.R")
 
 
 # ==============================================================================

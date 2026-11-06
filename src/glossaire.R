@@ -25,7 +25,7 @@ GLOSSAIRE <- data.frame(
     "Normale", "Période de référence", "Écart à la normale", "Écart-type",
     "Année partielle", "ETP", "P − ETP", "SWI", "VPD", "GDD (degrés-jours)",
     "Indice de De Martonne", "Diagramme ombrothermique", "Gel tardif",
-    "Séquence sèche", "Vent soutenu", "Tendance", "Rupture d'homogénéité",
+    "Séquence sèche", "Vague de chaleur", "Vent soutenu", "Tendance", "Rupture d'homogénéité",
     "Maille SAFRAN", "Fenêtre de calcul"),
   definition = c(
     paste("Moyenne d'une grandeur sur la période de référence, calculée année par",
@@ -71,6 +71,12 @@ GLOSSAIRE <- data.frame(
           "peuplement, qui varie avec l'essence, l'année et l'altitude."),
     paste("Suite de jours consécutifs sans pluie significative (moins de 1 mm par",
           "défaut)."),
+    paste("Suite d'au moins cinq jours consécutifs, de mai à septembre, dont la",
+          "température maximale dépasse d'au moins 5 °C la normale du jour (moyenne de",
+          "la température maximale de ce jour du calendrier sur la période de",
+          "référence, lissée sur cinq jours). Définition de l'indice HWDI (Frich et al.",
+          "2002). Le seuil est relatif à la saison : ce n'est pas un nombre de jours",
+          "au-dessus de 30 °C."),
     paste("Vent moyen journalier supérieur au 95e percentile des vents de la période de",
           "référence, au point étudié. Il mesure une exposition, pas un risque de",
           "chablis."),
@@ -92,7 +98,7 @@ GLOSSAIRE <- data.frame(
     "normale", NA, "écart à la normale", "écart-type", NA, "ETP", "P\\s*[-−]\\s*ETP",
     "SWI", "VPD|Déficit de pression de vapeur", "GDD|Degrés-jours",
     "De Martonne", "ombrothermique", "gel tardif", "Séquences? sèches?",
-    "vent soutenu", NA, NA, NA, NA),
+    "vagues? de chaleur", "vent soutenu", NA, NA, NA, NA),
   stringsAsFactors = FALSE
 )
 
