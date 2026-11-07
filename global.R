@@ -97,14 +97,18 @@ FICHIERS_R <- c(
   "src/carte_couches.R",          # 6d. couches cartographiables (v1.8)
   "src/utils_carte.R",            # 6e. fichiers de la carte : validation, transport
   "src/utils_comparer.R",         # 6f. comparaison de lieux importes (v1.9)
+  "src/utils_stations_publiees.R",# 6f2. stations publiees a cote des mailles (v2.1)
+  "src/utils_comparer_duo.R",     # 6f3. comparaison de deux lieux : maille, station, departement (v2.1)
   "src/utils_profils.R",          # 6g. profils et acces par identifiant (v2.0)
   "src/utils_territoires.R",      # 6h. departements et regions (v2.0)
   "src/utils_fiches.R",           # 6i. fiches importees, point d'accroche Sylvasan (v2.0)
   "src/utils_synthese.R",         # 6j. bilan synthetique : calcul, phrases, graphiques (v2.0)
   "src/utils_synthese_rendu.R",   # 6k. bilan synthetique : tableaux, CSV, bilan a emporter (v2.0)
+  "src/utils_envoi.R",            # 6l. synthese a envoyer par courriel (v2.1)
   "src/mod_localisation.R",       # 7. modules Shiny
   "src/mod_station.R",
   "src/mod_carte.R",              # onglet Carte (v1.8)
+  "src/mod_lieu_choix.R",         # choix d'un lieu : maille, station, departement (v2.1)
   "src/mod_comparer.R",           # onglet Comparer (v1.9)
   "src/mod_synthese.R",           # onglet Synthese : bilan court a quatre echelles (v2.0)
   "src/mod_terrain.R",            # ecran « Autour de moi » (v2.0)

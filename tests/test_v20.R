@@ -835,7 +835,7 @@ verifier(length(cl_code) >= 8L && all(vapply(cl_code, function(k) grepl(paste0("
 verifier(grepl("scroll-padding-bottom", css20, fixed = TRUE),
          "la barre d'action collante ne masque pas un champ qui prend le focus")
 
-verifier(identical(CONFIG$app$version, "2.0.0"), "la version est 2.0.0")
+verifier(grepl("^2\\.[0-9]+\\.[0-9]+$", CONFIG$app$version), "la version est une 2.x.y (2.0.0 a la sortie des profils)")
 verifier(all(c("acces", "territoires", "synthese", "sylvasan") %in% names(CONFIG)) &&
            CONFIG$synthese$fiches_max <= 1000L && CONFIG$synthese$territoires_max <= 20L,
          "les reglages v2.0 existent, et bornent les imports et les comparaisons")

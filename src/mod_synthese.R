@@ -26,7 +26,7 @@ SYNTHESE_AIDE_ECHELLE <- c(
   departement = "La moyenne des mailles de 8 km du département, à poids égaux.",
   region      = "La moyenne des mailles de 8 km de la région, à poids égaux.",
   fiches      = "Vos fiches replacées dans leur contexte climatique : une fiche, la valeur de sa maille l'année de la fiche.",
-  point       = "La valeur de la maille de 8 km la plus proche du point.")
+  point       = "La valeur de la maille de 8 km la plus proche du point, et, si vous les cochez, celle des stations Météo-France proches (des mesures).")
 
 # ------------------------------------------------------------------------------
 # Interface
@@ -116,7 +116,8 @@ mod_synthese_server <- function(id, profil, lieu, naviguer = function(onglet) NU
                                 declencheur = shiny::reactiveVal(NULL),
                                 transport = shiny::reactive(carte_transport()),
                                 mobile = shiny::reactive(FALSE),
-                                executer = httr2::req_perform) {
+                                executer = httr2::req_perform,
+                                altitude = mf_altitude) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     avec_sf <- requireNamespace("sf", quietly = TRUE)
@@ -305,10 +306,32 @@ mod_synthese_server <- function(id, profil, lieu, naviguer = function(onglet) NU
           "Aucun point choisi : désignez-le dans l'Accueil." else
           "Aucun point choisi : cherchez une commune ou touchez « Utiliser ma position », ci-dessus, ou cliquez une maille sur la carte."))
       }
-      shiny::p(class = "cf-synt__compte",
-               shiny::strong(p$nom %||% "Point choisi"),
-               sprintf(" — %s °N, %s °E ", fmt_fr(p$lat, 4), fmt_fr(p$lon, 4)),
-               if ("accueil" %in% profil$onglets) shiny::actionLink(ns("vers_accueil"), "Changer de point"))
+      shiny::tagList(
+        shiny::p(class = "cf-synt__compte",
+                 shiny::strong(p$nom %||% "Point choisi"),
+                 sprintf(" — %s °N, %s °E ", fmt_fr(p$lat, 4), fmt_fr(p$lon, 4)),
+                 if ("accueil" %in% profil$onglets) shiny::actionLink(ns("vers_accueil"), "Changer de point")),
+        shiny::uiOutput(ns("sources")))
+    })
+
+    # -- Les sources du point : la maille (modele) et les stations publiees proches (mesures) --
+    src_pt <- shiny::reactive({
+      p <- lieu(); j <- jeu()
+      shiny::req(p, j, avec_sf)
+      # L'altitude juge l'ecart avec chaque station ; elle n'est demandee que si le jeu a des stations.
+      alt <- if (isTRUE(cmp_stations(j, executer = executer)$ok))
+        tryCatch(altitude(p$lon, p$lat), error = function(e) NA_real_) else NA_real_
+      tryCatch(sources_point(j, p$lon, p$lat, alt, executer),
+               error = function(e) {
+                 journaliser_erreur("Bilan synthétique : stations proches", e)
+                 list(stations = NULL, publiees = FALSE, raison = "invalide")
+               })
+    })
+
+    output$sources <- shiny::renderUI({
+      s <- tryCatch(src_pt(), error = function(e) NULL)
+      if (is.null(s) || !isTRUE(s$publiees)) return(NULL)
+      sources_choix_ui(ns("sources_choix"), s, shiny::isolate(input$sources_choix))
     })
     shiny::observeEvent(input$vers_accueil, naviguer("accueil"))
 
@@ -338,8 +361,11 @@ mod_synthese_server <- function(id, profil, lieu, naviguer = function(onglet) NU
         point = {
           p <- lieu()
           if (is.null(p)) return(vide("Choisissez d'abord un point."))
-          list(lieux = list(cmp_lieu_point(cmp_nom_propre(p$nom %||% "Point choisi", "Point choisi"), p$lon, p$lat)),
-               fiches = NULL, vide = NULL)
+          # La maille du point, et les stations cochees (la maille seule si le jeu n'en a pas).
+          src <- tryCatch(src_pt(), error = function(e) NULL) %||% list(stations = NULL, publiees = FALSE)
+          lieux <- sources_lieux(p, input$sources_choix %||% sources_defaut(src), src)
+          list(lieux = lieux, fiches = NULL, vide = NULL, point_nom = sources_nom_point(p),
+               details = sources_details(lieux, src))
         },
         vide("Échelle inconnue."))
     }
@@ -354,6 +380,7 @@ mod_synthese_server <- function(id, profil, lieu, naviguer = function(onglet) NU
     signature <- function(e) {
       paste(e, paste(sort(c(input$deps, input$dep, input$regs)), collapse = ","), nrow(fiches()),
             input$annee, input$ref, paste(cochees("g_"), collapse = ","), paste(cochees("t_"), collapse = ","),
+            if (identical(e, "point")) paste(sort(input$sources_choix), collapse = ","),
             sep = "|")
     }
 
@@ -372,7 +399,10 @@ mod_synthese_server <- function(id, profil, lieu, naviguer = function(onglet) NU
         tryCatch(synthese_preparer(e, c0$lieux, c0$fiches, j, g, t, cx$ctx, cx$annee, profil, executer),
                  error = function(err) { journaliser_erreur("Bilan synthétique : calcul", err); NULL })
       })
-      if (!is.null(r)) r$blocs_fiches <- fb
+      if (!is.null(r)) {
+        r$blocs_fiches <- fb
+        if (identical(e, "point")) { r$point_nom <- c0$point_nom; r$details <- c0$details }
+      }
       res_val(list(res = r, signature = signature(e)))
     }
 

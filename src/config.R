@@ -19,7 +19,7 @@ CONFIG <- list(
   app = list(
     nom          = "ClimaFor",
     sous_titre   = "Bilan météorologique et climatique pour la gestion forestière",
-    version     = "2.0.0",
+    version     = "2.1.0",
     organisme    = "DSF — Département de la santé des forêts",
     annee        = format(Sys.Date(), "%Y"),
     # Detail technique d'un indicateur en echec, affiche sur sa carte (message
@@ -176,7 +176,30 @@ CONFIG <- list(
     # d'hebergeur, le refus nomme l'hote : l'ajouter ici, en connaissance de cause.
     hotes_autorises = c("data.gouv.fr", "meteofrance.s3.sbg.io.cloud.ovh.net"),
     taille_max_mo   = 500,
-    redirections_max = 5L
+    redirections_max = 5L,
+
+    # Stations PUBLIEES (v2.1). Comme les mailles de la carte, les indicateurs annuels des
+    # stations sont precalcules (outils/stations_precalcul.R) et publies a cote des fichiers
+    # de la carte : stations.json (la liste, avec de quoi juger la qualite) et
+    # s_<grandeur>.bin.gz (meme format binaire que c_<grandeur>.bin.gz). Cela permet de
+    # comparer une station a une maille ou a un departement SANS telecharger de serie
+    # journaliere (le Comparer, la Synthese et le Terrain n'appellent aucun service).
+    publie = list(
+      # Version du FORMAT de stations.json. A incrementer si sa disposition change.
+      schema         = 1L,
+      fichier        = "stations.json",
+      # Une station n'est publiee que si elle a au moins ce nombre d'annees VALIDES (voir
+      # seuil_annee) pour la pluie ou pour les temperatures : en deca, ni normale (dix
+      # annees de reference au moins) ni tendance (vingt annees au moins) ne sont possibles.
+      annees_min     = 15L,
+      # Une station dont la derniere mesure a plus de tant de jours n'est pas publiee : elle
+      # ne decrit plus le climat d'aujourd'hui. Les stations arretees depuis moins longtemps
+      # le sont, avec une qualite « fraicheur » en consequence.
+      inactive_max_j = 730L,
+      # Garde-fou de lecture : un stations.json qui en annonce davantage est refuse. La base
+      # quotidienne compte quelques milliers de postes.
+      stations_max   = 8000L
+    )
   ),
 
   # ---------------------------------------------------------------------------

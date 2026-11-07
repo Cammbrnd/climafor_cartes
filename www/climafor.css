@@ -1502,6 +1502,25 @@ abbr.cf-terme, abbr.cf-terme[title] {
 .cf-terrain__ecart { font-size: var(--t-sm); }
 .cf-terrain__lecture { font-size: var(--t-xs); font-weight: 700; color: var(--cf-texte-mention); }
 @media (max-width: 640px) { .cf-terrain__liste { grid-template-columns: minmax(0, 1fr); } }
+/* v2.1 : une grandeur, plusieurs sources (maille = modele, station = mesure) */
+.cf-terrain__sources { list-style: none; margin: var(--e-2) 0 0; padding: 0; display: grid; gap: var(--e-3); }
+.cf-terrain__sources > li { border-top: 1px solid var(--cf-bordure); padding-top: var(--e-2); }
+.cf-terrain__sources > li:first-child { border-top: 0; padding-top: 0; }
+.cf-terrain__source { font-size: var(--t-xs); font-weight: 700; }
+.cf-terrain__valeur--source { font-size: var(--t-md); }
+/* choix des sources d'un point */
+.cf-sources { border: 0; margin: 0; padding: 0; min-width: 0; }
+.cf-sources__legende { font-size: var(--t-md, 1rem); font-weight: 700; margin: 0 0 var(--e-2); padding: 0; border: 0; }
+.cf-sources .checkbox label { display: flex; align-items: flex-start; min-height: 32px; }
+.cf-sources .cf-source__opt { display: block; }
+.cf-sources .cf-source__optmeta { display: block; font-size: var(--t-xs); color: var(--cf-texte-mention); }
+/* synthese a envoyer */
+.cf-envoi__actions { display: flex; flex-wrap: wrap; gap: var(--e-2); margin: var(--e-3) 0; }
+.cf-envoi__actions .cf-btn { min-height: 44px; }
+.cf-envoi__actions [hidden] { display: none !important; }
+.cf-envoi__etat { min-height: 1.4em; }
+.cf-envoi__texte { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--t-xs); }
+@media print { .cf-envoi__actions { display: none !important; } }
 .cf-synt__choix .shiny-options-group {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0 var(--e-4);
 }

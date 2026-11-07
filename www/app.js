@@ -1,7 +1,7 @@
 /* =============================================================================
    app.js — complément client
    -----------------------------------------------------------------------------
-   Huit fonctions que Shiny ne peut pas assurer côté serveur :
+   Neuf fonctions que Shiny ne peut pas assurer côté serveur :
      0. (v2.0) la fenêtre hôte (RStudio) ne se ferme plus avec la session ;
      1. la géolocalisation, qui est une API du navigateur ;
      2. la validation par la touche Entrée dans le champ commune ;
@@ -14,7 +14,10 @@
      6. la thématique courante du sommaire du bilan, repérée au défilement ;
      7. (v1.4) le partage de l'analyse (copie de l'adresse) et la navigation
         interne : lien « Voir les graphiques » du bloc À retenir, lien vers le
-        glossaire de l'onglet Sources.
+        glossaire de l'onglet Sources ;
+     8. (v2.1) la synthèse du terrain à envoyer : partage de l'appareil et copie
+        du texte, qui exigent un geste de l'utilisateur et ne peuvent donc pas
+        attendre un aller-retour vers le serveur.
 
    POINT TECHNIQUE : POURQUOI LE POINT 3 EST INDISPENSABLE
    ------------------------------------------------------
@@ -283,5 +286,64 @@
     var lien = document.querySelector('a[data-toggle="tab"][data-value="' + onglet + '"]');
     if (lien) $(lien).tab("show");
     if (cible) setTimeout(function () { defilerVers(cible, 10); }, 150);
+  });
+
+  /* -- 8. Synthèse à envoyer (v2.1) ------------------------------------------- */
+  /* Le serveur a déjà mis dans la page (balise <script type="application/json"
+     class="cf-envoi-donnees">) l'objet, le texte et la page HTML de la synthèse.
+     Les boutons les lisent sur place : l'API de partage et le presse-papiers
+     n'acceptent un appel que peu de secondes après le clic, un aller-retour vers le
+     serveur risquerait de dépasser ce délai (Safari, surtout).
+     Le bouton « Envoyer par courriel » est un simple lien mailto: : il n'a besoin
+     d'aucun code. Le bouton « Partager » reste masqué (attribut hidden) tant que
+     l'appareil n'offre pas navigator.share. */
+  function donneesEnvoi(bouton) {
+    var zone = bouton.closest("[data-envoi-zone]");
+    var balise = zone && zone.querySelector("script.cf-envoi-donnees");
+    if (!balise) return null;
+    try { return JSON.parse(balise.textContent); } catch (err) { return null; }
+  }
+
+  function annoncerEnvoi(bouton, message) {
+    var zone = bouton.closest("[data-envoi-zone]");
+    var etat = zone && zone.querySelector("[data-envoi-etat]");
+    if (!etat) return;
+    etat.textContent = message;
+    setTimeout(function () { if (etat.textContent === message) etat.textContent = ""; }, 5000);
+  }
+
+  function montrerPartage() {
+    if (!navigator.share) return;
+    document.querySelectorAll("[data-envoi='partager']").forEach(function (b) { b.hidden = false; });
+  }
+  $(document).on("shiny:recalculated", function (e) {
+    var id = (e.target && e.target.id) || "";
+    if (/-envoi$/.test(id)) setTimeout(montrerPartage, 0);
+  });
+
+  $(document).on("click", "[data-envoi='copier']", function () {
+    var bouton = this, d = donneesEnvoi(bouton);
+    if (!d) { annoncerEnvoi(bouton, "Rien à copier."); return; }
+    copierTexte(d.texte).then(
+      function () { annoncerEnvoi(bouton, "Texte copié : collez-le dans votre message."); },
+      function () { annoncerEnvoi(bouton, "Copie impossible : ouvrez « Voir le message » et copiez le texte à la main."); });
+  });
+
+  $(document).on("click", "[data-envoi='partager']", function () {
+    var bouton = this, d = donneesEnvoi(bouton);
+    if (!d || !navigator.share) { annoncerEnvoi(bouton, "Le partage n'est pas disponible sur cet appareil."); return; }
+    var fichier = null;
+    try { fichier = new File([d.html], d.fichier, { type: "text/html" }); } catch (err) { fichier = null; }
+    var avecFichier = fichier && navigator.canShare && navigator.canShare({ files: [fichier] });
+    var charge = avecFichier ? { title: d.objet, text: d.court, files: [fichier] }
+                             : { title: d.objet, text: d.court };
+    navigator.share(charge).then(
+      function () { annoncerEnvoi(bouton, avecFichier ? "Synthèse partagée avec la page en pièce jointe."
+                                                       : "Synthèse partagée (texte seul : enregistrez la page pour la joindre)."); },
+      function (err) {
+        /* L'utilisateur qui ferme la fenêtre de partage n'a pas rencontré d'erreur. */
+        if (err && err.name === "AbortError") return;
+        annoncerEnvoi(bouton, "Partage impossible : utilisez « Envoyer par courriel » ou « Enregistrer la page ».");
+      });
   });
 })();

@@ -47,6 +47,14 @@ synthese_libelle <- function(res) {
     return(sprintf("%d fiche%s importée%s", nrow(res$fiches), if (nrow(res$fiches) > 1L) "s" else "",
                    if (nrow(res$fiches) > 1L) "s" else ""))
   }
+  # Un point et ses sources : le nom du point, avec ce qu'on a regarde.
+  if (identical(res$echelle, "point") && !is.null(res$point_nom) && !isTRUE(res$duo)) {
+    ret <- res$tl[res$tl$retenu, , drop = FALSE]
+    n_st <- sum(ret$source == "station")
+    if (!n_st) return(res$point_nom)
+    return(sprintf("%s (%s)", res$point_nom, paste(c(if (any(ret$source == "maille")) "maille SAFRAN",
+      sprintf("%d station%s", n_st, if (n_st > 1L) "s" else "")), collapse = " + ")))
+  }
   l <- res$tl$lieu[res$tl$retenu]
   if (length(l) <= 3L) paste(l, collapse = ", ") else sprintf("%s et %d autres territoires", paste(l[1:2], collapse = ", "), length(l) - 2L)
 }
@@ -58,9 +66,13 @@ synthese_lignes_metadonnees <- function(res, titre) {
     sprintf("%s %s — %s", CONFIG$app$nom, CONFIG$app$version, titre),
     sprintf("Source : mailles SAFRAN-ISBA précalculées (Météo-France), %d mailles de 8 km, jeu produit le %s",
             res$jeu$n_mailles, synthese_date_jeu(res$jeu$genere_le)),
+    if (!is.null(res$jeu$stations)) sprintf(
+      "Stations : mesures Météo-France (données climatologiques de base quotidiennes), indicateurs annuels précalculés le %s ; ETP estimée (Hargreaves-Samani)",
+      synthese_date_jeu(res$jeu$stations$genere_le)),
     sprintf("Échelle : %s ; %s", unname(SYNTHESE_ECHELLES[res$echelle]), synthese_libelle(res)),
     switch(res$echelle,
-      point = "Valeur d'un point : maille la plus proche",
+      point = if (!is.null(res$jeu$stations)) "Valeur d'une source : maille la plus proche pour la maille SAFRAN (modèle), série de la station pour une station (mesure)"
+              else "Valeur d'un point : maille la plus proche",
       fiches = "Valeur d'une fiche : maille la plus proche, pour l'année de la fiche",
       "Valeur d'un territoire : moyenne à poids égaux des mailles dont le centre est dans le contour"),
     "Seuils : valeurs par défaut du précalcul (les réglages de l'onglet Paramètres ne s'y appliquent pas)",

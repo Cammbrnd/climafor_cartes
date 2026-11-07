@@ -25,12 +25,13 @@ carte_encoder_valeurs <- function(x, stock, cle = "?") {
   e
 }
 
-#' Ecrit une couche : c_<cle>.bin.gz.
+#' Ecrit une couche : c_<cle>.bin.gz (mailles) ou s_<cle>.bin.gz (stations, prefixe = "s").
+#' Le format est le meme : une « maille » est ici une colonne, maille ou station.
 #' @param valeurs matrice n_annees x n (NA = absente).
-carte_ecrire_couche <- function(dossier, couche, normale, pente, signif, valeurs) {
+carte_ecrire_couche <- function(dossier, couche, normale, pente, signif, valeurs, prefixe = "c") {
   n <- length(normale)
   stopifnot(length(pente) == n, length(signif) == n, ncol(valeurs) == n)
-  fichier <- file.path(dossier, sprintf("c_%s.bin.gz", couche$cle))
+  fichier <- file.path(dossier, sprintf("%s_%s.bin.gz", prefixe, couche$cle))
   con <- gzfile(fichier, "wb", compression = 9)
   on.exit(close(con))
   writeBin(as.numeric(normale), con, size = 4L, endian = "little")

@@ -38,17 +38,17 @@
 PROFILS <- list(
   terrain = list(
     id = "terrain", libelle = "Terrain",
-    resume = "Le climat autour de moi, sur téléphone : valeurs de l'année et écart à la normale.",
+    resume = "Le climat autour de moi, sur téléphone : valeurs de l'année, mesures des stations proches et synthèse à envoyer par courriel.",
     onglets = c("terrain", "carte"),
     echelles = "point", multi = FALSE, restreint = TRUE),
   co = list(
     id = "co", libelle = "Correspondant-observateur",
-    resume = "La carte et un bilan synthétique d'un point ou d'un département, avec les grandeurs les plus parlantes.",
+    resume = "La carte et un bilan synthétique d'un point (maille et stations proches) ou d'un département, avec les grandeurs les plus parlantes.",
     onglets = c("carte", "synthese", "sources"),
     echelles = c("point", "departement"), multi = FALSE, restreint = TRUE),
   dsf = list(
     id = "dsf", libelle = "Permanent DSF",
-    resume = "Tous les indicateurs, la comparaison de lieux, l'import de fiches et les bilans par territoire.",
+    resume = "Tous les indicateurs, la comparaison de deux lieux (maille, station, département) ou de lieux importés, l'import de fiches et les bilans par territoire.",
     onglets = c("accueil", "carte", "comparer", "synthese", "bilan", "rapport", "parametres", "sources"),
     echelles = c("departement", "region", "fiches", "point"), multi = TRUE, restreint = FALSE)
 )

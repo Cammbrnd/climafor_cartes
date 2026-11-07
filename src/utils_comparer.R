@@ -157,6 +157,29 @@ cmp_jeu <- function(transport = carte_transport(), maintenant = Sys.time(),
   jeu
 }
 
+#' Les stations publiees a cote de la carte (utils_stations_publiees.R), gardees en memoire
+#' `CONFIG$comparer$cache_h` heures comme le jeu de mailles.
+#'
+#' LAZY A DESSEIN : cmp_jeu() ne les lit pas. Un bilan de mailles seules (la carte, un
+#' departement) ne demande pas un troisieme fichier, et un jeu publie avant la v2.1 n'en a
+#' pas : son absence se dit ici, elle ne fait pas echouer le reste.
+#' @return stations_jeu() : list(ok = TRUE, ...) ou list(ok = FALSE, raison, detail).
+#' @keywords internal
+cmp_stations <- function(jeu, maintenant = Sys.time(), executer = httr2::req_perform) {
+  tr <- jeu$transport
+  cle <- paste0("stations|", tr$base %||% "absent",
+                if (identical(tr$mode, "local")) normalizePath(tr$dossier) else "")
+  c0 <- .ETAT_COMPARER[[cle]]
+  if (!is.null(c0) &&
+      as.numeric(difftime(maintenant, c0$t, units = "hours")) < CONFIG$comparer$cache_h) {
+    return(c0$sj)
+  }
+  sj <- stations_jeu(tr, maintenant, executer)
+  # Un echec passager (reseau) n'est pas conserve : le prochain appel reessaie.
+  if (isTRUE(sj$ok) || isTRUE(sj$definitif)) .ETAT_COMPARER[[cle]] <- list(t = maintenant, sj = sj)
+  sj
+}
+
 #' Couches que le jeu publie propose, dans l'ordre de CARTE_COUCHES, avec leur titre.
 #' Un jeu publie avant l'ajout d'une couche ne la porte pas : elle n'est pas offerte.
 #' @return vecteur nomme : cle -> titre.
@@ -503,7 +526,21 @@ cmp_modele_csv <- function() {
 #' @param jeu resultat de cmp_jeu().
 #' @return list(idx = indices de mailles (base 1), note = phrase, vide si rien a dire).
 #' @keywords internal
-cmp_mailles <- function(lieu, jeu) {
+cmp_mailles <- function(lieu, jeu, executer = httr2::req_perform) {
+  # Une STATION n'a pas de maille : `idx` est son rang dans les fichiers de stations, et
+  # `source` le dit (cmp_series lit alors s_<grandeur>.bin.gz au lieu de c_<grandeur>.bin.gz).
+  if (identical(lieu$type, "station")) {
+    sj <- cmp_stations(jeu, executer = executer)
+    i <- if (isTRUE(sj$ok)) match(lieu$id, sj$table$id) else NA_integer_
+    if (is.na(i)) {
+      return(list(idx = integer(0), source = "station",
+                  note = "station absente des données publiées"))
+    }
+    return(list(idx = i, source = "station",
+                note = sprintf("station à %s m d'altitude, mesures depuis %s",
+                               if (is.finite(sj$table$alt[i])) fmt_fr(sj$table$alt[i], 0) else "?",
+                               if (is.finite(sj$table$premiere[i])) sj$table$premiere[i] else "?")))
+  }
   pts <- cmp_centres_sf(jeu)
   dmax <- CONFIG$comparer$distance_max_m
   hors <- list(idx = integer(0), note = sprintf(
@@ -539,20 +576,28 @@ cmp_mailles <- function(lieu, jeu) {
 cmp_table_lieux <- function(lieux, mailles) {
   if (!length(lieux)) {
     return(data.frame(lieu = character(0), type = character(0), n_mailles = integer(0),
-                      note = character(0), retenu = logical(0), stringsAsFactors = FALSE))
+                      note = character(0), retenu = logical(0), source = character(0),
+                      stringsAsFactors = FALSE))
   }
+  est_station <- vapply(mailles, function(m) identical(m$source, "station"), TRUE)
   data.frame(lieu = vapply(lieux, function(l) l$nom, ""),
              type = vapply(lieux, function(l) l$type, ""),
-             n_mailles = vapply(mailles, function(m) length(m$idx), 1L),
+             # Une station n'a aucune maille : 0, pas le rang de la station dans ses fichiers.
+             n_mailles = ifelse(est_station, 0L, vapply(mailles, function(m) length(m$idx), 1L)),
              note = vapply(mailles, function(m) m$note, ""),
              retenu = vapply(mailles, function(m) length(m$idx) > 0L, TRUE),
+             # D'ou vient la valeur : « maille » (modele SAFRAN) ou « station » (mesure).
+             source = ifelse(est_station, "station", "maille"),
              stringsAsFactors = FALSE)
 }
 
-#' Serie annuelle de chaque lieu pour chaque grandeur : moyenne des mailles du lieu.
+#' Serie annuelle de chaque lieu pour chaque grandeur : moyenne des mailles du lieu, ou
+#' serie publiee de la station.
 #'
 #' Un lieu n'a pas de valeur une annee ou TOUTES ses mailles en sont privees (NA) ;
-#' sinon la moyenne porte sur les mailles renseignees.
+#' sinon la moyenne porte sur les mailles renseignees. Une station a ses propres annees
+#' (celles de s_<grandeur>.bin.gz) et ses propres lacunes : une annee trop mal renseignee
+#' est absente, jamais comptee comme zero.
 #' @param jeu cmp_jeu() ; @param mailles cmp_mailles() par lieu ; @param noms noms des lieux.
 #' @param cles cles de couches.
 #' @return data.frame(lieu, cle, annee, valeur).
@@ -563,14 +608,25 @@ cmp_series <- function(jeu, noms, mailles, cles, executer = httr2::req_perform) 
     return(data.frame(lieu = character(0), cle = character(0), annee = integer(0),
                       valeur = numeric(0), stringsAsFactors = FALSE))
   }
+  est_station <- vapply(mailles, function(m) identical(m$source, "station"), TRUE)
+  sj <- if (any(est_station[garde])) cmp_stations(jeu, executer = executer) else NULL
   morceaux <- list()
   for (cle in cles) {
-    v <- cmp_lire_couche(jeu, cle, executer)$valeurs     # annees x mailles
+    # Les fichiers ne sont lus que si un lieu en a besoin.
+    v <- if (any(!est_station[garde])) cmp_lire_couche(jeu, cle, executer)$valeurs else NULL   # annees x mailles
+    vs <- if (any(est_station[garde])) stations_lire_couche(sj, cle, executer) else NULL       # NULL : non publiee
     for (i in garde) {
-      s <- rowMeans(v[, mailles[[i]]$idx, drop = FALSE], na.rm = TRUE)
-      s[is.nan(s)] <- NA_real_
+      if (est_station[i]) {
+        # Une grandeur qu'aucune station ne donne (SWI, neige...) : serie vide, pas zero.
+        a <- sj$annees
+        s <- if (is.null(vs)) rep(NA_real_, length(a)) else vs$valeurs[, mailles[[i]]$idx]
+      } else {
+        a <- jeu$annees
+        s <- rowMeans(v[, mailles[[i]]$idx, drop = FALSE], na.rm = TRUE)
+        s[is.nan(s)] <- NA_real_
+      }
       morceaux[[length(morceaux) + 1L]] <- data.frame(
-        lieu = noms[i], cle = cle, annee = jeu$annees, valeur = as.numeric(s),
+        lieu = noms[i], cle = cle, annee = a, valeur = as.numeric(s),
         stringsAsFactors = FALSE)
     }
   }
@@ -703,7 +759,10 @@ cmp_export_comparaison <- function(bilan, lieux, annee) {
              ifelse(bilan$classe == "haut", "au-dessus",
              ifelse(bilan$classe == "bas", "en dessous", "proche de la normale")))
   d <- data.frame(
-    lieu = cmp_texte_csv_sur(bilan$lieu), type = lieux$type[i], n_mailles = lieux$n_mailles[i],
+    lieu = cmp_texte_csv_sur(bilan$lieu), type = lieux$type[i],
+    # D'ou vient la valeur : la maille SAFRAN (modele) ou la station (mesure).
+    source = if ("source" %in% names(lieux)) lieux$source[i] else "maille",
+    n_mailles = ifelse(lieux$type[i] == "station", NA_integer_, lieux$n_mailles[i]),
     grandeur = bilan$titre, unite = bilan$unite, annee = annee,
     valeur = bilan$valeur, normale = bilan$normale, ecart = bilan$ecart,
     ecart_type_reference = bilan$ecart_type_ref, lecture = lecture,
@@ -795,12 +854,19 @@ cmp_graphe <- function(series, bilan, cle, mode = c("valeur", "ecart"), ctx, ann
 #' @param jeu cmp_jeu() ; @param tl cmp_table_lieux() ; @param titre titre du fichier.
 #' @export
 cmp_lignes_metadonnees <- function(jeu, tl, ctx, annee, titre) {
+  stations <- "source" %in% names(tl) && any(tl$source == "station")
+  sj <- if (stations) cmp_stations(jeu) else NULL
   l <- c(
     sprintf("%s %s — %s", CONFIG$app$nom, CONFIG$app$version, titre),
     sprintf("Source : mailles SAFRAN-ISBA précalculées (Météo-France), %d mailles de 8 km, jeu produit le %s",
             as.integer(jeu$meta$n_mailles), jeu$meta$genere_le),
-    sprintf("Lieux : %d (%d points, %d zones)", nrow(tl), sum(tl$type == "point"), sum(tl$type == "zone")),
-    "Valeur d'un lieu : maille la plus proche pour un point, moyenne des mailles dont le centre est dans la zone",
+    if (stations && isTRUE(sj$ok)) sprintf(
+      "Stations : mesures Météo-France (données climatologiques de base quotidiennes), indicateurs annuels précalculés le %s ; ETP estimée (Hargreaves-Samani)",
+      sj$meta$genere_le),
+    sprintf("Lieux : %d (%d points, %d zones%s)", nrow(tl), sum(tl$type == "point"), sum(tl$type == "zone"),
+            if (stations) sprintf(", %d stations", sum(tl$type == "station")) else ""),
+    paste0("Valeur d'un lieu : maille la plus proche pour un point, moyenne des mailles dont le centre est dans la zone",
+           if (stations) ", série de la station pour une station" else ""),
     "Seuils : valeurs par défaut du précalcul (les réglages de l'onglet Paramètres ne s'y appliquent pas)",
     sprintf("Référence : %s ; année comparée : %d ; années affichées : %d-%d",
             ctx$ref_label, annee, min(ctx$affichage), max(ctx$affichage)),

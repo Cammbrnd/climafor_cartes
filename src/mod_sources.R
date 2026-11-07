@@ -177,6 +177,42 @@ mod_sources_ui <- function(id) {
       )
     ),
 
+    # -- Mesure et modele (v2.1) ----------------------------------------------
+    shiny::div(
+      class = "cf-carte",
+      shiny::h3(class = "cf-carte__titre", "Mesure et modèle, côte à côte"),
+      shiny::tags$dl(
+        class = "cf-liste-def",
+        shiny::tags$dt("La station est une mesure, la maille un modèle"),
+        shiny::tags$dd(paste(
+          "Une station Météo-France décrit son emplacement : altitude, exposition, abri. La maille SAFRAN de 8 km",
+          "est un modèle alimenté par des observations : elle lisse le relief. Les deux ne disent pas exactement",
+          "la même chose, et leur écart n'est pas une erreur de l'une ou de l'autre. Les voir côte à côte",
+          "(Synthèse d'un point, Autour de moi, Comparer) aide à juger ce que la maille dit de votre peuplement.")),
+
+        shiny::tags$dt("Stations publiées avec la carte"),
+        shiny::tags$dd(sprintf(paste(
+          "Les indicateurs annuels de chaque station sont précalculés avec ceux des mailles, au même moment, et publiés",
+          "avec elles : consulter une station ne télécharge aucune série journalière. N'y figurent que les stations",
+          "qui ont au moins %d années valides de pluie ou de températures et une mesure de moins de %d jours.",
+          "Les indicateurs qu'une station ne mesure pas (humidité du sol, neige, humidité de l'air) ne sont pas publiés ;",
+          "pour une station, l'ETP est estimée (Hargreaves-Samani)."),
+          CONFIG$stations$publie$annees_min, CONFIG$stations$publie$inactive_max_j)),
+
+        shiny::tags$dt("Comparer deux lieux"),
+        shiny::tags$dd(paste(
+          "Deux mailles, deux stations, une maille et une station, ou des départements, dans toutes les combinaisons.",
+          "Seules les années où les deux lieux ont une valeur sont comparées, et la normale de chacun est calculée",
+          "sur ces années : comparer 1959-2025 à 1975-2025 reviendrait à comparer deux climats.")),
+
+        shiny::tags$dt("Envoyer une synthèse par courriel"),
+        shiny::tags$dd(paste(
+          "L'écran Autour de moi prépare une synthèse courte. « Envoyer par courriel » ouvre votre messagerie sur un",
+          "message déjà rédigé ; ClimaFor n'envoie lui-même aucun courriel, et ne vous demande aucune adresse.",
+          "Le message contient le nom du lieu, jamais ses coordonnées. Un lien de courriel ne peut pas porter de pièce",
+          "jointe : la page complète s'enregistre, ou se partage depuis l'appareil quand il le permet.")))
+    ),
+
     # -- Variables mobilisees, generees depuis CONFIG -------------------------
     shiny::div(
       class = "cf-carte",

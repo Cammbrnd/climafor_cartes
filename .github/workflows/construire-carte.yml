@@ -12,6 +12,14 @@
 # chaine ; elle ne publie JAMAIS sur Pages (le jeu reste en artefact, 7 jours).
 #
 # Le calcul est reparti en FRAGMENTS (un job chacun, 6 h maximum par job) puis assemble.
+#
+# STATIONS (v2.1). Dans le meme calcul, les indicateurs annuels des stations Meteo-France sont
+# precalcules (outils/stations_cli.R) et publies A COTE des mailles : stations.json et
+# s_<grandeur>.bin.gz, dans le meme site. Un site Pages se REMPLACE en entier a chaque
+# publication : c'est pourquoi les stations se construisent ici, et non dans un calcul a part
+# qui effacerait les mailles (ou l'inverse). Source « mf » : les fichiers departementaux de
+# Meteo-France (data.gouv.fr), les memes que l'analyse d'une station. Source « demo » : des
+# stations FICTIVES, comme les mailles fictives, jamais publiees sur Pages.
 name: Construire la carte
 
 on:
@@ -37,6 +45,14 @@ on:
       en_parallele:
         description: "Fragments simultanes (3 pour sim ; 4 au plus pour position, qui menage GeoSAS)"
         default: "3"
+      stations:
+        description: "Precalculer aussi les stations Meteo-France (oui/non). Non : le site publie n'aura pas de stations."
+        type: choice
+        options: ["oui", "non"]
+        default: "oui"
+      stations_fragments:
+        description: "Nombre de fragments pour les stations (jobs). Chacun lit les fichiers d'environ 25 departements."
+        default: "4"
 
 # Un seul calcul a la fois : deux calculs simultanes doubleraient la charge sur les serveurs
 # de donnees (Meteo-France ou GeoSAS).
@@ -101,8 +117,63 @@ jobs:
           path: parts/
           retention-days: 3
 
+  stations_preparer:
+    if: ${{ inputs.stations == 'oui' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      fragments: ${{ steps.liste.outputs.fragments }}
+    steps:
+      - id: liste
+        env:
+          N: ${{ inputs.stations_fragments }}
+        run: |
+          if ! [[ "$N" =~ ^[0-9]+$ ]] || [ "$N" -lt 1 ] || [ "$N" -gt 96 ]; then
+            echo "stations_fragments doit etre un entier entre 1 et 96 (recu : $N)"; exit 1
+          fi
+          echo "fragments=$(seq -s, 1 "$N" | sed 's/^/[/; s/$/]/')" >> "$GITHUB_OUTPUT"
+
+  stations_fragment:
+    needs: stations_preparer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      max-parallel: 2     # les fichiers de Meteo-France sont servis par un hebergeur tiers : on le menage
+      matrix:
+        fragment: ${{ fromJSON(needs.stations_preparer.outputs.fragments) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+
+      - name: Calculer les stations du fragment
+        env:
+          SOURCE: ${{ inputs.source }}
+          DEBUT: ${{ inputs.annee_debut }}
+          FIN: ${{ inputs.annee_fin }}
+          NF: ${{ inputs.stations_fragments }}
+        run: |
+          if [ "$SOURCE" = "demo" ]; then SRC=demo; else SRC=mf; fi
+          Rscript outils/stations_cli.R fragment source="$SRC" \
+            annee_debut="$DEBUT" annee_fin="$FIN" \
+            fragment=${{ matrix.fragment }} fragments="$NF" sortie=parts_stations
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stations-fragment-${{ matrix.fragment }}
+          path: parts_stations/
+          retention-days: 3
+
   assembler:
-    needs: fragment
+    needs: [fragment, stations_fragment]
+    # Les stations sont facultatives (entree « stations = non » : le job est alors ignore), mais
+    # si elles sont demandees et echouent, RIEN n'est publie : un site sans stations remplacerait
+    # le precedent, et l'application perdrait la comparaison station / maille jusqu'au calcul suivant.
+    if: ${{ !cancelled() && needs.fragment.result == 'success' && (needs.stations_fragment.result == 'success' || needs.stations_fragment.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -120,12 +191,20 @@ jobs:
           merge-multiple: true
           path: parts
 
+      - if: ${{ inputs.stations == 'oui' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: stations-fragment-*
+          merge-multiple: true
+          path: parts_stations
+
       - name: Assembler et verifier
         env:
           SOURCE: ${{ inputs.source }}
           MAILLES: ${{ inputs.mailles }}
           DEBUT: ${{ inputs.annee_debut }}
           FIN: ${{ inputs.annee_fin }}
+          STATIONS: ${{ inputs.stations }}
         run: |
           if [ "$SOURCE" = "demo" ]; then
             TEXTE="DONNEES FICTIVES (jeu de démonstration, pas du climat)"
@@ -137,6 +216,16 @@ jobs:
           Rscript outils/carte_cli.R assembler source_texte="$TEXTE" mailles="$MAILLES" \
             annee_debut="$DEBUT" annee_fin="$FIN" parts=parts sortie=public
           Rscript outils/carte_cli.R verifier dossier=public
+          if [ "$STATIONS" = "oui" ]; then
+            if [ "$SOURCE" = "demo" ]; then
+              TEXTE_ST="DONNEES FICTIVES (jeu de démonstration, pas du climat)"; NMIN=1
+            else
+              TEXTE_ST="Météo-France, données climatologiques de base quotidiennes (stations), Licence Ouverte 2.0"; NMIN=300
+            fi
+            Rscript outils/stations_cli.R assembler source_texte="$TEXTE_ST" \
+              annee_debut="$DEBUT" annee_fin="$FIN" parts=parts_stations sortie=public n_min=$NMIN
+            Rscript outils/stations_cli.R verifier dossier=public
+          fi
           touch public/.nojekyll
           {
             echo "# Carte ClimaFor"

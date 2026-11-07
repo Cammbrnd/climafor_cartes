@@ -56,6 +56,23 @@ jobs:
             if [ "$CODE" != "200" ]; then KO=$((KO+1)); echo "ABSENT/ERREUR $f : $R"; else echo "ok $f : $R octets"; fi
           done
           echo "Fichiers listes : $N ; en erreur : $KO"
+          echo "== stations.json (facultatif : un jeu publie avant la v2.1 n'en a pas) =="
+          CODE_ST=$(curl -sS -o stations.json -w "%{http_code}" -H "Origin: https://exemple.test" "${ADRESSE}stations.json")
+          if [ "$CODE_ST" = "200" ]; then
+            echo "stations : $(jq '.n_stations' stations.json), annees $(jq '.annees | first' stations.json)-$(jq '.annees | last' stations.json), genere le $(jq -r '.genere_le' stations.json)"
+            echo "lignes de la table : $(jq '.stations.id | length' stations.json)"
+            NS=0; KOS=0
+            for f in $(jq -r '.couches[].fichier' stations.json | sort -u); do
+              NS=$((NS+1))
+              R=$(curl -sS -o /tmp/f.bin -w "%{http_code} %{size_download}" -H "Origin: https://exemple.test" "${ADRESSE}${f}")
+              CODE=${R%% *}
+              if [ "$CODE" != "200" ]; then KOS=$((KOS+1)); echo "ABSENT/ERREUR $f : $R"; else echo "ok $f : $R octets"; fi
+            done
+            echo "Fichiers de stations listes : $NS ; en erreur : $KOS"
+            KO=$((KO+KOS))
+          else
+            echo "stations.json : HTTP $CODE_ST (jeu sans stations : l'application n'utilise alors que les mailles)"
+          fi
           echo "== Page d'accueil et .nojekyll =="
           curl -sS -o /dev/null -w "index.md/index.html : %{http_code}\n" "${ADRESSE}"
           [ "$KO" = "0" ] && [ "$N" -gt 0 ]

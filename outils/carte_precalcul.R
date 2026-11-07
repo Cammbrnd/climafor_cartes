@@ -41,13 +41,23 @@ carte_famille <- function(couche) {
 #' @param don tableau journalier de la maille (format safran_charger()).
 #' @param ctx contexte de carte_ctx().
 #' @param annees annees cartographiees.
+#' @param calculer function(source, don, ctx) -> tableau annuel de l'indicateur `source`
+#'   (ou NULL). Par defaut, le calcul DIRECT de l'indicateur : celui des mailles SAFRAN, dont
+#'   la serie est complete. Les stations publiees (outils/stations_precalcul.R) passent par
+#'   calculer_un_indicateur(), qui ecarte les annees trop lacunaires et refuse un indicateur
+#'   dont la station ne mesure pas la variable (« 0 jour de gel » pour un pluviometre).
+#' @param garde_jours TRUE (mailles) : une annee dont la serie journaliere compte plus de deux
+#'   jours manquants n'est cartographiee pour aucune couche. FALSE (stations) : la validite des
+#'   annees est deja decidee par `annees_valides` (95 % des jours renseignes, par variable).
 #' @return liste nommee par cle de couche ; chaque element : valeurs (une par
 #'   annee, NA = absente), normale, pente (par decennie), signif (logique).
-carte_calculer_maille <- function(don, ctx, annees, couches = CARTE_COUCHES) {
+carte_calculer_maille <- function(don, ctx, annees, couches = CARTE_COUCHES,
+                                  calculer = NULL, garde_jours = TRUE) {
+  if (is.null(calculer)) calculer <- function(s, don, ctx) INDICATEURS[[s]]$calc(don, ctx)
   sources <- unique(vapply(couches, function(k) k$source, ""))
   # Chaque indicateur n'est calcule qu'une fois, meme s'il porte plusieurs couches.
   res <- stats::setNames(lapply(sources, function(s) {
-    tryCatch(INDICATEURS[[s]]$calc(don, ctx), error = function(e) NULL)
+    tryCatch(calculer(s, don, ctx), error = function(e) NULL)
   }), sources)
 
   # Garde propre a la carte, en plus de la completude de chaque indicateur : une
@@ -55,7 +65,8 @@ carte_calculer_maille <- function(don, ctx, annees, couches = CARTE_COUCHES) {
   # n'est cartographiee pour aucune couche.
   bissextile <- (annees %% 4L == 0L & annees %% 100L != 0L) | annees %% 400L == 0L
   n_jours <- tabulate(match(don$annee, annees), length(annees))
-  incomplete <- n_jours < ifelse(bissextile, 366L, 365L) - 2L
+  incomplete <- if (isTRUE(garde_jours)) n_jours < ifelse(bissextile, 366L, 365L) - 2L
+                else rep(FALSE, length(annees))
 
   lapply(couches, function(k) {
     vide <- list(valeurs = rep(NA_real_, length(annees)), normale = NA_real_,
@@ -86,7 +97,7 @@ carte_calculer_maille <- function(don, ctx, annees, couches = CARTE_COUCHES) {
 #' @return la part (liste), de façon invisible.
 carte_construire <- function(lire_maille, lon, lat, annees, indices,
                              couches = CARTE_COUCHES, fichier = NULL,
-                             progres_tous = 200L) {
+                             progres_tous = 200L, calculer = NULL, garde_jours = TRUE) {
   ctx <- carte_ctx(annees)
   na <- length(annees); m <- length(indices)
   part <- list(
@@ -103,7 +114,7 @@ carte_construire <- function(lire_maille, lon, lat, annees, indices,
     if (is.null(don) || !is.data.frame(don) || !nrow(don)) {
       part$echecs <- c(part$echecs, i); next
     }
-    out <- carte_calculer_maille(don, ctx, annees, couches)
+    out <- carte_calculer_maille(don, ctx, annees, couches, calculer, garde_jours)
     for (cle in names(couches)) {
       part$valeurs[[cle]][, j] <- out[[cle]]$valeurs
       part$normale[[cle]][j]   <- out[[cle]]$normale

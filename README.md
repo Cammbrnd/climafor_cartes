@@ -14,6 +14,10 @@ DSF) et un **bilan synthétique** par département, région, fiches importées o
 [Version 2.0](#version-20--trois-profils-et-bilan-synthétique). Pour une démonstration :
 `?profil=co`, `?profil=dsf` ou `?profil=terrain` à la suite de l'adresse de l'application.
 
+**Depuis la version 2.1**, les stations Météo-France sont publiées avec la carte (mesure et modèle côte à côte), l'onglet
+Comparer compare deux lieux de n'importe quelle sorte (maille, station, département) et l'écran terrain produit une
+synthèse à envoyer par courriel : voir [Version 2.1](#version-21--mesures-et-modèle-côte-à-côte-deux-lieux-synthèse-à-envoyer).
+
 ---
 
 ## Démarrage
@@ -1283,6 +1287,112 @@ JSON), la **liste d'accès** (à remplacer par une vraie authentification), le *
 pures sur les couches précalculées : moyenne des mailles d'un contour, normale, écart, rang, tendance), les
 **gabarits de phrases** et les **contours**. `tests/test_v20.R` sert de spécification : chaque valeur y est
 vérifiable à la main.
+
+---
+
+## Version 2.1 — mesures et modèle côte à côte, deux lieux, synthèse à envoyer
+
+Trois besoins venus du terrain : (1) **garder les stations Météo-France** à côté du modèle SAFRAN
+(la mesure réelle et la valeur modélisée, ensemble) ; (2) **comparer deux lieux de n'importe quelle
+sorte** ; (3) **produire sur le terrain une synthèse envoyable par courriel**.
+
+### Stations publiées comme les mailles
+
+Les indicateurs annuels des stations sont **précalculés et publiés à côté des mailles**, dans le même
+format et par le même calcul : `stations.json` (la liste : identifiant, nom, département, position,
+altitude, dernière mesure, complétude pluie et températures, nombre d'années) et un fichier
+`s_<grandeur>.bin.gz` par grandeur (entiers 16 bits compressés, comme les `c_<grandeur>.bin.gz` des
+mailles). L'application ne télécharge donc **aucune série journalière** au choix d'une station : elle lit
+le jeu publié, une fois, au premier besoin (`cmp_stations()`).
+
+- **Un jeu sans stations n'est pas une erreur** : un jeu publié avant la v2.1 continue de marcher, et
+  l'interface dit simplement qu'il n'y a pas encore de stations (404 mémorisé pour la session).
+- **Validation à la lecture** (`stations_meta_valider()`) : schéma, noms de fichiers sans chemin,
+  identifiants uniques et bien formés, colonnes de même longueur, nombre de stations annoncé, coordonnées,
+  années, plafond `CONFIG$stations$publie$stations_max`. Un jeu invalide est refusé en entier.
+- **Qui est publiée** : au moins `annees_min` (15) années valides pour la pluie ou les températures ; pas
+  d'arrêt de mesure depuis plus de `inactive_max_j` (730) jours.
+- **Calcul** : le workflow `construire-carte.yml` a deux entrées, `stations` (oui/non, « oui » par défaut) et
+  `stations_fragments` (nombre de jobs, 4 par défaut ; chacun lit environ 25 départements). Les stations se construisent
+  **dans le même calcul que les mailles** parce que le déploiement GitHub Pages remplace tout le site :
+  un calcul séparé effacerait l'un ou l'autre. Si les stations sont demandées et échouent, **rien n'est
+  publié** (un site sans stations remplacerait un site avec). `outils/stations_cli.R` (fragment, assembler),
+  `outils/stations_precalcul.R` et, pour les essais, `outils/stations_demo.R` (stations **fictives**, jamais
+  publiées sur Pages).
+- **Vérifié** par `.github/workflows/verifier-publication.yml` (bloc `stations.json`).
+
+### Les sources d'un point : le modèle et la mesure, ensemble
+
+Pour un point (commune, coordonnées, point de l'accueil), le bilan peut s'appuyer sur la **maille SAFRAN**
+(modèle) et sur les **stations voisines** (mesure), côte à côte. Les stations proposées viennent du même
+classement que la recherche en direct (`mf_classer_stations()` : distance, écart d'altitude, fraîcheur,
+complétude ; `CONFIG$stations$n_propositions` = 3). Par défaut : la maille et la meilleure station si sa
+qualité est correcte (niveau 3 au plus). Quand plusieurs sources sont retenues, les lieux s'appellent
+« Maille SAFRAN (modèle) » et « <Station> (mesure) » ; avec la seule maille, le nom du point est conservé.
+Chaque grandeur est lue dans la source qui la fournit : une station sans températures n'en invente pas.
+La normale d'une station est calculée sur **ses** années de mesure (référence d'au moins dix ans).
+
+### Deux lieux (onglet Comparer)
+
+Le mode « Deux lieux » (par défaut) compare **deux lieux de sorte quelconque** : maille SAFRAN, station
+Météo-France ou département (`src/mod_lieu_choix.R`), soit toutes les combinaisons : maille↔maille,
+station↔station, maille↔station, département↔département, département↔maille, département↔station. Le mode
+« Plusieurs lieux importés » reste disponible.
+
+- **Période commune** : pour chaque grandeur, les deux séries sont restreintes aux années où **les deux**
+  ont une valeur, puis normales et tendances sont recalculées sur ces années (`duo_restreindre()`).
+- **Tableau** : Grandeur · A · B · écart A − B · écart de chacun à sa normale · lecture en mots. Quand un
+  lieu ne fournit pas une grandeur, ou qu'aucune année n'est commune, le tableau le dit (pas de case vide).
+- **Corrélation** (Pearson) annoncée seulement à 10 années communes au moins.
+- **Mesure et modèle** : le texte rappelle qu'une station mesure en un point et que la maille SAFRAN est une
+  moyenne de 8 km ; un écart entre les deux n'est pas une erreur de l'une des deux.
+- Code : `src/utils_comparer_duo.R` (`duo_*`, `sources_*`), `src/mod_comparer.R`.
+
+### Une synthèse du terrain, à envoyer par courriel
+
+L'écran terrain (« Autour de moi ») produit une synthèse du point : quelques phrases, un petit tableau,
+les sources et la prudence d'usage. Quatre façons de l'emporter :
+
+| Bouton | Ce qu'il fait |
+|---|---|
+| **Envoyer par courriel** | ouvre la messagerie de l'appareil avec objet et texte rédigés (lien `mailto:`) |
+| **Partager…** | ouvre le partage du téléphone, avec la page HTML en pièce jointe quand l'appareil le permet |
+| **Enregistrer la page** | télécharge la synthèse en HTML autonome |
+| **Copier le texte** | place le texte dans le presse-papiers |
+
+**Choix assumés.** L'application **n'envoie aucun courriel elle-même** : il faudrait un serveur de
+messagerie, un compte expéditeur et des secrets, et le message partirait d'une adresse de l'application et
+non de celle du forestier. Avec `mailto:`, il part de sa messagerie, sous son nom, et il le relit avant
+d'envoyer. Un lien `mailto:` **ne porte pas de pièce jointe** (aucun navigateur ne le permet) : la page HTML
+s'enregistre ou se partage à part. Le texte est limité à 1 900 octets une fois encodé (certaines
+messageries tronquent au-delà) en retirant d'abord les lignes de grandeurs les moins importantes. **Les
+coordonnées ne figurent jamais dans le message**, seulement le nom du lieu. `src/utils_envoi.R`,
+`src/mod_terrain.R`, `www/app.js` (section 8).
+
+### Sources et accueil
+
+L'onglet Sources décrit les deux natures de donnée (« Mesure et modèle, côte à côte »). L'accueil du
+profil `dsf` comporte un tableau qui explique en une ligne chacune des différences entre **Synthèse**
+(un lieu, quelques phrases), **Bilan climatique** (le détail chiffré, plusieurs lieux) et **Rapport** (le
+document complet à diffuser).
+
+### Limites à connaître
+
+- **Les stations réelles de Météo-France n'ont été essayées que sur des données de démonstration** : le
+  calcul des stations sur les vrais fichiers (workflow « Construire la carte » avec `stations = oui`, valeur par
+  défaut, et une source autre que `demo`) reste à lancer et à vérifier une première fois sur GitHub Actions.
+- Une station n'est publiée qu'avec assez d'années ; une station récente ou arrêtée n'apparaît pas.
+- Le courriel dépend de la messagerie de l'appareil ; sans messagerie configurée, utiliser « Copier le
+  texte » ou « Enregistrer la page ».
+- Une station mesure en un point ; sa valeur n'est pas celle de la maille qui la contient.
+
+### Vérifications
+
+`tests/test_v21.R` : précalcul et lecture des stations (validation, refus des jeux altérés, 404
+définitif), bilans mesure + modèle sur un jeu synthétique, toutes les combinaisons de deux lieux, période
+commune, synthèse à envoyer (texte, lien `mailto:` borné, HTML autonome, aucune coordonnée), écrans
+(terrain, synthèse d'un point, Comparer en mode deux lieux), `outils/stations_cli.R`, `www/app.js`, feuille
+de style et workflow.
 
 ---
 

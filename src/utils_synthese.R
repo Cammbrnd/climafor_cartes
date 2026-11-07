@@ -196,7 +196,7 @@ synthese_preparer <- function(echelle, lieux = list(), fiches = NULL, jeu, cles_
 
   if (identical(echelle, "fiches")) {
     f <- fiches %||% fiches_vide()
-    mailles <- lapply(seq_len(nrow(f)), function(i) cmp_mailles(cmp_lieu_point(f$id[i], f$lon[i], f$lat[i]), jeu))
+    mailles <- lapply(seq_len(nrow(f)), function(i) cmp_mailles(cmp_lieu_point(f$id[i], f$lon[i], f$lat[i]), jeu, executer))
     dans <- vapply(mailles, function(m) length(m$idx) > 0L, TRUE)
     res$fiches <- f
     res$fiches_dans <- dans
@@ -212,10 +212,15 @@ synthese_preparer <- function(echelle, lieux = list(), fiches = NULL, jeu, cles_
     return(res)
   }
 
-  mailles <- lapply(lieux, cmp_mailles, jeu = jeu)
+  mailles <- lapply(lieux, cmp_mailles, jeu = jeu, executer = executer)
   tl <- cmp_table_lieux(lieux, mailles)
   garde <- which(tl$retenu)
   res$tl <- tl
+  # Des stations dans le bilan : la methode et les exports le disent (date de leur precalcul).
+  if (any(tl$source[tl$retenu] == "station")) {
+    sj <- cmp_stations(jeu, executer = executer)
+    if (isTRUE(sj$ok)) res$jeu$stations <- list(genere_le = as.character(sj$meta$genere_le), n = nrow(sj$table))
+  }
   res$series <- cmp_series(jeu, tl$lieu[garde], mailles[garde], cles, executer)
   res$tendances <- cmp_tendances(res$series, ctx)
   res$bilan <- cmp_bilan(res$series, ctx, annee, res$tendances)
@@ -304,6 +309,8 @@ synthese_phrases_cle <- function(res, cle) {
   }
   b <- res$bilan[res$bilan$cle == cle, , drop = FALSE]
   if (!nrow(b)) return(character(0))
+  # Un point, plusieurs sources (maille, stations) : chacune se lit, puis l'ecart entre elles.
+  if (nrow(b) > 1L && sources_multiples(res) && !isTRUE(res$duo)) return(sources_phrases_cle(res, cle))
   if (nrow(b) == 1L) {
     rg <- res$rang[res$rang$lieu == b$lieu[1] & res$rang$cle == cle, , drop = FALSE]
     return(synthese_phrases_ligne(b[1, ], rg, res$ctx, res$annee))
@@ -354,6 +361,7 @@ synthese_phrases_generales <- function(res) {
   b <- res$bilan[is.finite(res$bilan$valeur) & is.finite(res$bilan$normale), , drop = FALSE]
   lieux <- unique(b$lieu)
   if (!nrow(b)) return(sprintf("Aucune valeur exploitable pour %d avec les grandeurs choisies.", a))
+  if (length(lieux) > 1L && sources_multiples(res) && !isTRUE(res$duo)) return(sources_phrases_generales(res))
   z <- ifelse(is.finite(b$ecart_type_ref) & b$ecart_type_ref > 0, abs(b$ecart) / b$ecart_type_ref, 0)
 
   if (length(lieux) == 1L) {
@@ -407,16 +415,29 @@ synthese_date_jeu <- function(x) {
 #' @export
 synthese_methode <- function(res) {
   dmax <- fmt_fr(CONFIG$comparer$distance_max_m / 1000, 0)
+  types <- unique(res$tl$type[res$tl$retenu])
   zone <- switch(res$echelle,
-    point = sprintf("Un point prend la valeur de sa maille la plus proche (à %s km au plus).", dmax),
+    # Un point, mais aussi les lieux du mode « Deux lieux » : maille, station ou departement.
+    point = c(if (!length(types) || "point" %in% types)
+                sprintf("Un point prend la valeur de sa maille la plus proche (à %s km au plus).", dmax),
+              if ("zone" %in% types)
+                "Un département prend la moyenne, à poids égaux, des mailles dont le centre est dans son contour ; la moyenne n'est pas pondérée par la surface forestière."),
     fiches = sprintf("Chaque fiche prend la valeur de sa maille la plus proche (à %s km au plus), pour l'année de la fiche (l'année comparée si la fiche n'est pas datée).", dmax),
     "Un territoire prend la moyenne, à poids égaux, des mailles dont le centre est dans son contour ; un contour plus petit qu'une maille prend la maille la plus proche. La moyenne n'est pas pondérée par la surface forestière.")
+  st <- res$jeu$stations
   m <- c(
     sprintf("Source : réanalyse SAFRAN-ISBA (Météo-France), mailles de 8 km précalculées le %s (%d mailles). Les seuils sont ceux par défaut du précalcul : les réglages de l'onglet Paramètres ne s'y appliquent pas.",
             synthese_date_jeu(res$jeu$genere_le), res$jeu$n_mailles),
+    if (!is.null(st)) sprintf(paste(
+      "Les stations sont des MESURES de Météo-France (données climatologiques de base quotidiennes), indicateurs annuels précalculés le %s.",
+      "Une année n'est retenue que si au moins %.0f %% de ses jours sont renseignés ; sinon elle est absente de la série, jamais comptée comme zéro.",
+      "Une station ne mesure pas tout : humidité du sol, neige et humidité de l'air manquent, l'ETP est estimée (Hargreaves-Samani).",
+      "La maille SAFRAN est un MODÈLE alimenté par des observations : elle et la station ne disent pas exactement la même chose, et leur écart n'est pas une erreur de l'une ou de l'autre."),
+      synthese_date_jeu(st$genere_le), 100 * CONFIG$stations$seuil_annee),
     zone,
     sprintf("La normale est la moyenne de la période %s ; un écart n'est qualifié d'« au-dessus » ou « en dessous » que s'il dépasse un demi écart-type de cette période. Le rang compare l'année aux autres années de la série. La tendance est la pente de Sen avec le test de Mann-Kendall corrigé de l'autocorrélation, sur vingt années au moins ; « non significative » ne veut pas dire « absente ».", res$ctx$ref_label),
-    "Une maille lisse le relief : en terrain accidenté, la valeur d'un lieu peut s'écarter de celle d'une station proche. Ce bilan décrit un climat, il ne se substitue pas à un diagnostic stationnel.")
+    if (is.null(st)) "Une maille lisse le relief : en terrain accidenté, la valeur d'un lieu peut s'écarter de celle d'une station proche. Ce bilan décrit un climat, il ne se substitue pas à un diagnostic stationnel."
+    else "Une maille lisse le relief : en terrain accidenté, elle peut s'écarter d'une station proche, et une station décrit son emplacement, pas tout un massif. Ce bilan décrit un climat, il ne se substitue pas à un diagnostic stationnel.")
   if (identical(res$echelle, "fiches")) {
     m <- c(m, "Les fiches sont signalées là où l'on regarde : elles ne forment pas un échantillon. Leur contexte climatique éclaire une observation, il n'en établit pas la cause.")
   }
@@ -530,7 +551,12 @@ synthese_graphe_serie <- function(res, cle, mobile = FALSE) {
   s <- res$series[res$series$cle == cle, , drop = FALSE]
   if (!nrow(s) || all(is.na(s$valeur))) return(graphe_message("Aucune valeur à tracer pour cette grandeur."))
   lieux <- unique(s$lieu)
-  if (length(lieux) > 1L) return(cmp_graphe(res$series, res$bilan, cle, "ecart", res$ctx, res$annee, mobile))
+  if (length(lieux) > 1L) {
+    # Plusieurs sources d'un meme point : la valeur, pour voir l'ecart mesure-modele ; plusieurs
+    # territoires : l'ecart a la normale de chacun, seule lecture qui compare des climats differents.
+    mode <- if (sources_multiples(res) && !isTRUE(res$duo)) "valeur" else "ecart"
+    return(cmp_graphe(res$series, res$bilan, cle, mode, res$ctx, res$annee, mobile))
+  }
   k <- CARTE_COUCHES[[cle]]
   b <- res$bilan[res$bilan$cle == cle & res$bilan$lieu == lieux, , drop = FALSE]
   couleur <- synthese_couleur(k)

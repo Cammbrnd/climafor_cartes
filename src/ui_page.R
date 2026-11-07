@@ -83,6 +83,42 @@ ui_page_pied <- function() {
                      "8 km. Il ne se substitue pas à un diagnostic stationnel."))))
 }
 
+#' Tableau « Synthèse, Bilan climatique, Rapport : quelle différence ? », replie sur l'accueil.
+#' Les trois onglets partent du meme calcul de normale et d'ecart, mais ne servent pas a la
+#' meme chose : le dire a l'entree evite de lancer un rapport pour une phrase.
+#' @keywords internal
+accueil_differences_ui <- function() {
+  lignes <- list(
+    c("Pour quoi faire", "Lire le climat d'un lieu en quelques phrases et un tableau, et en parler.",
+      "Analyser un point à fond : tous les indicateurs, avec leurs graphiques.",
+      "Emporter l'analyse du Bilan dans un document rédigé."),
+    c("Quels lieux", "Un point, un département, une région, ou des fiches importées.",
+      "Un seul point, celui de l'accueil.", "Le point analysé dans le Bilan."),
+    c("Quelles données", "Mailles SAFRAN de 8 km précalculées ; pour un point, les stations Météo-France publiées à côté.",
+      "La station Météo-France la plus proche (mesure) ou la grille SAFRAN (modèle), téléchargées pour le point.",
+      "Celles du Bilan climatique."),
+    c("Réglages", "Année, référence et grandeurs ; seuils par défaut.",
+      "Tous ceux de l'onglet Paramètres : seuils, période, source.", "Niveau de détail et format."),
+    c("Temps", "Quelques secondes.", "Une à plusieurs minutes la première fois : les séries sont téléchargées.",
+      "Un peu plus encore : le document est composé."),
+    c("Ce qu'on emporte", "Une page HTML, un fichier Word, des CSV.", "Les graphiques et les CSV.", "Un fichier Word ou HTML."))
+  cf_repli(
+    "Synthèse, Bilan climatique, Rapport : quelle différence ?",
+    shiny::div(
+      class = "cf-synt__defile", role = "region", tabindex = "0", `aria-label` = "Différences entre Synthèse, Bilan climatique et Rapport (défile horizontalement)",
+      shiny::tags$table(
+        class = "cf-tableau cf-synt__table",
+        shiny::tags$caption(class = "cf-sr-only", "Différences entre Synthèse, Bilan climatique et Rapport"),
+        shiny::tags$thead(shiny::tags$tr(
+          shiny::tags$th(scope = "col", ""), shiny::tags$th(scope = "col", "Synthèse"),
+          shiny::tags$th(scope = "col", "Bilan climatique"), shiny::tags$th(scope = "col", "Rapport"))),
+        shiny::tags$tbody(lapply(lignes, function(l) shiny::tags$tr(
+          shiny::tags$th(scope = "row", l[1]), lapply(l[-1], shiny::tags$td)))))),
+    shiny::p(class = "cf-mention", paste(
+      "En bref : la Synthèse pour lire et comparer vite ; le Bilan climatique pour analyser un point en détail ;",
+      "le Rapport pour en faire un document.")))
+}
+
 #' Un onglet de l'application, par sa valeur. Les branches suivent l'ordre de la
 #' navigation du profil permanent ; c'est profil$onglets qui decide lesquelles servent.
 #' @param nom valeur de l'onglet ; @param profil element de PROFILS ; @param etat lien partage.
@@ -120,7 +156,8 @@ ui_page_onglet <- function(nom, profil, etat = NULL) {
             class = "cf-btn cf-btn--principal cf-btn--large")),
         # Messages du service de donnees : ils concernent le chargement, donc ils
         # s'affichent la ou l'on a lance le chargement.
-        shiny::uiOutput("messages_api"))),
+        shiny::uiOutput("messages_api"),
+        accueil_differences_ui())),
 
     # ---- Terrain : « autour de moi », un ecran de telephone -----------------------
     terrain = shiny::tabPanel(
@@ -130,7 +167,8 @@ ui_page_onglet <- function(nom, profil, etat = NULL) {
         shiny::h2(class = "cf-titre-section", "Autour de moi"),
         shiny::p(class = "cf-chapeau", paste(
           "Le climat du lieu où vous êtes : la valeur de l'année la plus récente et son écart",
-          "à la normale, d'après les mailles de 8 km de la carte.")),
+          "à la normale, d'après les mailles de 8 km de la carte et, si le jeu en contient, les stations",
+          "Météo-France proches. Une synthèse courte s'envoie par courriel.")),
         shiny::div(class = "cf-carte", mod_localisation_ui("loc")),
         mod_terrain_ui("terrain"))),
 

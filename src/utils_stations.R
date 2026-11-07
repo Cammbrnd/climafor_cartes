@@ -703,6 +703,39 @@ mf_qualite_stations <- function(st) {
   st
 }
 
+#' Classe des stations autour d'un point : distance, ecart d'altitude, qualite, pertinence.
+#'
+#' Partagee par la recherche en direct (mf_stations_proches) et par la lecture des stations
+#' publiees (stations_proches_publiees) : un seul classement, donc les memes propositions
+#' d'où que viennent les stations.
+#' @param tous data.frame de stations (id, nom, lat, lon, alt, derniere_obs, fr_p, fr_t,
+#'   a_pluie, a_temp, dept).
+#' @param alt altitude du point (NA : critere ignore) ; @param n nombre de stations gardees.
+#' @return stations a moins de `rayon_km`, triees par pertinence, avec distance_km,
+#'   ecart_alt_m, les niveaux de qualite et `pertinence` ; vide si aucune n'est assez proche.
+#' @export
+mf_classer_stations <- function(tous, lon, lat, alt = NA_real_, n = CONFIG$stations$n_propositions) {
+  cfg <- CONFIG$stations
+  tous$distance_km <- mf_distance_km(lon, lat, tous$lon, tous$lat)
+  tous <- tous[tous$distance_km <= cfg$rayon_km, , drop = FALSE]
+  if (!nrow(tous)) return(tous)
+
+  tous$ecart_alt_m <- if (is.finite(alt)) abs(tous$alt - alt) else NA_real_
+  tous <- mf_qualite_stations(tous)
+
+  alt_pen <- ifelse(is.finite(tous$ecart_alt_m), tous$ecart_alt_m * cfg$poids_alt_km_par_m, 0)
+  tous$pertinence <- tous$distance_km + alt_pen +
+    ifelse(tous$a_temp, 0, cfg$penalite_sans_t_km) +
+    ifelse(tous$a_pluie, 0, cfg$penalite_sans_p_km) +
+    ifelse(!is.na(tous$age_j) & tous$age_j > cfg$seuils$fraicheur_j[3],
+           cfg$penalite_inactive_km, 0)
+
+  tous <- tous[order(tous$pertinence, tous$distance_km), , drop = FALSE]
+  tous <- utils::head(tous, n)
+  rownames(tous) <- NULL
+  tous
+}
+
 #' Stations Meteo-France les plus pertinentes autour d'un point.
 #'
 #' CLASSEMENT. La distance seule ferait proposer un pluviometre voisin a la
@@ -716,7 +749,6 @@ mf_qualite_stations <- function(st) {
 #' @return data.frame trie, ou vide ; attribut "erreurs" (vecteur de messages).
 #' @export
 mf_stations_proches <- function(lon, lat, alt = NA_real_) {
-  cfg <- CONFIG$stations
   erreurs <- character(0)
 
   deps <- mf_departements_proches(lon, lat)
@@ -745,26 +777,7 @@ mf_stations_proches <- function(lon, lat, alt = NA_real_) {
   }
   tous <- tous[!duplicated(tous$id), , drop = FALSE]
 
-  tous$distance_km <- mf_distance_km(lon, lat, tous$lon, tous$lat)
-  tous <- tous[tous$distance_km <= cfg$rayon_km, , drop = FALSE]
-  if (!nrow(tous)) {
-    attr(tous, "erreurs") <- erreurs
-    return(tous)
-  }
-
-  tous$ecart_alt_m <- if (is.finite(alt)) abs(tous$alt - alt) else NA_real_
-  tous <- mf_qualite_stations(tous)
-
-  alt_pen <- ifelse(is.finite(tous$ecart_alt_m), tous$ecart_alt_m * cfg$poids_alt_km_par_m, 0)
-  tous$pertinence <- tous$distance_km + alt_pen +
-    ifelse(tous$a_temp, 0, cfg$penalite_sans_t_km) +
-    ifelse(tous$a_pluie, 0, cfg$penalite_sans_p_km) +
-    ifelse(!is.na(tous$age_j) & tous$age_j > cfg$seuils$fraicheur_j[3],
-           cfg$penalite_inactive_km, 0)
-
-  tous <- tous[order(tous$pertinence, tous$distance_km), , drop = FALSE]
-  tous <- utils::head(tous, cfg$n_propositions)
-  rownames(tous) <- NULL
+  tous <- mf_classer_stations(tous, lon, lat, alt)
   attr(tous, "erreurs") <- erreurs
   tous
 }
@@ -921,6 +934,82 @@ mf_normaliser <- function(brut) {
   df
 }
 
+#' Tableau journalier ClimaFor d'une station, a partir de ses lignes brutes.
+#'
+#' Tout ce que station_charger() fait apres la lecture des fichiers : calendrier complet,
+#' annees valides, ETP de Hargreaves-Samani, attributs de source. Separee pour que le
+#' precalcul des stations publiees (outils/stations_precalcul.R) passe par EXACTEMENT les
+#' memes lignes de code que l'analyse d'une station : pas deux manieres de lire une station.
+#'
+#' @param brut lignes brutes de la station (mf_lire_fichier), eventuellement de plusieurs fichiers.
+#' @param station ligne decrivant la station (id, nom, dept, lat, lon, alt[, distance_km]).
+#' @param lon,lat point d'analyse (conserve dans l'attribut "point").
+#' @param annees annees conservees ; @param erreurs messages deja recueillis.
+#' @return tableau journalier, ou tableau vide portant l'attribut "erreurs".
+#' @keywords internal
+station_depuis_brut <- function(brut, station, lon, lat, annees, erreurs = character(0)) {
+  annees <- sort(unique(as.integer(annees)))
+  vide <- function() {
+    v <- safran_tableau_vide()
+    attr(v, "erreurs") <- erreurs
+    attr(v, "source") <- "station"
+    v
+  }
+  df <- mf_normaliser(brut)
+  if (!nrow(df)) {
+    erreurs <- c(erreurs, "La station n'a aucune valeur exploitable sur la période demandée.")
+    return(vide())
+  }
+
+  # ETP de Hargreaves-Samani : aucune ETP mesuree dans ces fichiers
+  df$etp <- etp_hargreaves(df$t_moy, df$t_min, df$t_max, df$doy, station$lat)
+
+  # Les attributs de qualite sont poses par mf_normaliser(). Un sous-ensemble de
+  # lignes ne les conserve pas de facon fiable : on les releve avant, on les
+  # repose apres.
+  garder <- c("annees_valides", "qualite_annuelle", "qualite_non_filtree",
+              "n_valeurs_ecartees", "derniere_mesure", "definition_tmoy")
+  attrs <- attributes(df)[garder]
+
+  nf <- attr(df, "qualite_non_filtree")
+  if (length(nf)) {
+    erreurs <- c(erreurs, sprintf(paste(
+      "Codes qualité Météo-France non appliqués pour %s : ils auraient écarté plus de",
+      "la moitié des valeurs, ce qui laisse penser que leur signification diffère de",
+      "celle supposée. À vérifier (CONFIG$stations$qualite_ecartee)."),
+      paste(nf, collapse = ", ")))
+  }
+  ne <- attr(df, "n_valeurs_ecartees")
+  if (isTRUE(ne > 0)) {
+    erreurs <- c(erreurs, sprintf("%s valeur(s) écartée(s) par le contrôle qualité Météo-France.",
+                                  format(ne, big.mark = " ")))
+  }
+
+  # Annees hors de la plage demandee : on ne les garde pas
+  df <- df[df$annee %in% annees, , drop = FALSE]
+  rownames(df) <- NULL
+  if (!nrow(df)) {
+    erreurs <- c(erreurs, sprintf("La station n'a pas de mesure sur %d-%d.", min(annees), max(annees)))
+    return(vide())
+  }
+
+  # Les annees hors de la plage demandee ont ete retirees des lignes : on les
+  # retire aussi des listes d'annees valides, pour que tout reste coherent.
+  attrs$annees_valides <- lapply(attrs$annees_valides, function(v) v[v %in% annees])
+  attrs$qualite_annuelle <- attrs$qualite_annuelle[attrs$qualite_annuelle$annee %in% annees, , drop = FALSE]
+  for (nom in names(attrs)) attr(df, nom) <- attrs[[nom]]
+  attr(df, "etp_source") <- "Hargreaves-Samani (station : pas d'ETP mesurée)"
+  attr(df, "erreurs")  <- erreurs
+  attr(df, "source")   <- "station"
+  attr(df, "station")  <- list(
+    id = station$id, nom = station$nom, dept = station$dept,
+    lat = station$lat, lon = station$lon, alt = station$alt,
+    distance_km = station$distance_km %||% NA_real_)
+  attr(df, "point")    <- c(lon = lon, lat = lat)
+  attr(df, "extrait")  <- Sys.time()
+  df
+}
+
 #' Charge la serie d'une station et la rend au format du tableau ClimaFor.
 #'
 #' Meme contrat de sortie que safran_charger() : data.frame journalier, ou
@@ -988,59 +1077,8 @@ station_charger <- function(station, lon, lat, annees, progres = NULL) {
   }
 
   notifier(0.93, "Mise en forme de la série...")
-  brut <- do.call(rbind, morceaux)
-  df <- mf_normaliser(brut)
-  if (!nrow(df)) {
-    erreurs <- c(erreurs, "La station n'a aucune valeur exploitable sur la période demandée.")
-    return(vide())
-  }
-
-  # ETP de Hargreaves-Samani : aucune ETP mesuree dans ces fichiers
-  df$etp <- etp_hargreaves(df$t_moy, df$t_min, df$t_max, df$doy, station$lat)
-
-  # Les attributs de qualite sont poses par mf_normaliser(). Un sous-ensemble de
-  # lignes ne les conserve pas de facon fiable : on les releve avant, on les
-  # repose apres.
-  garder <- c("annees_valides", "qualite_annuelle", "qualite_non_filtree",
-              "n_valeurs_ecartees", "derniere_mesure", "definition_tmoy")
-  attrs <- attributes(df)[garder]
-
-  nf <- attr(df, "qualite_non_filtree")
-  if (length(nf)) {
-    erreurs <- c(erreurs, sprintf(paste(
-      "Codes qualité Météo-France non appliqués pour %s : ils auraient écarté plus de",
-      "la moitié des valeurs, ce qui laisse penser que leur signification diffère de",
-      "celle supposée. À vérifier (CONFIG$stations$qualite_ecartee)."),
-      paste(nf, collapse = ", ")))
-  }
-  ne <- attr(df, "n_valeurs_ecartees")
-  if (isTRUE(ne > 0)) {
-    erreurs <- c(erreurs, sprintf("%s valeur(s) écartée(s) par le contrôle qualité Météo-France.",
-                                  format(ne, big.mark = " ")))
-  }
-
-  # Annees hors de la plage demandee : on ne les garde pas
-  df <- df[df$annee %in% annees, , drop = FALSE]
-  rownames(df) <- NULL
-  if (!nrow(df)) {
-    erreurs <- c(erreurs, sprintf("La station n'a pas de mesure sur %d-%d.", min(annees), max(annees)))
-    return(vide())
-  }
-
-  # Les annees hors de la plage demandee ont ete retirees des lignes : on les
-  # retire aussi des listes d'annees valides, pour que tout reste coherent.
-  attrs$annees_valides <- lapply(attrs$annees_valides, function(v) v[v %in% annees])
-  attrs$qualite_annuelle <- attrs$qualite_annuelle[attrs$qualite_annuelle$annee %in% annees, , drop = FALSE]
-  for (nom in names(attrs)) attr(df, nom) <- attrs[[nom]]
-  attr(df, "etp_source") <- "Hargreaves-Samani (station : pas d'ETP mesurée)"
-  attr(df, "erreurs")  <- erreurs
-  attr(df, "source")   <- "station"
-  attr(df, "station")  <- list(
-    id = station$id, nom = station$nom, dept = station$dept,
-    lat = station$lat, lon = station$lon, alt = station$alt,
-    distance_km = station$distance_km %||% NA_real_)
-  attr(df, "point")    <- c(lon = lon, lat = lat)
-  attr(df, "extrait")  <- Sys.time()
+  df <- station_depuis_brut(do.call(rbind, morceaux), station, lon, lat, annees, erreurs)
+  if (!nrow(df)) return(df)
   notifier(1, "Terminé")
   df
 }

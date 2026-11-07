@@ -1,10 +1,18 @@
 # ==============================================================================
-# mod_comparer.R — MODULE « COMPARER » (v1.9)
+# mod_comparer.R — MODULE « COMPARER » (v1.9, deux lieux : v2.1)
 # ------------------------------------------------------------------------------
-# Compare des points et des zones importes (CSV de points, GeoJSON, GeoPackage,
-# shapefile zippe) sur les mailles precalculees de la carte, et en tire un bilan
-# climatique par lieu. Tout le calcul est dans src/utils_comparer.R ; ce fichier
-# ne fait que le brancher a l'interface.
+# Deux facons de comparer, au choix :
+#
+#   « Deux lieux » (v2.1, par defaut). On choisit deux lieux, chacun une MAILLE SAFRAN
+#       (un point, un modele), une STATION Meteo-France (une mesure) ou un DEPARTEMENT,
+#       dans toutes les combinaisons : maille-maille, station-station, maille-station,
+#       departement-departement, departement-maille, departement-station. La lecture
+#       porte sur les ANNEES COMMUNES aux deux lieux (src/utils_comparer_duo.R).
+#   « Plusieurs lieux importes ». Des points et des zones importes (CSV de points,
+#       GeoJSON, GeoPackage, shapefile zippe), compares sur les mailles precalculees.
+#
+# Dans les deux cas, le calcul est celui de src/utils_comparer.R ; ce fichier ne fait que
+# le brancher a l'interface.
 #
 # CE QUE LA PAGE DIT, PARCE QUE CELA CHANGE LA LECTURE
 # ----------------------------------------------------
@@ -20,6 +28,7 @@
 #   transport  reactive : ou lire les fichiers de la carte (carte_transport())
 #   mobile     reactive : ecran etroit
 #   executer   fonction de requete HTTP (injectable : les tests n'ont pas de reseau)
+#   chercher   function(requete) -> communes (injectable : geo_chercher_communes)
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -68,6 +77,7 @@ comparer_tableau_ui <- function(bilan, tl, cles, annee) {
             shiny::div(class = "cf-comp__nom", l),
             shiny::div(class = "cf-comp__ecart", if (tl$type[i] == "zone")
               sprintf("zone, %d maille%s", tl$n_mailles[i], if (tl$n_mailles[i] > 1) "s" else "")
+              else if (tl$type[i] == "station") "station (mesure)"
               else "point")),
           cases(l))
       }))))
@@ -91,6 +101,17 @@ comparer_bilan_ui <- function(bilan, tl, ctx, annee) {
   })
 }
 
+#' Les deux lieux compares, en une ligne chacun : nom, famille, nature (mesure ou modele).
+#' @param res duo_preparer().
+#' @keywords internal
+comparer_duo_entete_ui <- function(res) {
+  ligne <- function(rep, nom, l, i) {
+    shiny::tags$li(shiny::strong(paste0(rep, " : ")), duo_nom_court(nom), sprintf(" — %s, %s", switch(l$type, station = "station", zone = "département", "maille SAFRAN"), duo_nature(l)),
+                   if (nzchar(res$tl$note[i])) shiny::span(class = "cf-mention", paste0(" (", res$tl$note[i], ")")))
+  }
+  shiny::tags$ul(class = "cf-duo__lieux", ligne("A", res$a, res$lieux$a, 1L), ligne("B", res$b, res$lieux$b, 2L))
+}
+
 #' Messages d'import : une alerte, avec la liste de ce qui a ete ecarte.
 #' @keywords internal
 comparer_messages_ui <- function(messages) {
@@ -111,49 +132,74 @@ comparer_messages_ui <- function(messages) {
 #' @export
 mod_comparer_ui <- function(id) {
   ns <- shiny::NS(id)
+  presets <- c(p_mm = "Maille ↔ maille", p_ss = "Station ↔ station", p_ms = "Maille ↔ station",
+               p_dd = "Département ↔ département", p_dm = "Département ↔ maille", p_ds = "Département ↔ station")
   shiny::tagList(
     shiny::h2(class = "cf-titre-section", "Comparer des lieux"),
     shiny::p(class = "cf-chapeau", paste(
-      "Importez des points (placettes, forêts, communes) ou des zones (propriétés, massifs)",
-      "et comparez leur climat : valeur d'une année, écart à la normale, tendance depuis 1959.",
-      "Les valeurs viennent des mailles de 8 km de la carte : aucun téléchargement de série.")),
+      "Comparez le climat de deux lieux : deux mailles SAFRAN (des points), deux stations Météo-France,",
+      "une maille et une station, ou des départements. La maille est un modèle, la station une mesure :",
+      "les comparer, c'est voir ce que la mesure dit de plus ou de moins que le modèle.")),
 
     shiny::uiOutput(ns("indisponible")),
 
-    # -- 1. Les lieux ----------------------------------------------------------
     shiny::div(
-      class = "cf-carte",
-      shiny::h3(class = "cf-carte__titre", "1. Vos lieux"),
-      shiny::fileInput(
-        ns("fichier"), "Importer un fichier",
-        accept = c(".csv", ".txt", ".tsv", ".geojson", ".json", ".gpkg", ".zip"),
-        buttonLabel = "Parcourir…", placeholder = "Aucun fichier choisi", width = "100%"),
-      shiny::div(class = "cf-aide", sprintf(paste(
-        "Points : CSV avec une colonne nom, latitude et longitude (WGS84, degrés décimaux).",
-        "Zones : GeoJSON, GeoPackage ou shapefile zippé (le .zip contient .shp, .shx, .dbf et .prj).",
-        "%d lieux au plus, %s Mo au plus par fichier."),
-        CONFIG$comparer$lieux_max, fmt_fr(CONFIG$comparer$fichier_max_mo, 0))),
-      shiny::div(
-        class = "cf-comp__actions",
-        shiny::actionButton(ns("ajouter_point"), "Ajouter le point de l'accueil",
-                            class = "cf-btn cf-btn--sec"),
-        shiny::downloadButton(ns("modele"), "Modèle de CSV", class = "cf-btn cf-btn--sec"),
-        shiny::actionButton(ns("vider"), "Tout effacer", class = "cf-btn cf-btn--sec")),
-      shiny::uiOutput(ns("messages")),
-      shiny::uiOutput(ns("liste_lieux"))),
+      class = "cf-pastilles",
+      shiny::radioButtons(ns("mode"), "Comparer",
+                          choices = c("Deux lieux" = "duo", "Plusieurs lieux importés" = "liste"),
+                          selected = "duo", inline = TRUE)),
 
-    # -- 2. Les grandeurs ------------------------------------------------------
+    # -- Deux lieux ------------------------------------------------------------
+    shiny::conditionalPanel(
+      "input.mode == 'duo'", ns = ns,
+      shiny::div(
+        class = "cf-carte",
+        shiny::h3(class = "cf-carte__titre", "1. Vos deux lieux"),
+        shiny::div(
+          class = "cf-duo__presets", role = "group", `aria-label` = "Combinaisons usuelles",
+          lapply(names(presets), function(i) shiny::actionButton(ns(i), presets[[i]], class = "cf-btn cf-btn--sec"))),
+        shiny::div(
+          class = "cf-duo__choix",
+          mod_lieu_choix_ui(ns("lieu_a"), "Lieu A", type_defaut = "maille"),
+          mod_lieu_choix_ui(ns("lieu_b"), "Lieu B", type_defaut = "station")))),
+
+    # -- Plusieurs lieux importes ------------------------------------------------
+    shiny::conditionalPanel(
+      "input.mode == 'liste'", ns = ns,
+      shiny::div(
+        class = "cf-carte",
+        shiny::h3(class = "cf-carte__titre", "1. Vos lieux"),
+        shiny::fileInput(
+          ns("fichier"), "Importer un fichier",
+          accept = c(".csv", ".txt", ".tsv", ".geojson", ".json", ".gpkg", ".zip"),
+          buttonLabel = "Parcourir…", placeholder = "Aucun fichier choisi", width = "100%"),
+        shiny::div(class = "cf-aide", sprintf(paste(
+          "Points : CSV avec une colonne nom, latitude et longitude (WGS84, degrés décimaux).",
+          "Zones : GeoJSON, GeoPackage ou shapefile zippé (le .zip contient .shp, .shx, .dbf et .prj).",
+          "%d lieux au plus, %s Mo au plus par fichier."),
+          CONFIG$comparer$lieux_max, fmt_fr(CONFIG$comparer$fichier_max_mo, 0))),
+        shiny::div(
+          class = "cf-comp__actions",
+          shiny::actionButton(ns("ajouter_point"), "Ajouter le point de l'accueil",
+                              class = "cf-btn cf-btn--sec"),
+          shiny::downloadButton(ns("modele"), "Modèle de CSV", class = "cf-btn cf-btn--sec"),
+          shiny::actionButton(ns("vider"), "Tout effacer", class = "cf-btn cf-btn--sec")),
+        shiny::uiOutput(ns("messages")),
+        shiny::uiOutput(ns("liste_lieux")))),
+
+    # -- 2. Les grandeurs (communes aux deux modes) -----------------------------
     shiny::div(
       class = "cf-carte",
       shiny::h3(class = "cf-carte__titre", "2. Grandeurs et année"),
       shiny::uiOutput(ns("choix")),
       shiny::p(class = "cf-mention", paste(
-        "Les valeurs sont celles des mailles précalculées, avec les seuils par défaut :",
-        "les réglages de l'onglet Paramètres ne s'y appliquent pas. La normale est celle de",
-        "la période de référence choisie sur l'accueil."))),
+        "Les valeurs des mailles sont précalculées avec les seuils par défaut : les réglages de l'onglet",
+        "Paramètres ne s'y appliquent pas. La normale est celle de la période de référence choisie",
+        "sur l'accueil."))),
 
     # -- 3. Resultats ----------------------------------------------------------
-    shiny::uiOutput(ns("resultats"))
+    shiny::conditionalPanel("input.mode == 'duo'", ns = ns, shiny::uiOutput(ns("duo_resultats"))),
+    shiny::conditionalPanel("input.mode == 'liste'", ns = ns, shiny::uiOutput(ns("resultats")))
   )
 }
 
@@ -165,7 +211,8 @@ mod_comparer_ui <- function(id) {
 #' @export
 mod_comparer_server <- function(id, ctx, lieu, transport = shiny::reactive(carte_transport()),
                                 mobile = shiny::reactive(FALSE),
-                                executer = httr2::req_perform) {
+                                executer = httr2::req_perform,
+                                chercher = geo_chercher_communes) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     avec_sf <- requireNamespace("sf", quietly = TRUE)
@@ -241,7 +288,7 @@ mod_comparer_server <- function(id, ctx, lieu, transport = shiny::reactive(carte
     mailles <- shiny::reactive({
       j <- jeu()
       shiny::req(j, avec_sf)
-      lapply(lieux(), cmp_mailles, jeu = j)
+      lapply(lieux(), cmp_mailles, jeu = j, executer = executer)
     })
     tl <- shiny::reactive({
       if (!length(lieux())) return(cmp_table_lieux(list(), list()))
@@ -254,7 +301,8 @@ mod_comparer_server <- function(id, ctx, lieu, transport = shiny::reactive(carte
         return(shiny::p(class = "cf-mention", "Aucun lieu pour l'instant."))
       }
       etiquette <- sprintf("%s — %s%s", t$lieu,
-        ifelse(t$type == "zone", sprintf("zone, %d maille%s", t$n_mailles, ifelse(t$n_mailles > 1, "s", "")), "point"),
+        ifelse(t$type == "zone", sprintf("zone, %d maille%s", t$n_mailles, ifelse(t$n_mailles > 1, "s", "")),
+               ifelse(t$type == "station", "station (mesure)", "point")),
         ifelse(nzchar(t$note), paste0(" (", t$note, ")"), ""))
       shiny::checkboxGroupInput(
         ns("retenus"), sprintf("Lieux comparés (%d sur %d)", sum(t$retenu & t$lieu %in% selection()), nrow(t)),
@@ -383,6 +431,99 @@ mod_comparer_server <- function(id, ctx, lieu, transport = shiny::reactive(carte
       shiny::req(s, b, cle, cle %in% s$cle)
       cmp_graphe(s, b, cle, input$mode_graphe %||% "valeur", ctx(), annee(), mobile())
     }, res = 96)
+
+    # -- Deux lieux ------------------------------------------------------------------------------
+    choix_a <- mod_lieu_choix_server("lieu_a", jeu, lieu, executer, chercher, type_defaut = "maille")
+    choix_b <- mod_lieu_choix_server("lieu_b", jeu, lieu, executer, chercher, type_defaut = "station")
+
+    # Combinaisons usuelles : elles ne font que cocher le type de chaque lieu.
+    paires <- list(p_mm = c("maille", "maille"), p_ss = c("station", "station"), p_ms = c("maille", "station"),
+                   p_dd = c("departement", "departement"), p_dm = c("departement", "maille"),
+                   p_ds = c("departement", "station"))
+    for (nom in names(paires)) local({
+      n <- nom
+      shiny::observeEvent(input[[n]], {
+        choix_a$definir_type(paires[[n]][1]); choix_b$definir_type(paires[[n]][2])
+      }, ignoreInit = TRUE)
+    })
+
+    duo <- shiny::reactive({
+      j <- jeu(); a <- choix_a$lieu(); b <- choix_b$lieu()
+      shiny::req(j, avec_sf, a, b, length(cles()) > 0)
+      tryCatch(duo_preparer(a, b, j, cles(), ctx(), annee(), executer),
+               error = function(e) { journaliser_erreur("Comparer : deux lieux", e); NULL })
+    })
+
+    output$duo_resultats <- shiny::renderUI({
+      shiny::req(jeu())
+      if (is.null(choix_a$lieu()) || is.null(choix_b$lieu())) {
+        return(shiny::div(class = "cf-carte",
+          shiny::p("Choisissez les deux lieux ci-dessus : le résultat s'affiche ensuite ici.")))
+      }
+      r <- duo()
+      if (is.null(r)) {
+        return(shiny::div(class = "cf-alerte cf-alerte--attention", role = "status",
+          shiny::span(class = "cf-alerte__titre", "La comparaison n'a pas pu être calculée"),
+          "Les fichiers de la carte ne se lisent pas ; l'erreur est consignée dans le journal."))
+      }
+      if (!all(r$tl$retenu)) {
+        hors <- r$tl[!r$tl$retenu, , drop = FALSE]
+        return(shiny::div(class = "cf-alerte cf-alerte--attention", role = "status",
+          shiny::span(class = "cf-alerte__titre", "Un lieu ne peut pas être comparé"),
+          shiny::tags$ul(lapply(seq_len(nrow(hors)), function(i) shiny::tags$li(sprintf("%s : %s.", hors$lieu[i], hors$note[i]))))))
+      }
+      k <- intersect(r$cles, unique(r$series$cle[is.finite(r$series$valeur)]))
+      choix_graphe <- stats::setNames(k, vapply(k, function(x) CARTE_COUCHES[[x]]$titre, ""))
+      tab <- duo_tableau(r)
+      shiny::tagList(
+        shiny::div(
+          class = "cf-carte",
+          shiny::h3(class = "cf-carte__titre", sprintf("3. Comparaison pour %d", r$annee)),
+          comparer_duo_entete_ui(r),
+          synthese_bref_ui(duo_lecture(r)),
+          if (!is.null(tab)) synthese_table_tag(tab, sprintf("Valeur de %d pour chaque lieu, écart entre les deux et écart à la normale", r$annee)),
+          shiny::p(class = "cf-mention", sprintf(paste(
+            "Années communes aux deux lieux seulement ; chacun est rapporté à sa propre normale %s,",
+            "calculée sur ces années. « Proche de la normale » : moins d'un demi écart-type."), r$ctx$ref_label))),
+        if (length(k)) shiny::div(
+          class = "cf-carte",
+          shiny::h3(class = "cf-carte__titre", "Évolution sur les années communes"),
+          shiny::div(
+            class = "cf-comp__actions",
+            shiny::selectInput(ns("duo_couche"), "Grandeur", choices = choix_graphe,
+                               selected = shiny::isolate(input$duo_couche), width = "22rem", selectize = FALSE),
+            shiny::div(
+              class = "cf-pastilles",
+              shiny::radioButtons(ns("duo_mode"), "Lecture",
+                                  choices = c("Valeur" = "valeur", "Écart à la normale" = "ecart"),
+                                  selected = shiny::isolate(input$duo_mode) %||% "valeur", inline = TRUE))),
+          shiny::plotOutput(ns("duo_graphe"), height = "380px")),
+        shiny::div(
+          class = "cf-comp__actions",
+          shiny::downloadButton(ns("csv_duo"), "Écarts A − B (CSV)", class = "cf-btn cf-btn--sec"),
+          shiny::downloadButton(ns("csv_duo_series"), "Séries annuelles (CSV)", class = "cf-btn cf-btn--sec")),
+        shiny::tags$details(
+          class = "cf-details",
+          shiny::tags$summary("Méthode et limites"),
+          shiny::div(class = "cf-details__corps", lapply(synthese_methode(r), shiny::p))))
+    })
+
+    output$duo_graphe <- shiny::renderPlot({
+      r <- duo(); cle <- input$duo_couche
+      shiny::req(r, cle, cle %in% r$series$cle)
+      cmp_graphe(r$series, r$bilan, cle, input$duo_mode %||% "valeur", r$ctx, r$annee, mobile())
+    }, res = 96)
+
+    ecrire_duo <- function(file, d, titre) {
+      r <- duo(); shiny::req(r)
+      ecrire_csv_avec_metadonnees(d, file, duo_lignes_metadonnees(r, jeu(), titre))
+    }
+    output$csv_duo <- shiny::downloadHandler(
+      filename = function() nom_fichier_export("comparaison_ab", list(nom = "deux_lieux")),
+      content = function(file) { r <- duo(); shiny::req(r); ecrire_duo(file, duo_export_ecarts(r), "Comparaison de deux lieux : écarts A − B") })
+    output$csv_duo_series <- shiny::downloadHandler(
+      filename = function() nom_fichier_export("comparaison_ab_series", list(nom = "deux_lieux")),
+      content = function(file) { r <- duo(); shiny::req(r); ecrire_duo(file, cmp_export_series(r$series), "Séries annuelles des deux lieux (années communes)") })
 
     # -- Exports ---------------------------------------------------------------------------
     output$modele <- shiny::downloadHandler(
