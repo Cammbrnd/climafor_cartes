@@ -6,6 +6,7 @@ Description: Application R/Shiny qui produit, pour un point de France
     SAFRAN-ISBA) avec vingt-cinq indicateurs forestiers, des tendances et des
     rapports. Ce fichier ne sert qu'a DECLARER les dependances (renv, lecture
     humaine) : l'application n'est pas un paquet R.
+License: EUPL-1.2
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Imports:

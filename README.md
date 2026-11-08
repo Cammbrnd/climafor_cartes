@@ -821,6 +821,7 @@ climafor/
 │                               base précalculée, mode rapide des mailles et des stations)
 ├── DESCRIPTION                 Paquets et versions requis (v2.3.0)
 ├── NEWS.md                     Historique des versions (audits 1.2 → 1.7.3 en détail)
+├── LICENSE                     Licence du code : EUPL-1.2
 ├── docs/                       maquette_interface.html (maquette d'origine, plus mise à jour)
 ├── .github/workflows/          Tester le code (à chaque envoi), Construire la carte, Vérifier la
 │                               publication, Veille, Diagnostic GeoSAS, Aperçu de la carte
@@ -1233,6 +1234,16 @@ Ces limites figurent dans l'onglet Sources et dans chaque rapport généré.
 
 ## Licence et attribution
 
-Données SAFRAN : Météo-France, licence ouverte Etalab 2.0. Toute réutilisation
+**Code** : [EUPL-1.2](LICENSE) (European Union Public Licence, texte officiel en anglais ; les versions
+dans les autres langues de l'Union, dont le français, ont la même valeur juridique et sont publiées par la
+Commission européenne). L'EUPL est une licence de logiciel libre à
+« copyleft faible » : on peut utiliser, modifier et redistribuer le code, y compris dans un produit, à condition de
+redistribuer les modifications du code lui-même sous la même licence (ou une licence compatible : GPL, CeCILL,
+MPL, LGPL…).
+
+Composants embarqués, qui gardent leur propre licence : MapLibre GL JS (BSD-3, `www/carte/lib/`),
+Open Sans (OFL, `www/fonts/`).
+
+**Données SAFRAN** : Météo-France, licence ouverte Etalab 2.0. Toute réutilisation
 doit mentionner la source et la date d'extraction, qui figure sur chaque
-rapport.
+rapport. Les données ne sont pas couvertes par la licence du code.

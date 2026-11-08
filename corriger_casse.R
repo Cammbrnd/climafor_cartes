@@ -32,6 +32,7 @@ attendus <- c(
   ".github/workflows/veille.yml",
   ".rscignore",
   "DESCRIPTION",
+  "LICENSE",
   "NEWS.md",
   "README.md",
   "app.R",
