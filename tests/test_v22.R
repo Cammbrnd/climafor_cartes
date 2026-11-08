@@ -373,8 +373,9 @@ cli22 <- lire22("outils/carte_cli.R")
 verifier(grepl("base_demandee", cli22) && grepl('"non"', cli22) && grepl("entrees de base", cli22),
          "carte_cli.R : la base se calcule avec les mailles (`base=non` la retire) et la verification la compte")
 par22 <- lire22("src/mod_parametres.R")
-verifier(grepl('mode_chargement', par22) && grepl('selected = "complet"', par22),
-         "Parametres : le mode de chargement existe, et le complet est le defaut")
+verifier(grepl('mode_chargement', par22) && grepl('selected = "rapide"', par22) &&
+           grepl('input\\$mode_chargement %\\|\\|% "rapide"', par22),
+         "Parametres : le mode de chargement existe, et le rapide est le defaut (affichage et valeur de repli)")
 verifier(grepl('charger_complet', lire22("src/serveur_dsf.R")) && grepl("base_ouvrir", lire22("src/serveur_dsf.R")),
          "serveur : le mode rapide passe par base_ouvrir() et le bouton recharge la serie complete")
 verifier(!grepl("base", paste(readLines(chemin_ci("www/carte/carte.js"), warn = FALSE), collapse = "\n"), ignore.case = FALSE) ||

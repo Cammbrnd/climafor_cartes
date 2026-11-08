@@ -12,7 +12,7 @@ volontairement laissé de côté. La version est déclarée à deux endroits qui
 
 | Version | Ce qui change | Détail |
 |---|---|---|
-| **2.3** | Le **mode rapide** s'étend aux **stations Météo-France** : le bilan d'une station lit ses années passées dans le jeu précalculé et ne télécharge que l'année en cours. Tests automatiques à chaque envoi sur GitHub. Historique des versions dans ce fichier. | [README, version 2.2](README.md#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
+| **2.3** | Le **mode rapide** s'étend aux **stations Météo-France** : le bilan d'une station lit ses années passées dans le jeu précalculé et ne télécharge que l'année en cours. Le mode rapide devient le **mode par défaut**. Tests automatiques à chaque envoi sur GitHub. Historique des versions dans ce fichier. | [README, version 2.2](README.md#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
 | **2.2** | **Base précalculée** : le précalcul de la carte publie aussi les colonnes annuelles et les références dont le bilan d'une maille a besoin ; **mode rapide** (Paramètres → Mode de chargement). | [README](README.md#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
 | **2.1** | Stations publiées avec la carte (mesure et modèle côte à côte), comparaison de **deux lieux**, **synthèse du terrain** à envoyer par courriel. | [README](README.md#version-21--mesures-et-modèle-côte-à-côte-deux-lieux-synthèse-à-envoyer) |
 | **2.0** | **Trois profils** (terrain, correspondant-observateur, permanent DSF) et **bilan synthétique** par département, région, fiches ou point. 2.0.1 : la fenêtre RStudio ne se ferme plus avec la session. | [README](README.md#version-20--trois-profils-et-bilan-synthétique) |

@@ -148,16 +148,20 @@ mod_parametres_ui <- function(id, etat = NULL) {
                        "référence choisie. L'Accueil annonce, avant de lancer l'analyse,",
                        "combien d'années restent à télécharger.")),
       shiny::checkboxInput(ns("cache"), "Utiliser le cache local", value = TRUE),
+      # Le mode rapide est le defaut (v2.3) : il ne sert que si la base precalculee est joignable et
+      # valable pour les reglages courants ; sinon serveur_dsf.R charge la serie complete et le dit.
       shiny::radioButtons(
-        ns("mode_chargement"), "Mode de chargement (grille SAFRAN)",
-        choices = c("Complet : toute la série, année par année (référence)" = "complet",
-                    "Rapide : base précalculée et années récentes" = "rapide"),
-        selected = "complet", width = "100%"),
+        ns("mode_chargement"), "Mode de chargement",
+        choices = c("Rapide : base précalculée et années récentes" = "rapide",
+                    "Complet : toute la série, année par année (référence)" = "complet"),
+        selected = "rapide", width = "100%"),
       shiny::div(class = "cf-aide", paste(
-        "Le mode rapide lit dans le jeu publié les années déjà calculées pour la maille du",
-        "point, et ne demande à SAFRAN que l'année en cours et l'année comparée. Il sert tant que",
-        "la référence, la fenêtre de saison et les seuils sont ceux par défaut. La synthèse chiffrée",
-        "à période égale et le rapport demandent la série complète."))
+        "Le mode rapide lit dans le jeu publié les années déjà calculées pour la maille SAFRAN ou",
+        "la station, et ne demande à SAFRAN (ou à Météo-France) que l'année en cours et l'année",
+        "comparée. Il sert tant que la référence, la fenêtre de saison et les seuils sont ceux par",
+        "défaut ; sinon, ou si le jeu publié n'est pas joignable, l'application charge la série",
+        "complète et le dit. La synthèse chiffrée à période égale et le rapport demandent la série",
+        "complète (un bouton la charge)."))
     ),
 
     # -- Seuils, generes automatiquement --------------------------------------
@@ -343,7 +347,7 @@ mod_parametres_server <- function(id) {
     list(
       seuils = seuils,
       annees = shiny::reactive(input$annees_charge),
-      mode   = shiny::reactive(input$mode_chargement %||% "complet"),
+      mode   = shiny::reactive(input$mode_chargement %||% "rapide"),
       # Reactif : les phrases qui annoncent « X annees en cache » en dependent.
       cache  = shiny::reactive(isTRUE(input$cache))
     )

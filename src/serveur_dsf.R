@@ -101,9 +101,12 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
       ouv <- if (en_station) base_ouvrir_station(src$station$id) else base_ouvrir(p$lon, p$lat)
       ap <- if (isTRUE(ouv$ok)) base_applicable(c0, ouv$jeu) else ouv
       if (isTRUE(ouv$ok) && isTRUE(ap$ok)) rap <- ouv
+      # Un simple message, pas un avertissement : le mode rapide etant le defaut, ce repli est un
+      # cas courant (station hors du jeu publie, autre reference) et le resultat est le meme, en
+      # plus lent.
       else shiny::showNotification(
         paste("Mode rapide indisponible :", ap$message, "Chargement complet."),
-        type = "warning", duration = 10)
+        type = "message", duration = 8)
     }
     if (!is.null(rap)) annees <- base_annees_a_charger(rap$jeu, annees, c0$courante)
 

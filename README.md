@@ -710,7 +710,11 @@ aussi l'**empreinte des réglages** (fenêtre de saison, seuils) avec lesquels l
 
 ### Le Bilan en mode rapide (Paramètres → Mode de chargement)
 
-**Le mode complet reste le mode par défaut.** En mode rapide, pour une maille SAFRAN :
+**Depuis la v2.3, le mode rapide est le mode par défaut** (Paramètres → Mode de chargement). Il ne sert que si le
+jeu publié est joignable et valable pour les réglages courants ; sinon l'application charge la série complète,
+le dit dans un message, et le résultat est le même, en plus lent. Le mode complet reste le chargement de référence
+et se choisit dans les Paramètres, ou à la demande avec le bouton « Charger la série complète ».
+En mode rapide, pour une maille SAFRAN :
 
 1. l'application trouve la maille du point dans le jeu publié (`cmp_mailles`, comme l'onglet Comparer) ;
 2. elle lit les années publiées dans la base (quelques fichiers de 0,5 à 5 Mo, téléchargés une fois par le
