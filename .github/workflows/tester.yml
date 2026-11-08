@@ -38,7 +38,8 @@ jobs:
       # des fichiers SIM), codetools (analyse du code).
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          dependencies: '["Depends", "Imports", "LinkingTo"]'
+          # Une expression R (pas du JSON) : l'action la recopie telle quelle dans son script.
+          dependencies: 'c("Depends", "Imports", "LinkingTo")'
           extra-packages: any::yaml, any::data.table, any::codetools
 
       # Pandoc : les tests produisent de vrais rapports Word et HTML.
