@@ -54,7 +54,7 @@ on:
         description: "Nombre de fragments pour les stations (jobs). Chacun lit les fichiers d'environ 25 departements."
         default: "4"
       base:
-        description: "Calculer aussi la base du bilan (mode rapide) avec les mailles (oui/non). Non : le site publie n'aura pas de mode rapide."
+        description: "Calculer aussi la base du bilan (mode rapide) pour les mailles et pour les stations (oui/non). Non : le site publie n'aura pas de mode rapide."
         type: choice
         options: ["oui", "non"]
         default: "oui"
@@ -162,10 +162,11 @@ jobs:
           DEBUT: ${{ inputs.annee_debut }}
           FIN: ${{ inputs.annee_fin }}
           NF: ${{ inputs.stations_fragments }}
+          BASE: ${{ inputs.base }}
         run: |
           if [ "$SOURCE" = "demo" ]; then SRC=demo; else SRC=mf; fi
           Rscript outils/stations_cli.R fragment source="$SRC" \
-            annee_debut="$DEBUT" annee_fin="$FIN" \
+            annee_debut="$DEBUT" annee_fin="$FIN" base="$BASE" \
             fragment=${{ matrix.fragment }} fragments="$NF" sortie=parts_stations
 
       - uses: actions/upload-artifact@v4
@@ -230,7 +231,7 @@ jobs:
               TEXTE_ST="Météo-France, données climatologiques de base quotidiennes (stations), Licence Ouverte 2.0"; NMIN=300
             fi
             Rscript outils/stations_cli.R assembler source_texte="$TEXTE_ST" \
-              annee_debut="$DEBUT" annee_fin="$FIN" parts=parts_stations sortie=public n_min=$NMIN
+              annee_debut="$DEBUT" annee_fin="$FIN" base="$BASE" parts=parts_stations sortie=public n_min=$NMIN
             Rscript outils/stations_cli.R verifier dossier=public
           fi
           touch public/.nojekyll

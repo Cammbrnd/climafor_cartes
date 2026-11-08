@@ -119,6 +119,50 @@ stations_meta_valider <- function(meta) {
       if (length(st_k) != 1L || is.na(st_k) || st_k < 0L || st_k > 4L) ajouter(sprintf("%s : précision de stockage invalide.", etiq))
     }
   }
+
+  # La base precalculee (v2.2) est facultative : un jeu publie avant elle n'en a pas. Si elle est
+  # la, chaque entree est verifiee comme une grandeur. [[ ]] et non $ : `$` completerait en
+  # silence `base` par `base_parametres` quand `base` est absent.
+  b <- meta[["base"]]
+  if (!is.null(b)) {
+    if (!is.list(b) || !length(b)) {
+      ajouter("Base précalculée mal formée.")
+    } else {
+      cles_b <- vapply(b, function(k) if (is.list(k)) as.character(k$cle %||% NA_character_)[1] else NA_character_, "")
+      if (anyNA(cles_b) || anyDuplicated(cles_b)) ajouter("Base précalculée : clés absentes ou en double.")
+      for (k in b) {
+        if (!is.list(k)) { ajouter("Base précalculée : entrée mal formée."); next }
+        etiq <- as.character(k$cle %||% "?")[1]
+        ref <- STATIONS_BASE_COUCHES[[etiq]]
+        # Une entree inconnue (jeu publie par une version plus recente) est ignoree, comme pour
+        # les mailles (carte_meta_valider) : elle ne sert a rien ici, elle ne doit pas tout refuser.
+        if (is.null(ref)) next
+        if (!identical(as.character(k$fichier %||% NA)[1], sprintf("s_%s.bin.gz", etiq)) ||
+            !carte_nom_fichier_sur(k$fichier %||% NA)) {
+          ajouter(sprintf("Base précalculée, %s : nom de fichier invalide.", etiq))
+        }
+        st_b <- suppressWarnings(as.integer(k$stock %||% NA))
+        if (length(st_b) != 1L || is.na(st_b) || st_b < 0L || st_b > 4L) {
+          ajouter(sprintf("Base précalculée, %s : précision de stockage invalide.", etiq))
+        }
+        if (!identical(as.character(k$type %||% NA)[1], ref$type)) {
+          ajouter(sprintf("Base précalculée, %s : type invalide.", etiq))
+        } else if (identical(ref$type, "ref") &&
+                   !identical(suppressWarnings(as.integer(k$lignes %||% NA)), as.integer(ref$lignes))) {
+          ajouter(sprintf("Base précalculée, %s : nombre de lignes invalide.", etiq))
+        }
+      }
+      bp <- meta[["base_parametres"]]
+      emp <- if (is.list(bp)) bp[["empreinte"]] else NULL
+      if (!is.character(emp) || length(emp) != 1L || !nzchar(emp) || nchar(emp) > 400L) {
+        ajouter("Base précalculée : empreinte des réglages absente ou invalide.")
+      }
+      vi <- if (is.list(bp)) unlist(bp[["vides"]]) else NULL
+      if (length(vi) && (!is.character(vi) || anyNA(vi) || any(nchar(vi) > 60L))) {
+        ajouter("Base précalculée : liste des entrées vides invalide.")
+      }
+    }
+  }
   list(ok = !length(err), erreurs = err)
 }
 

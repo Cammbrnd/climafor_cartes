@@ -4,15 +4,18 @@
 # A lancer depuis la RACINE du projet :
 #
 #   Rscript outils/stations_cli.R fragment source=mf|demo fragment=1 fragments=4 \
-#           annee_debut=1959 annee_fin=2025 sortie=parts_stations
+#           annee_debut=1959 annee_fin=2025 sortie=parts_stations [base=oui|non]
 #   Rscript outils/stations_cli.R assembler source_texte="..." annee_debut=1959 annee_fin=2025 \
-#           parts=parts_stations sortie=public n_min=300
+#           parts=parts_stations sortie=public n_min=300 [base=oui|non]
 #   Rscript outils/stations_cli.R verifier dossier=public
 #
 # fragment  : traite les departements dont le rang tombe dans ce fragment (entrelaces, pour
 #             equilibrer la charge) et ecrit parts_stations/part_<k>.rds ;
 # assembler : reunit les fragments et ecrit stations.json et s_<grandeur>.bin.gz dans le
 #             dossier de la carte (a cote de meta.json) ;
+# base      : oui (defaut) calcule et publie aussi la base du bilan en mode rapide (qualite des
+#             annees, jours manquants, references : src/carte_couches_base_stations.R). Le meme
+#             reglage DOIT servir aux fragments et a l'assemblage.
 # verifier  : relit les fichiers avec la validation de l'application (code de sortie non nul
 #             s'ils sont invalides).
 #
@@ -44,6 +47,13 @@ suppressMessages(source("global.R"))
 for (f in c("outils/carte_format.R", "outils/carte_precalcul.R",
             "outils/stations_precalcul.R", "outils/stations_demo.R")) source(f)
 
+# La base du bilan (v2.2) : par defaut publiee avec les grandeurs.
+base_demandee <- function() {
+  v <- opt$base %||% "oui"
+  if (!v %in% c("oui", "non")) stop("base : oui ou non", call. = FALSE)
+  if (v == "oui") STATIONS_BASE_COUCHES else list()
+}
+
 annees_demandees <- function() {
   fin <- if (nzchar(opt$annee_fin %||% "")) entier("annee_fin") else as.integer(format(Sys.Date(), "%Y")) - 1L
   debut <- entier("annee_debut", 1959L)
@@ -71,7 +81,8 @@ if (commande == "fragment") {
               min(annees), max(annees), opt$source))
   dir.create(opt$sortie, recursive = TRUE, showWarnings = FALSE)
   part <- stations_construire(lire, depts, annees,
-                              fichier = file.path(opt$sortie, sprintf("part_%03d.rds", k)))
+                              fichier = file.path(opt$sortie, sprintf("part_%03d.rds", k)),
+                              base = base_demandee())
   cat(sprintf("Termine : %d station(s) retenue(s), %d departement(s) sans donnees.\n",
               if (is.null(part$stations)) 0L else nrow(part$stations), length(part$echecs)))
 
@@ -81,7 +92,8 @@ if (commande == "fragment") {
   fichiers <- list.files(opt$parts, pattern = "^part_[0-9]+\\.rds$", full.names = TRUE, recursive = TRUE)
   if (!length(fichiers)) stop("Aucun fragment dans ", opt$parts, call. = FALSE)
   cat(sprintf("%d fragment(s) a reunir.\n", length(fichiers)))
-  r <- stations_assembler(fichiers, annees, opt$source_texte, opt$sortie, n_min = entier("n_min", 1L))
+  r <- stations_assembler(fichiers, annees, opt$source_texte, opt$sortie, n_min = entier("n_min", 1L),
+                          base = base_demandee())
   cat(sprintf("Stations ecrites dans %s : %d stations, %d grandeurs, %d-%d, %d Ko.\n",
               r$dossier, r$n, length(r$couches), min(r$annees), max(r$annees), r$taille_octets %/% 1024))
   if (length(r$departements_sans_donnees)) {

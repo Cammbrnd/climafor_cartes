@@ -1,0 +1,50 @@
+# Tester le code — lance toute la suite de tests (tests/lancer_tests.R) a chaque envoi sur
+# `main` et a chaque demande de fusion. Aucun test n'appelle le reseau : les series sont
+# synthetiques (tests/donnees_synthetiques.R) ou fictives (outils/carte_demo.R,
+# outils/stations_demo.R). Une demande de fusion dont un test echoue ne doit pas etre fusionnee.
+#
+# La suite dure une dizaine de minutes. Elle verifie, entre autres, que le code charge sans
+# fonction inutilisee, que chaque fichier est declare dans corriger_casse.R, que les versions
+# concordent, et que le mode rapide rend exactement ce que rend le chargement complet.
+name: Tester le code
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Un nouvel envoi annule le test en cours sur la meme branche : seul le dernier compte.
+concurrency:
+  group: tester-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tester:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      # Les paquets de DESCRIPTION (Imports), plus ceux que les tests utilisent sans que
+      # l'application en ait besoin : yaml (lecture des workflows), data.table (lecture rapide
+      # des fichiers SIM), codetools (analyse du code).
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          dependencies: '["Depends", "Imports", "LinkingTo"]'
+          extra-packages: any::yaml, any::data.table, any::codetools
+
+      # Pandoc : les tests produisent de vrais rapports Word et HTML.
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Lancer les tests
+        env:
+          LC_ALL: C.UTF-8
+        run: Rscript tests/lancer_tests.R

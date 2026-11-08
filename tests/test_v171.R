@@ -178,7 +178,8 @@ verifier(!length(inconnus171),
          else "aucune lecture de CONFIG ne vise un reglage absent (elle renverrait NULL en silence)")
 
 # La documentation ne doit pas citer un reglage qui n'existe pas.
-readme171 <- paste(lire171("README.md"), collapse = "\n")
+# README.md et NEWS.md (l'historique des audits y a ete deplace en v2.3) sont lus ensemble.
+readme171 <- paste(c(lire171("README.md"), lire171("NEWS.md")), collapse = "\n")
 cites171 <- unique(unlist(regmatches(readme171, gregexpr("CONFIG(\\$[A-Za-z_][A-Za-z0-9_]*)+", readme171))))
 # Reglages que le README presente expressement comme « a ajouter » (feuille de route).
 a_venir171 <- character()

@@ -90,12 +90,16 @@ stations_ligne <- function(resume, don, annees, maintenant = Sys.Date()) {
 #' @param annees annees cartographiees (les annees COMPLETES : la derniere annee partielle
 #'   n'est pas publiee, comme pour les mailles).
 #' @param fichier si non NULL, la part est ecrite en .rds a cet endroit.
+#' @param base entrees de la base precalculee d'une station (STATIONS_BASE_COUCHES), calculees avec
+#'   les grandeurs mais publiees a part ; list() = pas de base.
 #' @return la part (liste), de facon invisible : `stations` (table), `valeurs`, `normale`,
 #'   `pente`, `signif` par grandeur, `echecs` (departements sans donnees).
 stations_construire <- function(source_dept, depts, annees, couches = CARTE_COUCHES,
-                                fichier = NULL, maintenant = Sys.Date(), silencieux = FALSE) {
+                                fichier = NULL, maintenant = Sys.Date(), silencieux = FALSE,
+                                base = list()) {
   ctx <- carte_ctx(annees)
   na <- length(annees)
+  couches <- c(couches, base)
   lignes <- list()
   vals <- lapply(couches, function(k) list())     # grandeur -> liste de colonnes (une par station)
   nor  <- lapply(couches, function(k) numeric(0))
@@ -145,7 +149,9 @@ stations_construire <- function(source_dept, depts, annees, couches = CARTE_COUC
   part <- list(
     annees = annees, depts = depts, echecs = echecs,
     stations = if (m) do.call(rbind, lignes) else NULL,
-    valeurs = lapply(vals, function(l) if (m) do.call(cbind, l) else matrix(NA_real_, na, 0)),
+    valeurs = stats::setNames(lapply(names(vals), function(cle) {
+      if (m) do.call(cbind, vals[[cle]]) else matrix(NA_real_, base_nb_lignes(couches[[cle]], na), 0)
+    }), names(vals)),
     normale = nor, pente = pen, signif = sig)
   if (!is.null(fichier)) saveRDS(part, fichier)
   invisible(part)
@@ -157,9 +163,12 @@ stations_construire <- function(source_dept, depts, annees, couches = CARTE_COUC
 #' @param source texte affiche a l'utilisateur (origine des donnees).
 #' @param n_min nombre minimal de stations : en deca, la publication est refusee (un
 #'   telechargement partiel de Meteo-France ne doit pas ecraser un jeu complet).
+#' @param base entrees de la base precalculee (celles de stations_construire). Une entree
+#'   qu'aucune station ne renseigne n'est pas ecrite : stations.json la nomme dans
+#'   `base_parametres$vides`, et sa lecture rend des NA.
 #' @return list(dossier, n, annees, couches, departements_sans_donnees, taille_octets).
 stations_assembler <- function(parts, annees, source, dossier, couches = CARTE_COUCHES,
-                               n_min = 1L, genere_le = format(Sys.Date())) {
+                               n_min = 1L, genere_le = format(Sys.Date()), base = list()) {
   if (is.character(parts)) parts <- lapply(parts, readRDS)
   cfg <- CONFIG$stations$publie
   dir.create(dossier, recursive = TRUE, showWarnings = FALSE)
@@ -203,12 +212,29 @@ stations_assembler <- function(parts, annees, source, dossier, couches = CARTE_C
   st <- st[ordre, , drop = FALSE]
   if (!length(publiees)) stop("Aucune grandeur calculable : publication refusee.", call. = FALSE)
 
+  # La base : meme ecriture que les grandeurs, mais aucun usage cartographique ni meta de carte.
+  meta_base <- list(); vides <- character(0)
+  for (cle in names(base)) {
+    k <- base[[cle]]
+    v <- do.call(cbind, lapply(parts, function(p) p$valeurs[[cle]]))[, garde, drop = FALSE][, ordre, drop = FALSE]
+    if (!any(is.finite(v))) { vides <- c(vides, cle); next }
+    nan <- rep(NA_real_, ncol(v))
+    carte_ecrire_couche(dossier, k, nan, nan, rep(FALSE, ncol(v)), v, prefixe = "s")
+    meta_base[[length(meta_base) + 1L]] <- c(
+      list(cle = k$cle, fichier = sprintf("s_%s.bin.gz", k$cle), type = k$type, stock = k$stock),
+      if (identical(k$type, "ref")) list(lignes = k$lignes))
+  }
+
   ctx <- carte_ctx(annees)
   meta <- list(
     schema = cfg$schema, annees = annees, n_stations = nrow(st),
     reference = ctx$ref_label, genere_le = genere_le, source = source,
     couches = publiees,
-    stations = as.list(st[, STATIONS_PUBLIEES_COLONNES]))
+    stations = as.list(st[, STATIONS_PUBLIEES_COLONNES]),
+    base = if (length(base)) meta_base,
+    # Reglages dont depend la base : voir base_applicable() (src/utils_base.R).
+    base_parametres = if (length(base)) list(empreinte = base_empreinte(ctx),
+                                             attendues = as.list(names(base)), vides = as.list(vides)))
   jsonlite::write_json(meta, file.path(dossier, cfg$fichier), auto_unbox = TRUE, null = "null",
                        na = "null", digits = NA, pretty = FALSE)
 
@@ -240,7 +266,7 @@ stations_lire_meta_locale <- function(dossier) {
   meta <- tryCatch(jsonlite::fromJSON(f, simplifyVector = FALSE), error = function(e) NULL)
   v <- stations_meta_valider(meta)
   if (!v$ok) return(list(meta = NULL, erreurs = v$erreurs))
-  fichiers <- vapply(meta$couches, function(k) as.character(k$fichier)[1], "")
+  fichiers <- vapply(c(meta$couches, meta[["base"]]), function(k) as.character(k$fichier)[1], "")
   absents <- fichiers[!file.exists(file.path(dossier, fichiers))]
   if (length(absents)) {
     return(list(meta = NULL, erreurs = sprintf("Fichier(s) manquant(s) : %s.", paste(absents, collapse = ", "))))

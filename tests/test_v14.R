@@ -11,7 +11,7 @@
 # Ces tests lisent le balisage et les fonctions pures, sans navigateur. Ce qu'ils
 # ne peuvent pas verifier (rechargement reel de la page, copie dans le
 # presse-papiers, defilement, infobulle au survol) l'est dans un navigateur :
-# voir README, section « Version 1.4 ».
+# voir NEWS.md, section « Version 1.4 ».
 # ==============================================================================
 
 html_de14 <- function(ui) paste(as.character(htmltools::renderTags(ui)$html), collapse = "\n")

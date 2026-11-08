@@ -365,8 +365,8 @@ groupe("v2.2 — precalcul, interface et chaine de publication")
 lire22 <- function(f) paste(readLines(chemin_ci(f), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
 wf22 <- lire22(".github/workflows/construire-carte.yml")
 verifier(grepl("base:\\s+description:", wf22) && grepl("BASE: \\$\\{\\{ inputs\\.base \\}\\}", wf22) &&
-           length(gregexpr('base="\\$BASE"', wf22)[[1]]) == 2L,
-         "workflow : l'entree `base` passe par une variable d'environnement, aux deux commandes")
+           length(gregexpr('base="\\$BASE"', wf22)[[1]]) == 4L,
+         "workflow : l'entree `base` passe par une variable d'environnement, aux quatre commandes (mailles et stations, fragment et assemblage)")
 verifier(!grepl("inputs\\.base[^ ]*\\s*\\}\\}[^\n]*Rscript", wf22),
          "workflow : l'entree n'est jamais ecrite dans une commande")
 cli22 <- lire22("outils/carte_cli.R")

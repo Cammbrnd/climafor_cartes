@@ -4,7 +4,7 @@
 # Ces tests lisent le balisage produit par l'interface, sans navigateur. Ce
 # qu'ils ne peuvent pas verifier (contraste, taille rendue des cibles, ordre de
 # tabulation) l'est par l'audit automatise axe-core rejoue sur l'application :
-# voir README, section « Version 1.3 ».
+# voir NEWS.md, section « Version 1.3 ».
 # ==============================================================================
 
 groupe("v1.3 — page : langue, repere principal, icone (E1, E3, E8)")

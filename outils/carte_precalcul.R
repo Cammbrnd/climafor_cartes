@@ -86,6 +86,14 @@ carte_calculer_maille <- function(don, ctx, annees, couches = CARTE_COUCHES,
     }
     vide <- list(valeurs = rep(NA_real_, length(annees)), normale = NA_real_,
                  pente = NA_real_, signif = FALSE)
+    # Colonne annuelle qui ne vient d'aucun indicateur (qualite d'une annee, jours manquants :
+    # base des stations, src/carte_couches_base_stations.R) : sa fonction rend une valeur par annee.
+    if (is.function(k$annuel)) {
+      v <- tryCatch(as.numeric(k$annuel(don, ctx, annees)), error = function(e) NULL)
+      if (length(v) != length(annees)) return(vide)
+      v[!is.finite(v)] <- NA_real_
+      return(list(valeurs = v, normale = NA_real_, pente = NA_real_, signif = FALSE))
+    }
     r <- res[[k$source]]
     if (is.null(r) || !nrow(r) || !(k$colonne %in% names(r))) return(vide)
 

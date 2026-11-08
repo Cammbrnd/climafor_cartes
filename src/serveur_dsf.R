@@ -93,12 +93,12 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
     src <- source_donnees()
     en_station <- !is.null(src) && identical(src$type, "station")
 
-    # Mode rapide (v2.2) : la base precalculee fournit les annees publiees, SAFRAN ne donne que
-    # le reste. Jamais pour une station ; et seulement si la base sert pour ces reglages, sinon
+    # Mode rapide (v2.2) : la base precalculee fournit les annees publiees, SAFRAN (ou Meteo-France,
+    # pour une station) ne donne que le reste. Seulement si la base sert pour ces reglages, sinon
     # chargement complet, avec la raison dite.
     rap <- NULL
-    if (!en_station && !isTRUE(complet) && identical(parametres$mode(), "rapide")) {
-      ouv <- base_ouvrir(p$lon, p$lat)
+    if (!isTRUE(complet) && identical(parametres$mode(), "rapide")) {
+      ouv <- if (en_station) base_ouvrir_station(src$station$id) else base_ouvrir(p$lon, p$lat)
       ap <- if (isTRUE(ouv$ok)) base_applicable(c0, ouv$jeu) else ouv
       if (isTRUE(ouv$ok) && isTRUE(ap$ok)) rap <- ouv
       else shiny::showNotification(
@@ -126,7 +126,7 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
                         else "Interrogation de SAFRAN", value = 0)
     progres <- function(f, m) barre$set(value = f, detail = m)
 
-    don <- tryCatch(
+    charger <- function(annees) tryCatch(
       if (en_station) {
         station_charger(src$station, p$lon, p$lat, annees, progres = progres)
       } else {
@@ -136,6 +136,18 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
         messages(paste("Erreur inattendue :", conditionMessage(e)))
         NULL
       })
+    don <- charger(annees)
+
+    # Station en mode rapide sans la moindre mesure des annees que le jeu ne porte pas (station
+    # arretee depuis la publication) : rien a ajouter a la base, mais le bilan a besoin de jours.
+    # On charge alors toute la serie plutot que d'echouer.
+    if (!is.null(rap) && en_station && !is.null(don) && !nrow(don)) {
+      shiny::showNotification(
+        "Mode rapide : aucune mesure récente pour cette station. Chargement complet.",
+        type = "warning", duration = 10)
+      rap <- NULL
+      don <- charger(annees_a_charger())
+    }
 
     if (is.null(don)) return()
 
@@ -155,7 +167,11 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
     # Altitude du point (IGN) : la grille SAFRAN et la station n'ont pas la meme
     # altitude que lui. Conservee avec les donnees pour le bilan, le rapport et
     # les exports (D5).
-    if (!is.null(rap)) attr(don, "base") <- rap[c("jeu", "i", "note")]
+    if (!is.null(rap)) {
+      # Une station garde la qualite de TOUTES ses annees, pas des seules annees chargees.
+      if (en_station) don <- base_station_attributs(don, rap)
+      attr(don, "base") <- rap[c("jeu", "i", "note")]
+    }
     alt_pt <- suppressWarnings(as.numeric(src$alt %||% NA_real_))
     if (length(alt_pt) == 1L && is.finite(alt_pt)) attr(don, "altitude_point") <- alt_pt
 

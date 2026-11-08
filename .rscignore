@@ -9,7 +9,9 @@ corriger_casse.r
 tests
 outils
 cache
-maquette_interface.html
+docs
+NEWS.md
+news.md
 README.md
 readme.md
 .gitignore

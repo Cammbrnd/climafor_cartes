@@ -972,7 +972,9 @@ donnees_pour_indicateur <- function(don, ind) {
   if (!length(groupes)) return(don)
   ok <- Reduce(intersect, lapply(groupes, function(g) valides[[g]]))
   d <- copier_attributs_source(don[don$annee %in% ok, , drop = FALSE], don)
-  attr(d, "annees_exclues") <- sort(setdiff(unique(don$annee), ok))
+  # Les annees de la qualite (qualite_annuelle) sont celles de la serie : en mode rapide, `don` ne
+  # porte que les jours charges, et la note « annee ecartee » doit nommer aussi les annees publiees.
+  attr(d, "annees_exclues") <- sort(setdiff(unique(c(don$annee, attr(don, "qualite_annuelle")$annee)), ok))
   d
 }
 
@@ -1023,23 +1025,28 @@ calculer_un_indicateur <- function(don, ind, ctx) {
     return(vide("aucune_donnee", "Aucune donnée chargée pour ce point."))
   }
 
-  manque <- colonnes_manquantes(ind, don)
-  if (length(manque)) {
-    return(vide("variable_absente", sprintf(
-      "Indicateur non calculable avec cette source : %s non mesuré(e).",
-      paste(vapply(manque, libelle_colonne, character(1)), collapse = " ; "))))
-  }
-
-  d <- donnees_pour_indicateur(don, ind)
-  if (!nrow(d)) {
-    return(vide("aucune_annee_valide", sprintf(
-      "Aucune année n'est assez renseignée (au moins %.0f %% des jours) pour cet indicateur.",
-      100 * CONFIG$stations$seuil_annee)))
-  }
-
   # Mode rapide : les donnees ne portent que les jours charges, et la base precalculee fournit
   # le reste (src/utils_base.R). Sans cet attribut, le calcul est celui de toujours.
   rap <- attr(don, "base")
+  # Pour une STATION en mode rapide, « variable non mesuree » et « aucune annee valide » ne se
+  # jugent pas sur les seuls jours charges (un capteur de vent en panne cette annee a mesure le
+  # vent les annees precedentes) : une colonne absente des jours charges n'est « non mesuree »
+  # que si la base n'en a jamais eu non plus (base_station_colonnes_absentes).
+  station_rapide <- !is.null(rap) && base_est_station(rap$jeu)
+
+  manque <- colonnes_manquantes(ind, don)
+  if (station_rapide) manque <- base_station_colonnes_absentes(manque, don)
+  texte_manque <- function() sprintf(
+    "Indicateur non calculable avec cette source : %s non mesuré(e).",
+    paste(vapply(manque, libelle_colonne, character(1)), collapse = " ; "))
+  if (length(manque)) return(vide("variable_absente", texte_manque()))
+
+  d <- donnees_pour_indicateur(don, ind)
+  texte_sans_annee <- function() sprintf(
+    "Aucune année n'est assez renseignée (au moins %.0f %% des jours) pour cet indicateur.",
+    100 * CONFIG$stations$seuil_annee)
+  if (!nrow(d) && !station_rapide) return(vide("aucune_annee_valide", texte_sans_annee()))
+
   res <- tryCatch(if (is.null(rap)) ind$calc(d, ctx) else base_calculer(d, ind, ctx, rap), error = function(e) {
     warning(sprintf("Indicateur '%s' en échec : %s", ind$id, conditionMessage(e)),
             call. = FALSE)
@@ -1049,6 +1056,11 @@ calculer_un_indicateur <- function(don, ind, ctx) {
       detail = conditionMessage(e))
   })
   if (!is.data.frame(res) || !nrow(res)) {
+    # Station en mode rapide : la base n'a rien non plus. On dit alors pourquoi, comme le fait le
+    # chargement complet.
+    if (station_rapide && identical(attr(res, "raison"), "vide") && !nrow(d)) {
+      return(vide("aucune_annee_valide", texte_sans_annee()))
+    }
     if (!is.null(attr(res, "raison"))) return(res)
     return(vide("vide", "Aucun résultat pour cet indicateur sur la période choisie."))
   }

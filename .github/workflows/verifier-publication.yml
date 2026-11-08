@@ -62,7 +62,15 @@ jobs:
             echo "stations : $(jq '.n_stations' stations.json), annees $(jq '.annees | first' stations.json)-$(jq '.annees | last' stations.json), genere le $(jq -r '.genere_le' stations.json)"
             echo "lignes de la table : $(jq '.stations.id | length' stations.json)"
             NS=0; KOS=0
-            for f in $(jq -r '.couches[].fichier' stations.json | sort -u); do
+            # Base precalculee des stations (v2.3) : ses fichiers s'ajoutent a ceux des couches, et
+            # son empreinte de reglages doit etre celle de la base des mailles (meta.json).
+            echo "base des stations : $(jq '(.base // []) | length' stations.json) fichiers, $(jq '(.base_parametres.vides // []) | length' stations.json) entrees vides (aucune station ne les renseigne)"
+            EMP_ST=$(jq -r '.base_parametres.empreinte // ""' stations.json); EMP_MA=$(jq -r '.base_parametres.empreinte // ""' meta.json)
+            if [ -n "$EMP_ST" ] && [ -n "$EMP_MA" ] && [ "$EMP_ST" != "$EMP_MA" ]; then
+              echo "EMPREINTE DIFFERENTE entre meta.json et stations.json : le mode rapide des stations ne servirait pas"
+              KO=$((KO+1))
+            fi
+            for f in $(jq -r '(.couches[], (.base // [])[]) | .fichier' stations.json | sort -u); do
               NS=$((NS+1))
               R=$(curl -sS -o /tmp/f.bin -w "%{http_code} %{size_download}" -H "Origin: https://exemple.test" "${ADRESSE}${f}")
               CODE=${R%% *}

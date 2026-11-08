@@ -99,6 +99,7 @@ FICHIERS_R <- c(
   "src/utils_carte.R",            # 6e. fichiers de la carte : validation, transport
   "src/utils_comparer.R",         # 6f. comparaison de lieux importes (v1.9)
   "src/utils_base.R",             # 6f1. bilan d'un point lu dans la base precalculee (v2.2)
+  "src/carte_couches_base_stations.R", # 6f1b. base precalculee des stations : qualite, jours manquants, references (v2.2)
   "src/utils_stations_publiees.R",# 6f2. stations publiees a cote des mailles (v2.1)
   "src/utils_comparer_duo.R",     # 6f3. comparaison de deux lieux : maille, station, departement (v2.1)
   "src/utils_profils.R",          # 6g. profils et acces par identifiant (v2.0)
