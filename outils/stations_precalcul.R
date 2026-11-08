@@ -18,6 +18,12 @@
 #   - Toutes les stations ne sont pas publiees : au moins CONFIG$stations$publie$annees_min
 #     annees valides, et une derniere mesure de moins de inactive_max_j jours.
 #
+# LA BASE DU MODE RAPIDE (v2.3, parametre `base`). En plus des grandeurs, chaque station
+# publie ce dont le bilan a besoin pour ne telecharger que l'annee en cours : validite et part
+# de jours renseignes par annee, jours manquants, references par indicateur (voir
+# src/carte_couches_base_stations.R). Ces entrees suivent le meme chemin d'ecriture que les
+# grandeurs, mais figurent dans `base` de stations.json, pas dans `couches` : la carte ne les voit pas.
+#
 # DEUX ETAPES, comme pour les mailles, pour repartir le travail :
 #   1. stations_construire()  traite des DEPARTEMENTS et ecrit une part (.rds) ;
 #   2. stations_assembler()   reunit les parts, ecrit stations.json et s_<cle>.bin.gz, les

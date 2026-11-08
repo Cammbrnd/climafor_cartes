@@ -25,6 +25,17 @@
 # porte pas toute la base, base_applicable() le dit et l'indicateur n'est PAS calcule en
 # mode rapide : on ne montre jamais un nombre calcule avec d'autres reglages que ceux affiches.
 #
+# LES STATIONS (v2.3). Meme principe, mais une station a des trous : le bilan ecarte d'abord
+# les annees dont moins de 95 % des jours sont renseignes. Le jeu de stations publie donc, en
+# plus, la validite de chaque annee, les jours manquants et des references PAR INDICATEUR
+# (src/carte_couches_base_stations.R). Cote lecture :
+#   base_ouvrir_station()           retrouve la station dans le jeu publie ;
+#   base_station_attributs()        complete la qualite des seules annees chargees par celle de
+#                                   TOUTES les annees (c'est elle qui fait ecarter les memes annees) ;
+#   base_station_colonnes_absentes() juge « variable non mesuree » sur la base, pas sur l'annee
+#                                   chargee (un capteur arrete cette annee a mesure avant).
+# tests/test_v22_stations.R compare les deux chemins sur des stations aux trous reels.
+#
 # CE QUE LE MODE RAPIDE NE FAIT PAS. La synthese chiffree « a periode egale » compare les
 # jours de l'annee en cours aux memes jours de chaque annee de reference : elle exige la
 # serie journaliere de la reference, qu'aucun jeu annuel ne remplace. Elle demande donc le
