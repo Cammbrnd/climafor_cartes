@@ -1409,7 +1409,7 @@ Le navigateur (onglet Carte) ne lit pas ce champ : **la carte est inchangée**.
 
 | Quoi | Combien | Pour quoi faire |
 |---|---|---|
-| **Colonnes annuelles** | 23 fichiers `c_b_<indicateur>_<colonne>.bin.gz` | les colonnes des tableaux annuels que la carte ne montre pas (jours de gel sévère, date du dernier gel, pluie liquide et solide, durée de la plus longue vague…) |
+| **Colonnes annuelles** | 24 fichiers `c_b_<indicateur>_<colonne>.bin.gz` | les colonnes des tableaux annuels que la carte ne montre pas (jours de gel sévère, date du dernier gel, pluie liquide et solide, durée de la plus longue vague…) |
 | **Normales mensuelles** | 6 fichiers `c_r_mois_*.bin.gz`, 12 valeurs par maille | profils du mois (précipitations, température, neige, ETP, déficit de vapeur, vent) |
 | **Normale du jour** | 2 fichiers `c_r_jour_*.bin.gz`, 366 valeurs par maille | courbe de température de l'année, vagues de chaleur de l'année en cours |
 | **Seuil de vent soutenu** | 1 fichier `c_r_seuil_ff.bin.gz`, 1 valeur par maille | percentile 95 du vent de la référence |
