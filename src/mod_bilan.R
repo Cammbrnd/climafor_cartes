@@ -53,6 +53,9 @@ mod_bilan_ui <- function(id) {
     # -- Bandeau d'identification (visible a l'impression seulement) ---------
     shiny::uiOutput(ns("bandeau")),
 
+    # -- Mode rapide : base precalculee (v2.2) ---------------------------------
+    shiny::uiOutput(ns("mode_rapide")),
+
     # -- Qualite de la serie (station) ---------------------------------------
     shiny::uiOutput(ns("qualite")),
 
@@ -304,8 +307,10 @@ mod_bilan_export_server <- function(output, ns, donnees, resultats, ctx, lieu) {
     shiny::div(
       class = "cf-export",
       shiny::span(class = "cf-export__legende", "Exporter ce bilan"),
-      shiny::downloadButton(ns("csv_synthese"), "Synthèse chiffrée (CSV)",
-                            class = "cf-btn cf-btn--sec"),
+      # Pas de synthese a periode egale en mode rapide : pas de bouton qui echouerait.
+      if (!base_active(donnees()))
+        shiny::downloadButton(ns("csv_synthese"), "Synthèse chiffrée (CSV)",
+                              class = "cf-btn cf-btn--sec"),
       shiny::downloadButton(ns("csv_series"), "Toutes les séries annuelles (CSV)",
                             class = "cf-btn cf-btn--sec"))
   })
@@ -391,6 +396,11 @@ mod_bilan_server <- function(id, donnees, ctx, lieu, mobile = shiny::reactive(FA
       qualite_serie_ui(q, attr(don, "station"), ctx()$ref_label)
     })
 
+    output$mode_rapide <- shiny::renderUI({
+      don <- donnees(); shiny::req(don, nrow(don) > 0)
+      base_avis_ui(don)
+    })
+
     # -- Bandeau (impression) -------------------------------------------------
     output$bandeau <- shiny::renderUI({
       p <- lieu(); c <- ctx(); don <- donnees()
@@ -401,9 +411,9 @@ mod_bilan_server <- function(id, donnees, ctx, lieu, mobile = shiny::reactive(FA
         shiny::h2(class = "cf-bandeau__titre", p$nom),
         shiny::p(
           class = "cf-bandeau__meta",
-          sprintf("%s N, %s E — référence %s — année comparée %d — série %d à %d — données jusqu'au %s",
+          sprintf("%s N, %s E — référence %s — année comparée %d — %s — données jusqu'au %s",
                   fmt_fr(p$lat, 4), fmt_fr(p$lon, 4), c$ref_label, c$courante,
-                  min(don$annee), max(don$annee),
+                  serie_libelle(don),
                   format(derniere, "%d/%m/%Y"))
         )
       )

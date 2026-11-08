@@ -19,7 +19,7 @@ CONFIG <- list(
   app = list(
     nom          = "ClimaFor",
     sous_titre   = "Bilan météorologique et climatique pour la gestion forestière",
-    version     = "2.1.0",
+    version     = "2.2.0",
     organisme    = "DSF — Département de la santé des forêts",
     annee        = format(Sys.Date(), "%Y"),
     # Detail technique d'un indicateur en echec, affiche sur sa carte (message

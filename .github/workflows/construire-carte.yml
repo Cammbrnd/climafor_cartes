@@ -53,6 +53,11 @@ on:
       stations_fragments:
         description: "Nombre de fragments pour les stations (jobs). Chacun lit les fichiers d'environ 25 departements."
         default: "4"
+      base:
+        description: "Calculer aussi la base du bilan (mode rapide) avec les mailles (oui/non). Non : le site publie n'aura pas de mode rapide."
+        type: choice
+        options: ["oui", "non"]
+        default: "oui"
 
 # Un seul calcul a la fois : deux calculs simultanes doubleraient la charge sur les serveurs
 # de donnees (Meteo-France ou GeoSAS).
@@ -106,9 +111,10 @@ jobs:
           DEBUT: ${{ inputs.annee_debut }}
           FIN: ${{ inputs.annee_fin }}
           NF: ${{ inputs.fragments }}
+          BASE: ${{ inputs.base }}
         run: |
           Rscript outils/carte_cli.R fragment source="$SOURCE" mailles="$MAILLES" \
-            annee_debut="$DEBUT" annee_fin="$FIN" \
+            annee_debut="$DEBUT" annee_fin="$FIN" base="$BASE" \
             fragment=${{ matrix.fragment }} fragments="$NF" sortie=parts
 
       - uses: actions/upload-artifact@v4
@@ -205,6 +211,7 @@ jobs:
           DEBUT: ${{ inputs.annee_debut }}
           FIN: ${{ inputs.annee_fin }}
           STATIONS: ${{ inputs.stations }}
+          BASE: ${{ inputs.base }}
         run: |
           if [ "$SOURCE" = "demo" ]; then
             TEXTE="DONNEES FICTIVES (jeu de démonstration, pas du climat)"
@@ -214,7 +221,7 @@ jobs:
             TEXTE="Réanalyse SAFRAN-ISBA (Météo-France), via GeoSAS INRAE"
           fi
           Rscript outils/carte_cli.R assembler source_texte="$TEXTE" mailles="$MAILLES" \
-            annee_debut="$DEBUT" annee_fin="$FIN" parts=parts sortie=public
+            annee_debut="$DEBUT" annee_fin="$FIN" base="$BASE" parts=parts sortie=public
           Rscript outils/carte_cli.R verifier dossier=public
           if [ "$STATIONS" = "oui" ]; then
             if [ "$SOURCE" = "demo" ]; then

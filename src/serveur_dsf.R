@@ -75,7 +75,8 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
              annees <= as.integer(format(Sys.Date(), "%Y"))]
   }
 
-  lancer_analyse <- function() {
+  # `complet` : charger toute la serie meme si le mode rapide est choisi (bouton du bilan).
+  lancer_analyse <- function(complet = FALSE) {
 
     p <- lieu()
     if (is.null(p)) {
@@ -92,11 +93,25 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
     src <- source_donnees()
     en_station <- !is.null(src) && identical(src$type, "station")
 
+    # Mode rapide (v2.2) : la base precalculee fournit les annees publiees, SAFRAN ne donne que
+    # le reste. Jamais pour une station ; et seulement si la base sert pour ces reglages, sinon
+    # chargement complet, avec la raison dite.
+    rap <- NULL
+    if (!en_station && !isTRUE(complet) && identical(parametres$mode(), "rapide")) {
+      ouv <- base_ouvrir(p$lon, p$lat)
+      ap <- if (isTRUE(ouv$ok)) base_applicable(c0, ouv$jeu) else ouv
+      if (isTRUE(ouv$ok) && isTRUE(ap$ok)) rap <- ouv
+      else shiny::showNotification(
+        paste("Mode rapide indisponible :", ap$message, "Chargement complet."),
+        type = "warning", duration = 10)
+    }
+    if (!is.null(rap)) annees <- base_annees_a_charger(rap$jeu, annees, c0$courante)
+
     # Limites d'usage (audit V2). Le compteur du processus ne s'applique qu'aux
     # analyses qui iront chercher des donnees a distance : SAFRAN dont toutes les
     # annees ne sont pas en cache, ou une station (sa serie n'est pas predictible
     # sans lire les fichiers).
-    distant <- en_station || tryCatch(
+    distant <- en_station || !is.null(rap) || tryCatch(
       estimer_chargement(p$lon, p$lat, annees)$n_telecharger > 0,
       error = function(e) TRUE)
     lim <- limite_controler("analyses", session, distant = distant)
@@ -140,6 +155,7 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
     # Altitude du point (IGN) : la grille SAFRAN et la station n'ont pas la meme
     # altitude que lui. Conservee avec les donnees pour le bilan, le rapport et
     # les exports (D5).
+    if (!is.null(rap)) attr(don, "base") <- rap[c("jeu", "i", "note")]
     alt_pt <- suppressWarnings(as.numeric(src$alt %||% NA_real_))
     if (length(alt_pt) == 1L && is.finite(alt_pt)) attr(don, "altitude_point") <- alt_pt
 
@@ -171,6 +187,9 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
   }
 
   shiny::observeEvent(input$lancer, lancer_analyse())
+  # Depuis le bilan ou le rapport en mode rapide : recharger la serie entiere.
+  shiny::observeEvent(input$charger_complet, lancer_analyse(complet = TRUE))
+  shiny::observeEvent(input$charger_complet_rapport, lancer_analyse(complet = TRUE))
 
   # -- Ouverture d'un lien partagé ---------------------------------------------
   # L'interface a déjà reçu les périodes et les seuils du lien (ui_construire).
@@ -267,7 +286,8 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
       est <- tryCatch(estimer_chargement(p$lon, p$lat, annees_a_charger()),
                       error = function(e) NULL)
     }
-    etat_chargement_ui(don, p, src, perimee, est)
+    etat_chargement_ui(don, p, src, perimee, est,
+                       rapide = identical(parametres$mode(), "rapide") && !identical(src$type, "station"))
   })
 
   # -- Alerte si la référence n'est pas couverte ----------------------------
@@ -279,7 +299,7 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
     manquantes <- setdiff(c0$ref, unique(don$annee))
     # Pour une station, la couverture de la référence est jugée par la carte de
     # qualité du bilan (années valides, pas seulement présentes).
-    if (length(manquantes) > 2 && is.null(attr(don, "station"))) {
+    if (length(manquantes) > 2 && is.null(attr(don, "station")) && !base_active(don)) {
       shiny::showNotification(
         sprintf(paste("%d année(s) de la référence %s ne sont pas chargées.",
                       "Élargissez la série dans l'onglet Paramètres, sinon la",

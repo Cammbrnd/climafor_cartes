@@ -134,7 +134,8 @@ texte_source <- function(don) {
   paste0("réanalyse SAFRAN-ISBA (Météo-France), maille de 8 km",
          if (!is.null(alt) && is.finite(alt))
            sprintf(" ; altitude du point : %.0f m (l'altitude moyenne de la maille n'est pas fournie par la source)", alt)
-         else "")
+         else "",
+         if (base_active(don)) paste0(" ; ", base_texte_source(don)) else "")
 }
 
 #' Ligne « Source » au pied d'un export image : source, licence, version, date.

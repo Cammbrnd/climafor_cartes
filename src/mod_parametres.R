@@ -147,7 +147,17 @@ mod_parametres_ui <- function(id, etat = NULL) {
                        "secondes grâce au cache. La plage doit couvrir la période de",
                        "référence choisie. L'Accueil annonce, avant de lancer l'analyse,",
                        "combien d'années restent à télécharger.")),
-      shiny::checkboxInput(ns("cache"), "Utiliser le cache local", value = TRUE)
+      shiny::checkboxInput(ns("cache"), "Utiliser le cache local", value = TRUE),
+      shiny::radioButtons(
+        ns("mode_chargement"), "Mode de chargement (grille SAFRAN)",
+        choices = c("Complet : toute la série, année par année (référence)" = "complet",
+                    "Rapide : base précalculée et années récentes" = "rapide"),
+        selected = "complet", width = "100%"),
+      shiny::div(class = "cf-aide", paste(
+        "Le mode rapide lit dans le jeu publié les années déjà calculées pour la maille du",
+        "point, et ne demande à SAFRAN que l'année en cours et l'année comparée. Il sert tant que",
+        "la référence, la fenêtre de saison et les seuils sont ceux par défaut. La synthèse chiffrée",
+        "à période égale et le rapport demandent la série complète."))
     ),
 
     # -- Seuils, generes automatiquement --------------------------------------
@@ -333,6 +343,7 @@ mod_parametres_server <- function(id) {
     list(
       seuils = seuils,
       annees = shiny::reactive(input$annees_charge),
+      mode   = shiny::reactive(input$mode_chargement %||% "complet"),
       # Reactif : les phrases qui annoncent « X annees en cache » en dependent.
       cache  = shiny::reactive(isTRUE(input$cache))
     )

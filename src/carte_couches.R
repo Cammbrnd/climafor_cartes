@@ -35,9 +35,12 @@
 
 carte_couche <- function(cle, source, colonne, titre, unite, decimales, stock,
                          palette, ecart, normale = NULL, famille = NULL) {
+  # `base`, `type`, `lignes`, `calc` : propres a la base precalculee (carte_couches_base.R).
+  # Une couche de la carte est toujours une colonne annuelle, hors de la base.
   list(cle = cle, source = source, colonne = colonne, normale = normale,
        titre = titre, unite = unite, decimales = decimales, stock = stock,
-       palette = palette, ecart = ecart, famille = famille)
+       palette = palette, ecart = ecart, famille = famille,
+       base = FALSE, type = "annuel", lignes = NULL, calc = NULL)
 }
 
 CARTE_PALETTES <- c("chaud", "eau", "vert", "violet", "froid")

@@ -212,9 +212,9 @@ contexte_ui <- function(don, p, c0) {
       shiny::div(class = "cf-contexte__lieu", cf_icone("position"), p$nom),
       shiny::div(class = "cf-contexte__meta", shiny::HTML(sprintf(
         paste("%s · référence <b>%s</b> · année comparée <b>%d</b>",
-              "· série %d-%d · données jusqu'au %s"),
+              "· %s · données jusqu'au %s"),
         origine, c0$ref_label, c0$courante,
-        min(don$annee), max(don$annee),
+        serie_libelle(don),
         format(attr(don, "derniere_mesure") %||% max(don$date), "%d/%m/%Y"))))
     ),
     shiny::div(
@@ -268,9 +268,12 @@ messages_service_ui <- function(msg, bloquant) {
 #' (`CONFIG$api$duree_lot_s`), jamais presentee comme une mesure.
 #' @param en_station TRUE pour une station Meteo-France.
 #' @param est sortie de estimer_chargement(), ou NULL si elle n'a pu etre faite.
+#' @param rapide TRUE en mode rapide : l'estimation par annee ne s'applique plus.
 #' @keywords internal
-phrase_attente <- function(en_station, est) {
+phrase_attente <- function(en_station, est, rapide = FALSE) {
   if (en_station) return("Premier chargement : de quelques secondes à une minute.")
+  if (rapide) return(paste("Mode rapide : base précalculée et années récentes,",
+                           "quelques secondes si la base est disponible."))
   if (is.null(est)) return("Premier chargement : environ une minute.")
   if (est$n_telecharger == 0L) {
     return(sprintf("%d années déjà en cache : chargement immédiat.", est$n_total))
@@ -287,9 +290,10 @@ phrase_attente <- function(en_station, est) {
 #' charge. Le bouton n'est jamais actionne a l'aveugle.
 #' @param don donnees (ou NULL) ; @param p point (ou NULL) ; @param src source
 #'   choisie (liste type/station, ou NULL) ; @param perimee TRUE si la selection a
-#'   change depuis l'analyse ; @param est estimation de chargement (ou NULL).
+#'   change depuis l'analyse ; @param est estimation de chargement (ou NULL) ;
+#'   @param rapide TRUE si le mode rapide est demande.
 #' @keywords internal
-etat_chargement_ui <- function(don, p, src, perimee, est) {
+etat_chargement_ui <- function(don, p, src, perimee, est, rapide = FALSE) {
   if (is.null(don) || !nrow(don) || perimee) {
     if (is.null(p)) {
       return(shiny::span(class = "cf-mention",
@@ -300,7 +304,7 @@ etat_chargement_ui <- function(don, p, src, perimee, est) {
                else if (!is.null(src)) " · grille SAFRAN" else ""
     return(shiny::span(class = "cf-mention",
                        sprintf("Prêt : %s%s. %s", p$nom, origine,
-                               phrase_attente(en_station, est))))
+                               phrase_attente(en_station, est, rapide))))
   }
   shiny::div(
     class = "cf-etat cf-etat--ok",

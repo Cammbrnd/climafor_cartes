@@ -48,6 +48,7 @@ mod_rapport_ui <- function(id) {
   htmltools::tagList(
 
     shiny::h2(class = "cf-titre-section", "Rapport"),
+    shiny::uiOutput(ns("mode_rapide")),
     shiny::p(class = "cf-chapeau",
              paste("Le rapport reprend le point sélectionné, la période de référence",
                    "retenue et les indicateurs cochés, accompagnés de leur lecture",
@@ -192,6 +193,11 @@ mod_rapport_ui <- function(id) {
 mod_rapport_server <- function(id, donnees, resultats, ctx, lieu) {
   shiny::moduleServer(id, function(input, output, session) {
 
+    output$mode_rapide <- shiny::renderUI({
+      don <- donnees(); shiny::req(don, nrow(don) > 0)
+      base_avis_ui(don, id = "charger_complet_rapport")
+    })
+
     # -- Raccourcis de selection ---------------------------------------------
     tous_les_ids <- vapply(indicateurs_ordonnes(), function(i) i$id, character(1))
 
@@ -289,6 +295,12 @@ mod_rapport_server <- function(id, donnees, resultats, ctx, lieu) {
       don <- donnees()
       if (is.null(don) || !nrow(don) || is.null(resultats())) {
         shiny::showNotification("Lancez d'abord une analyse.", type = "warning")
+        return()
+      }
+      # Le rapport reprend la synthese a periode egale, qui exige la serie journaliere.
+      if (base_active(don)) {
+        shiny::showNotification(paste("Le rapport demande la série complète : chargez-la",
+                                      "(bouton en tête de cet onglet)."), type = "warning", duration = 10)
         return()
       }
       if (!length(indicateurs_choisis())) {

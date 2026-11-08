@@ -36,6 +36,14 @@ carte_famille <- function(couche) {
   if (is.null(ind)) NA_character_ else ind$famille
 }
 
+#' Nombre de lignes d'une entree de la base : l'annee pour une colonne annuelle, `lignes`
+#' pour une reference.
+#' @param n_annees nombre d'annees du jeu.
+#' @keywords internal
+base_nb_lignes <- function(k, n_annees) {
+  if (identical(k$type, "ref")) as.integer(k$lignes) else as.integer(n_annees)
+}
+
 #' Les couches d'une maille.
 #'
 #' @param don tableau journalier de la maille (format safran_charger()).
@@ -54,7 +62,8 @@ carte_famille <- function(couche) {
 carte_calculer_maille <- function(don, ctx, annees, couches = CARTE_COUCHES,
                                   calculer = NULL, garde_jours = TRUE) {
   if (is.null(calculer)) calculer <- function(s, don, ctx) INDICATEURS[[s]]$calc(don, ctx)
-  sources <- unique(vapply(couches, function(k) k$source, ""))
+  # Les references de la base (type « ref ») ne passent pas par un indicateur : elles ont leur calcul.
+  sources <- unique(stats::na.omit(vapply(couches, function(k) k$source %||% NA_character_, "")))
   # Chaque indicateur n'est calcule qu'une fois, meme s'il porte plusieurs couches.
   res <- stats::setNames(lapply(sources, function(s) {
     tryCatch(calculer(s, don, ctx), error = function(e) NULL)
@@ -69,17 +78,26 @@ carte_calculer_maille <- function(don, ctx, annees, couches = CARTE_COUCHES,
                 else rep(FALSE, length(annees))
 
   lapply(couches, function(k) {
+    if (identical(k$type, "ref")) {
+      v <- tryCatch(as.numeric(k$calc(don, ctx)), error = function(e) NULL)
+      if (length(v) != k$lignes) v <- rep(NA_real_, k$lignes)
+      v[!is.finite(v)] <- NA_real_
+      return(list(valeurs = v, normale = NA_real_, pente = NA_real_, signif = FALSE))
+    }
     vide <- list(valeurs = rep(NA_real_, length(annees)), normale = NA_real_,
                  pente = NA_real_, signif = FALSE)
     r <- res[[k$source]]
     if (is.null(r) || !nrow(r) || !(k$colonne %in% names(r))) return(vide)
 
     pos <- match(annees, r$annee)
-    v <- r[[k$colonne]][pos]
+    x <- if (is.function(k$extraire)) k$extraire(r) else r[[k$colonne]]
+    v <- x[pos]
     # Une annee incomplete (SAFRAN publie avec retard) n'est pas cartographiee :
     # la comparer a des annees pleines ferait une carte fausse.
     v[r$partielle[pos] %in% TRUE | incomplete | !is.finite(v)] <- NA_real_
 
+    # La base ne cartographie rien : ni normale ni tendance a calculer (et un facteur n'en a pas).
+    if (isTRUE(k$base)) return(list(valeurs = v, normale = NA_real_, pente = NA_real_, signif = FALSE))
     normale <- if (!is.null(k$normale)) r[[k$normale]][1]
                else stats_ref(r, k$colonne, ctx)$normale
     t <- tendance(annees, v, unite = k$unite, dec = k$decimales)
@@ -94,15 +112,19 @@ carte_calculer_maille <- function(don, ctx, annees, couches = CARTE_COUCHES,
 #'
 #' @param lire_maille function(i, lon, lat) -> tableau journalier ou NULL.
 #' @param fichier si non NULL, la part est ecrite en .rds a cet endroit.
+#' @param base colonnes et references de la base precalculee (BASE_COUCHES), calculees
+#'   avec les couches mais publiees a part ; list() = pas de base.
 #' @return la part (liste), de façon invisible.
 carte_construire <- function(lire_maille, lon, lat, annees, indices,
                              couches = CARTE_COUCHES, fichier = NULL,
-                             progres_tous = 200L, calculer = NULL, garde_jours = TRUE) {
+                             progres_tous = 200L, calculer = NULL, garde_jours = TRUE,
+                             base = list()) {
   ctx <- carte_ctx(annees)
   na <- length(annees); m <- length(indices)
+  couches <- c(couches, base)
   part <- list(
     indices = as.integer(indices), annees = annees,
-    valeurs = lapply(couches, function(k) matrix(NA_real_, na, m)),
+    valeurs = lapply(couches, function(k) matrix(NA_real_, base_nb_lignes(k, na), m)),
     normale = lapply(couches, function(k) rep(NA_real_, m)),
     pente   = lapply(couches, function(k) rep(NA_real_, m)),
     signif  = lapply(couches, function(k) rep(FALSE, m)),
@@ -182,13 +204,15 @@ carte_domaines <- function(valeurs, normale, pente) {
 carte_assembler <- function(parts, lon, lat, annees, source, dossier,
                             couches = CARTE_COUCHES, taux_echec_max = 0.01,
                             genere_le = format(Sys.Date()), annee_partielle = NULL,
-                            part_min_annee = 0.95, l2e = NULL, note_etp = "") {
+                            part_min_annee = 0.95, l2e = NULL, note_etp = "", base = list()) {
   if (is.character(parts)) parts <- lapply(parts, readRDS)
   n <- length(lon); na <- length(annees)
   dir.create(dossier, recursive = TRUE, showWarnings = FALSE)
+  carte <- couches
+  couches <- c(couches, base)
 
   agr <- list(
-    valeurs = lapply(couches, function(k) matrix(NA_real_, na, n)),
+    valeurs = lapply(couches, function(k) matrix(NA_real_, base_nb_lignes(k, na), n)),
     normale = lapply(couches, function(k) rep(NA_real_, n)),
     pente   = lapply(couches, function(k) rep(NA_real_, n)),
     signif  = lapply(couches, function(k) rep(FALSE, n)))
@@ -218,21 +242,40 @@ carte_assembler <- function(parts, lon, lat, annees, source, dossier,
   # SAFRAN publie avec retard : la derniere annee demandee peut ne pas etre encore
   # complete. Les dernieres annees presque vides sont retirees (et le disent), plutot
   # que publiees comme une carte quasi blanche.
+  # Seules les couches de la carte decident des annees retirees : la base suit.
   renseigne <- vapply(seq_len(na), function(k) {
-    mean(vapply(names(couches), function(cle) mean(is.finite(agr$valeurs[[cle]][k, ])), 0))
+    mean(vapply(names(carte), function(cle) mean(is.finite(agr$valeurs[[cle]][k, ])), 0))
   }, 0)
   garde <- na
   while (garde > 2L && renseigne[garde] < part_min_annee * max(renseigne)) garde <- garde - 1L
   retirees <- if (garde < na) annees[(garde + 1L):na] else integer(0)
   if (length(retirees)) {
     annees <- annees[seq_len(garde)]
-    for (cle in names(couches)) agr$valeurs[[cle]] <- agr$valeurs[[cle]][seq_len(garde), , drop = FALSE]
+    for (cle in names(couches)) {
+      if (!identical(couches[[cle]]$type, "ref")) {
+        agr$valeurs[[cle]] <- agr$valeurs[[cle]][seq_len(garde), , drop = FALSE]
+      }
+    }
   }
 
   ctx <- carte_ctx(annees)
+
+  # La base : un fichier par entree, meme format que les couches, mais aucune bornes de
+  # couleur (rien ne s'en affiche) et un champ meta a part que le navigateur ignore.
+  meta_base <- list()
+  for (cle in names(base)) {
+    k <- base[[cle]]
+    carte_ecrire_couche(dossier, k, agr$normale[[cle]], agr$pente[[cle]],
+                        agr$signif[[cle]], agr$valeurs[[cle]])
+    meta_base[[length(meta_base) + 1L]] <- c(
+      list(cle = k$cle, fichier = sprintf("c_%s.bin.gz", k$cle), type = k$type, stock = k$stock),
+      if (identical(k$type, "ref")) list(lignes = k$lignes)
+      else list(source = k$source, colonne = k$colonne))
+  }
+
   meta_couches <- list()
-  for (cle in names(couches)) {
-    k <- couches[[cle]]
+  for (cle in names(carte)) {
+    k <- carte[[cle]]
     dom <- carte_domaines(agr$valeurs[[cle]], agr$normale[[cle]], agr$pente[[cle]])
     carte_ecrire_couche(dossier, k, agr$normale[[cle]], agr$pente[[cle]],
                         agr$signif[[cle]], agr$valeurs[[cle]])
@@ -257,7 +300,10 @@ carte_assembler <- function(parts, lon, lat, annees, source, dossier,
     schema = CONFIG$carte$schema, annees = annees, n_mailles = n,
     grille = "grille.json", reference = ctx$ref_label, genere_le = genere_le,
     source = source, annee_partielle = annee_partielle,
-    couches = meta_couches))
+    couches = meta_couches,
+    base = if (length(meta_base)) meta_base,
+    # Reglages dont depend la base : si l'utilisateur en change, elle ne vaut plus (utils_base.R).
+    base_parametres = if (length(meta_base)) list(empreinte = base_empreinte(ctx))))
 
   # Controle final : ce qui est ecrit doit passer la validation de l'application.
   lu <- carte_lire_meta_locale(dossier)

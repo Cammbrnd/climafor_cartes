@@ -114,7 +114,45 @@ carte_meta_valider <- function(meta) {
       if (length(st) != 1L || is.na(st) || st < 0L || st > 4L) ajouter(sprintf("%s : précision de stockage invalide.", etiq))
     }
   }
+  err <- c(err, carte_base_valider(meta[["base"]], meta[["base_parametres"]]))
   list(ok = !length(err), erreurs = err)
+}
+
+#' Verifie le champ facultatif `base` de meta.json (src/carte_couches_base.R).
+#'
+#' Facultatif : un jeu publie avant la v2.2 n'en a pas, et une entree que cette version ne
+#' connait pas est ignoree a la lecture (un jeu plus recent reste lisible). Une entree
+#' connue doit en revanche etre exacte : son nom de fichier, son type, sa precision et son
+#' nombre de lignes pilotent la lecture binaire.
+#' @return character : les erreurs (vide si tout va bien).
+#' @keywords internal
+carte_base_valider <- function(base, parametres = NULL) {
+  if (is.null(base)) return(character(0))
+  if (!is.list(base)) return("Base précalculée mal formée.")
+  err <- character(0)
+  emp <- parametres[["empreinte"]]
+  if (!is.null(parametres) && (!is.character(emp) || length(emp) != 1L || is.na(emp) || nchar(emp) > 3000L)) {
+    err <- c(err, "Réglages de la base invalides.")
+  }
+  cles <- vapply(base, function(k) {
+    if (is.list(k)) as.character(k$cle %||% NA_character_)[1] else NA_character_
+  }, "")
+  if (anyNA(cles) || anyDuplicated(cles)) err <- c(err, "Clés de la base absentes ou en double.")
+  for (k in base) {
+    if (!is.list(k)) { err <- c(err, "Entrée de la base mal formée."); next }
+    etiq <- as.character(k$cle %||% "?")[1]
+    if (!carte_nom_fichier_sur(k$fichier %||% NA)) err <- c(err, sprintf("Base %s : nom de fichier invalide.", etiq))
+    ref <- BASE_COUCHES[[etiq]]
+    if (is.null(ref)) next
+    st <- suppressWarnings(as.integer(k$stock %||% NA))
+    if (length(st) != 1L || is.na(st) || st < 0L || st > 4L) err <- c(err, sprintf("Base %s : précision invalide.", etiq))
+    if (!identical(as.character(k$type %||% "")[1], ref$type)) err <- c(err, sprintf("Base %s : type invalide.", etiq))
+    if (identical(ref$type, "ref") &&
+        !identical(suppressWarnings(as.integer(k$lignes %||% NA)), ref$lignes)) {
+      err <- c(err, sprintf("Base %s : nombre de lignes invalide.", etiq))
+    }
+  }
+  err
 }
 
 #' Lit et valide le jeu de donnees d'un dossier local.
@@ -128,7 +166,8 @@ carte_lire_meta_locale <- function(dossier) {
   meta <- tryCatch(jsonlite::fromJSON(f, simplifyVector = FALSE), error = function(e) NULL)
   v <- carte_meta_valider(meta)
   if (!v$ok) return(list(meta = NULL, erreurs = v$erreurs))
-  fichiers <- c(meta$grille, vapply(meta$couches, function(k) as.character(k$fichier)[1], ""))
+  fichiers <- c(meta$grille, vapply(meta$couches, function(k) as.character(k$fichier)[1], ""),
+                vapply(meta[["base"]] %||% list(), function(k) as.character(k$fichier)[1], ""))
   absents <- fichiers[!file.exists(file.path(dossier, fichiers))]
   if (length(absents)) {
     return(list(meta = NULL, erreurs = sprintf("Fichier(s) manquant(s) : %s.", paste(absents, collapse = ", "))))
@@ -203,6 +242,27 @@ carte_lire_couche <- function(fichier, n, n_annees, stock) {
        taille_exacte = reste == 0L && length(e) == n_annees * n)
 }
 
+
+#' Relit UNE maille d'une couche (une colonne de la matrice), sans decoder les autres.
+#'
+#' Meme format que carte_lire_couche(), mais ne garde que ce dont un point a besoin : le
+#' bilan d'un point lit une quarantaine de fichiers de 9 900 mailles, et en decoder
+#' tous les nombres en `numeric` coûterait des dizaines de Mo pour en garder 66.
+#' @param n nombre de mailles ; @param n_lignes lignes (annees, mois, jours...) ;
+#'   @param i rang de la maille (base 1).
+#' @return list(valeurs = vecteur de n_lignes, taille_exacte).
+#' @keywords internal
+carte_lire_colonne <- function(fichier, n, n_lignes, stock, i) {
+  con <- gzfile(fichier, "rb"); on.exit(close(con))
+  pad <- (4L - (n %% 4L)) %% 4L
+  readBin(con, "raw", 9L * n + pad)          # normale (4 o), pente (4 o), significativite (1 o)
+  e <- readBin(con, "integer", n_lignes * n, size = 2L, endian = "little")
+  reste <- length(readBin(con, "raw", 1L))
+  ok <- reste == 0L && length(e) == n_lignes * n && i >= 1L && i <= n
+  v <- if (ok) carte_decoder_valeurs(e[(seq_len(n_lignes) - 1L) * n + i], stock)
+       else rep(NA_real_, n_lignes)
+  list(valeurs = v, taille_exacte = ok)
+}
 
 #' Nom affiche pour une maille choisie sur la carte.
 #' @keywords internal

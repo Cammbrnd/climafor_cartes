@@ -41,6 +41,10 @@ suppressMessages(source("global.R"))
 for (f in c("outils/carte_geo.R", "outils/carte_format.R", "outils/carte_precalcul.R",
             "outils/carte_demo.R", "outils/carte_sim.R", "outils/carte_sources.R")) source(f)
 
+# La base precalculee du bilan (src/carte_couches_base.R) se calcule avec la carte : `base=non`
+# la retire (le site publie n'a alors pas de mode rapide).
+base_demandee <- function() if (identical(opt$base %||% "oui", "non")) list() else BASE_COUCHES
+
 annees_demandees <- function() {
   fin <- if (nzchar(opt$annee_fin %||% "")) entier("annee_fin") else as.integer(format(Sys.Date(), "%Y")) - 1L
   debut <- entier("annee_debut", 1959L)
@@ -74,7 +78,8 @@ if (commande == "fragment") {
               min(annees), max(annees), opt$source))
   dir.create(opt$sortie, recursive = TRUE, showWarnings = FALSE)
   part <- carte_construire(lire, m$lon, m$lat, annees, indices,
-                           fichier = file.path(opt$sortie, sprintf("part_%03d.rds", k)))
+                           fichier = file.path(opt$sortie, sprintf("part_%03d.rds", k)),
+                           base = base_demandee())
   cat(sprintf("Termine : %d maille(s) sans donnees sur %d.\n", length(part$echecs), length(indices)))
 
 } else if (commande == "assembler") {
@@ -90,7 +95,8 @@ if (commande == "fragment") {
   note_etp <- if (!is.null(l2e) && grepl("SIM", opt$source_texte, fixed = TRUE))
     paste("L'ETP vient du fichier SIM de Météo-France : elle s'écarte de quelques % de l'ETP lue par",
           "l'analyse d'une maille, donc ce bilan peut différer un peu de celui de l'analyse.") else ""
-  r <- carte_assembler(fichiers, m$lon, m$lat, annees, opt$source_texte, opt$sortie, l2e = l2e, note_etp = note_etp)
+  r <- carte_assembler(fichiers, m$lon, m$lat, annees, opt$source_texte, opt$sortie, l2e = l2e, note_etp = note_etp,
+                       base = base_demandee())
   cat(sprintf("Jeu ecrit dans %s : %d mailles, %d-%d, %d Ko, %d maille(s) sans donnees.\n",
               r$dossier, r$n, min(r$annees), max(r$annees), r$taille_octets %/% 1024, length(r$echecs)))
   if (length(r$annees_retirees)) {
@@ -104,9 +110,9 @@ if (commande == "fragment") {
     cat("INVALIDE :\n"); cat(paste0(" - ", lu$erreurs, "\n"), sep = "")
     quit(status = 1L)
   }
-  cat(sprintf("Valide : %d mailles, %d-%d, %d couches, genere le %s, source : %s\n",
+  cat(sprintf("Valide : %d mailles, %d-%d, %d couches, %d entrees de base, genere le %s, source : %s\n",
               lu$meta$n_mailles, min(unlist(lu$meta$annees)), max(unlist(lu$meta$annees)),
-              length(lu$meta$couches), lu$meta$genere_le, lu$meta$source))
+              length(lu$meta$couches), length(lu$meta[["base"]]), lu$meta$genere_le, lu$meta$source))
 } else {
   stop(sprintf("Commande inconnue : %s", commande), call. = FALSE)
 }

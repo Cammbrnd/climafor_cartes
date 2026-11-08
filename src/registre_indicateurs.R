@@ -1037,7 +1037,10 @@ calculer_un_indicateur <- function(don, ind, ctx) {
       100 * CONFIG$stations$seuil_annee)))
   }
 
-  res <- tryCatch(ind$calc(d, ctx), error = function(e) {
+  # Mode rapide : les donnees ne portent que les jours charges, et la base precalculee fournit
+  # le reste (src/utils_base.R). Sans cet attribut, le calcul est celui de toujours.
+  rap <- attr(don, "base")
+  res <- tryCatch(if (is.null(rap)) ind$calc(d, ctx) else base_calculer(d, ind, ctx, rap), error = function(e) {
     warning(sprintf("Indicateur '%s' en échec : %s", ind$id, conditionMessage(e)),
             call. = FALSE)
     vide("erreur", paste(

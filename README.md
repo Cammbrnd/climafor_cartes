@@ -1396,6 +1396,84 @@ de style et workflow.
 
 ---
 
+## Version 2.2 — une base précalculée pour le bilan d'un point (mode rapide)
+
+Jusqu'ici, le Bilan d'un point calculait ses 25 indicateurs depuis la série **journalière** de la maille
+SAFRAN : une requête par année, soixante-six requêtes pour 1959-2025. Le précalcul de la carte avait déjà
+calculé, pour chaque maille et chaque année complète, presque tout ce que le Bilan montre. La v2.2 **publie
+ce qui manquait** et laisse le Bilan **lire** ce jeu au lieu de le recalculer.
+
+### Ce qui est publié en plus (champ `base` de `meta.json`)
+
+Le navigateur (onglet Carte) ne lit pas ce champ : **la carte est inchangée**.
+
+| Quoi | Combien | Pour quoi faire |
+|---|---|---|
+| **Colonnes annuelles** | 23 fichiers `c_b_<indicateur>_<colonne>.bin.gz` | les colonnes des tableaux annuels que la carte ne montre pas (jours de gel sévère, date du dernier gel, pluie liquide et solide, durée de la plus longue vague…) |
+| **Normales mensuelles** | 6 fichiers `c_r_mois_*.bin.gz`, 12 valeurs par maille | profils du mois (précipitations, température, neige, ETP, déficit de vapeur, vent) |
+| **Normale du jour** | 2 fichiers `c_r_jour_*.bin.gz`, 366 valeurs par maille | courbe de température de l'année, vagues de chaleur de l'année en cours |
+| **Seuil de vent soutenu** | 1 fichier `c_r_seuil_ff.bin.gz`, 1 valeur par maille | percentile 95 du vent de la référence |
+
+Même format binaire que les couches de la carte (entiers 16 bits compressés) : une « année » y est une ligne,
+qu'elle soit une année, un mois, un jour ou rien. La liste est dans `src/carte_couches_base.R` ; `meta.json` porte
+aussi l'**empreinte des réglages** (fenêtre de saison, seuils) avec lesquels la base a été calculée.
+
+### Le Bilan en mode rapide (Paramètres → Mode de chargement)
+
+**Le mode complet reste le mode par défaut.** En mode rapide, pour une maille SAFRAN :
+
+1. l'application trouve la maille du point dans le jeu publié (`cmp_mailles`, comme l'onglet Comparer) ;
+2. elle lit les années publiées dans la base (quelques fichiers de 0,5 à 5 Mo, téléchargés une fois par le
+   serveur et gardés 24 h, comme pour Comparer) ;
+3. elle ne demande à SAFRAN que **les années que le jeu ne porte pas** (l'année en cours) **et l'année comparée** ;
+4. le tableau annuel de chaque indicateur est recomposé : lignes lues + lignes calculées, puis `enrichir_annuel()`
+   sur l'ensemble. **Même normale, même écart-type, même anomalie** qu'en mode complet (`src/utils_base.R`).
+
+Aucune formule n'est écrite deux fois : les années chargées passent par la fonction de calcul de l'indicateur, les
+valeurs qui ne dépendent pas de l'année (normale mensuelle, normale du jour, seuil de vent) sont glissées dans le
+contexte (`ctx$base`) que ces fonctions consultent avant de recalculer.
+
+**Quand la base ne sert pas** (et l'écran le dit, avec la raison) : autre période de référence, autre fenêtre de
+saison, un seuil modifié, jeu publié sans base ou avec une base incomplète, point hors grille, station
+Météo-France. Jamais de nombre calculé avec d'autres réglages que ceux affichés.
+
+**Ce que le mode rapide ne fait pas** : la **synthèse chiffrée « à période égale »** compare les jours de l'année
+en cours aux mêmes jours de chaque année de référence, et le **Rapport** la reprend : ils demandent la série
+journalière de la référence. Un bouton « Charger la série complète » (Bilan et Rapport) lance le chargement
+complet.
+
+### Précision
+
+La base est stockée en entiers 16 bits : une valeur lue diffère du calcul complet de **moins d'une unité de la
+dernière décimale conservée** (comptages de jours : exacts). La classe d'aridité est publiée en code pour ne jamais
+basculer d'une classe à l'autre à cause d'un arrondi.
+
+### Vérifications
+
+`tests/test_v22.R` : base bien formée et relue à l'identique ; **parité indicateur par indicateur** (les 25) entre
+le calcul complet et le calcul rapide, sur trois mailles, avec une année en cours partielle et avec une année
+comparée antérieure ; garde-fous (référence, fenêtre, seuils, base incomplète) ; refus d'une `meta.json` piégée.
+
+### À lancer
+
+Le workflow « Construire la carte » calcule la base avec les mailles (entrée `base`, `oui` par défaut). Après la
+publication, « Vérifier la publication » valide le jeu avec la base. La **taille du site** augmente (estimation :
+de l'ordre de 30 à 40 Mo en plus pour 9 888 mailles sur 1959-2025, à confirmer sur la première publication réelle).
+
+### Limites à connaître
+
+- **Stations** : la base n'est publiée que pour les mailles. Le Bilan d'une station publiée reste en mode complet ;
+  le mode rapide pour les stations viendra après le premier calcul réel des stations.
+- La base publiée avec la source `sim` (fichiers SIM de Météo-France) a une ETP qui s'écarte de quelques % de
+  l'ETP lue par l'analyse d'un point : en mode rapide, la jonction entre les années publiées et l'année chargée peut
+  faire apparaître cet écart sur P − ETP.
+- La maille lue dans la base est la plus proche du point ; celle que renvoie GeoSAS peut différer pour un point
+  situé à la limite de deux mailles. L'écran donne la distance à la maille.
+- Premier usage d'un point : le serveur télécharge jusqu'à une quarantaine de fichiers (quelques dizaines de Mo)
+  puis les garde 24 h pour tous les utilisateurs de ce processus.
+
+---
+
 ## Architecture
 
 ```
@@ -1411,7 +1489,8 @@ climafor/
 │                               test_v12.R … test_v17.R, test_v171.R (correctifs et revue)
 │                               test_v18.R + carte_verif_js.js (onglet Carte)
 │                               test_v19.R, test_v19_comparer.R (vagues, export, Comparer)
-├── DESCRIPTION                 Paquets et versions requis (v1.9.0)
+│                               test_v21.R, test_v22.R (stations, deux lieux ; base précalculée, mode rapide)
+├── DESCRIPTION                 Paquets et versions requis (v2.2.0)
 ├── .github/workflows/          Diagnostic GeoSAS, Construire la carte, Veille (v1.8)
 ├── outils/                     carte_*.R : précalcul de la carte (format, géométrie, calcul,
 │                               sources, SIM, démo, ligne de commande, veille, diagnostic)
@@ -1428,6 +1507,8 @@ climafor/
 │   ├── utils_partage.R         Lien partageable : encodage/décodage de l'état (v1.4)
 │   ├── carte_couches.R         Indicateurs cartographiables (v1.8)
 │   ├── utils_carte.R           Format des fichiers de la carte, validation, transport (v1.8)
+│   ├── carte_couches_base.R    Base précalculée : colonnes et références que la carte ne montre pas (v2.2)
+│   ├── utils_base.R            Lecture de la base, garde-fous, recomposition du Bilan en mode rapide (v2.2)
 │   ├── mod_carte.R             Onglet Carte : squelette, passerelle, ouverture d'une maille (v1.8)
 │   ├── utils_comparer.R        Comparer : import de lieux, mailles, séries, bilan, exports (v1.9)
 │   ├── mod_comparer.R          Onglet Comparer : interface et serveur (v1.9)

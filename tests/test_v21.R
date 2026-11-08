@@ -736,7 +736,7 @@ verifier(all(c("src/utils_stations_publiees.R", "src/utils_comparer_duo.R", "src
            match("src/utils_stations_publiees.R", ordre21) > match("src/utils_comparer.R", ordre21) &&
            match("src/mod_lieu_choix.R", ordre21) < match("src/mod_comparer.R", ordre21),
          "global.R : les nouveaux fichiers sont charges, dans l'ordre de leurs dependances")
-verifier(identical(CONFIG$app$version, "2.1.0"), "version : 2.1.0")
+verifier(grepl("^2\\.[1-9][0-9]*\\.[0-9]+$", CONFIG$app$version), "la version est une 2.1.x ou plus (2.1.0 a la sortie des stations publiees)")
 
 wf21 <- lire21(".github/workflows/construire-carte.yml")
 verifier(grepl("stations_fragment:", wf21, fixed = TRUE) && grepl("stations_preparer:", wf21, fixed = TRUE) &&

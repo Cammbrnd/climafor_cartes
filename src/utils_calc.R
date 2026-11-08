@@ -519,6 +519,18 @@ profil_mois <- function(d, colonne, fun = c("somme", "moyenne"), vars = colonne,
   sortie
 }
 
+#' Normale mensuelle (12 valeurs) d'une colonne sur les mois COMPLETS de la reference.
+#'
+#' Mode « base precalculee » (utils_base.R) : la reference journaliere n'est pas chargee,
+#' la normale vient du jeu publie (`ctx$base`, lu a la demande) ; le reste du calcul est
+#' inchange. Les deux chemins rendent la meme chose (tests/test_v22.R).
+#' @keywords internal
+ref_mensuelle <- function(don, ctx, colonne, fun, vars = colonne) {
+  b <- ctx$base[[paste0("mois_", colonne)]]
+  if (!is.null(b)) return(list(v = as.numeric(b), partiel = rep(FALSE, 12)))
+  profil_mois(sel_annees(don, ctx$ref), colonne, fun, vars, strict = TRUE)
+}
+
 #' 01 — Bilan hydrique mensuel P - ETP.
 #' Cumul mensuel des precipitations totales moins cumul mensuel d'ETP.
 #' Un solde negatif signale un mois ou la demande evaporative excede l'apport :
@@ -526,8 +538,8 @@ profil_mois <- function(d, colonne, fun = c("somme", "moyenne"), vars = colonne,
 #' @export
 calc_bilan_hydrique <- function(don, ctx) {
   v <- c("p_tot", "etp")
-  rp <- profil_mois(sel_annees(don, ctx$ref),     "p_tot", "somme", v, strict = TRUE)
-  re <- profil_mois(sel_annees(don, ctx$ref),     "etp",   "somme", v, strict = TRUE)
+  rp <- ref_mensuelle(don, ctx, "p_tot", "somme", v)
+  re <- ref_mensuelle(don, ctx, "etp",   "somme", v)
   cp <- profil_mois(sel_annees(don, ctx$courante), "p_tot", "somme", v)
   ce <- profil_mois(sel_annees(don, ctx$courante), "etp",   "somme", v)
 
@@ -548,10 +560,9 @@ calc_bilan_hydrique <- function(don, ctx) {
 #' cumul de pluie est tronque, il paraitrait sec a tort.
 #' @export
 calc_ombrothermique <- function(don, ctx) {
-  ref <- sel_annees(don, ctx$ref)
   cur <- sel_annees(don, ctx$courante)
-  rp <- profil_mois(ref, "p_tot", "somme",   "p_tot", strict = TRUE)
-  rt <- profil_mois(ref, "t_moy", "moyenne", "t_moy", strict = TRUE)
+  rp <- ref_mensuelle(don, ctx, "p_tot", "somme",   "p_tot")
+  rt <- ref_mensuelle(don, ctx, "t_moy", "moyenne", "t_moy")
   cp <- profil_mois(cur, "p_tot", "somme",   "p_tot")
   ct <- profil_mois(cur, "t_moy", "moyenne", "t_moy")
   partiel <- cp$partiel | ct$partiel
@@ -666,6 +677,12 @@ CLES_JOUR <- format(seq(as.Date("2000-01-01"), as.Date("2000-12-31"), by = "day"
 #'   compte moins d'annees renseignees que CONFIG$methode$vague_ref_annees_min.
 #' @keywords internal
 vague_normale_jour <- function(don, ctx) {
+  # Mode « base precalculee » (utils_base.R) : la normale vient du jeu publie, car la
+  # reference journaliere n'est pas chargee. NA partout = reference trop courte.
+  if (!is.null(ctx$base$normale_jour_tmax)) {
+    v <- ctx$base$normale_jour_tmax
+    return(if (all(is.na(v))) NULL else stats::setNames(as.numeric(v), CLES_JOUR))
+  }
   ref <- don[don$annee %in% ctx$ref & is.finite(don$t_max), c("date", "annee", "t_max"),
              drop = FALSE]
   if (!nrow(ref)) return(NULL)
@@ -827,8 +844,15 @@ calc_ete <- function(don, ctx) {
   t <- agreger_annuel(jja, "t_moy", "moyenne", nom = "t_jja")
   p <- agreger_annuel(jja, "p_tot", "somme",   nom = "p_jja")
   res <- merge(t, p, by = "annee")
+  enrichir_ete(res, completude(don, c(6L, 8L), c("t_moy", "p_tot")), ctx)
+}
 
-  comp <- completude(don, c(6L, 8L), c("t_moy", "p_tot"))
+#' Completude de la saison, normales et anomalies de l'ete (temperature ET pluie).
+#' Separee de calc_ete() pour que la base precalculee (utils_base.R) l'appelle telle
+#' quelle sur des valeurs lues au lieu de les recalculer.
+#' @param res data.frame(annee, t_jja, p_jja) ; @param comp completude() de la saison.
+#' @keywords internal
+enrichir_ete <- function(res, comp, ctx) {
   res <- merge(res, comp[, c("annee", "n_jours", "n_manquants", "partielle", "dernier_jour")],
                by = "annee", all.x = TRUE)
   res$partielle <- res$partielle %in% TRUE
@@ -1221,6 +1245,31 @@ calc_synthese <- function(don, ctx) {
 }
 
 
+# ------------------------------------------------------------------------------
+# Mode rapide (v2.2) : les trois petits predicats que le calcul et l'interface partagent.
+# Ils vivent ICI et non dans utils_base.R : diagnostic_stations.R ne charge que ce fichier-ci
+# et ne doit pas dependre de la lecture de la base (voir tests/test_v171.R).
+# ------------------------------------------------------------------------------
+
+#' Les donnees chargees portent-elles la base (mode rapide) ?
+#' @keywords internal
+base_active <- function(don) !is.null(attr(don, "base"))
+
+#' Les annees que SAFRAN a livrees pour ce point (celles que le jeu ne porte pas, et
+#' l'annee comparee).
+#' @keywords internal
+base_annees_vives <- function(don) sort(unique(as.integer(don$annee)))
+
+#' « série 1959-2026 » en mode complet ; « base 1959-2025 + 2026 » en mode rapide.
+#' @keywords internal
+serie_libelle <- function(don) {
+  rap <- attr(don, "base")
+  if (is.null(rap)) return(sprintf("série %d-%d", min(don$annee), max(don$annee)))
+  sprintf("base précalculée %d-%d + %s", min(rap$jeu$annees), max(rap$jeu$annees),
+          paste(base_annees_vives(don), collapse = ", "))
+}
+
+
 #' Synthese chiffree, SANS jamais lever d'erreur.
 #'
 #' Audit, C3 : quand `calc_synthese` echouait, le Bilan comme le rapport
@@ -1229,6 +1278,12 @@ calc_synthese <- function(don, ctx) {
 #' est consigne au journal et porte par l'attribut « erreur » du tableau vide.
 #' @export
 synthese_securisee <- function(don, ctx) {
+  # Mode rapide : la comparaison « a periode egale » exige la serie journaliere de la reference.
+  if (base_active(don)) {
+    s <- data.frame()
+    attr(s, "raison") <- "mode_rapide"
+    return(s)
+  }
   tryCatch(calc_synthese(don, ctx), error = function(e) {
     journaliser_erreur("Synthese chiffree", e)
     s <- data.frame()
@@ -1315,7 +1370,7 @@ calc_profil_mensuel <- function(don, ctx, colonne, fun = c("somme", "moyenne")) 
   # Etape 1 : une valeur par (annee, mois) ; etape 2 : moyenne inter-annuelle.
   # Reference : mois complets seulement. Annee comparee : tous les mois, le mois
   # incomplet etant signale dans `cur_partiel`.
-  ref <- profil_mois(sel_annees(don, ctx$ref),      colonne, fun, strict = TRUE)
+  ref <- ref_mensuelle(don, ctx, colonne, fun, colonne)
   cur <- profil_mois(sel_annees(don, ctx$courante), colonne, fun)
 
   data.frame(
@@ -1379,10 +1434,12 @@ calc_temperature_journaliere <- function(don, ctx) {
 
   ref <- sel_annees(don, ctx$ref)
   cur <- sel_annees(don, ctx$courante)
-  if (!nrow(ref) || !nrow(cur)) return(data.frame())
+  nb <- ctx$base$normale_jour_tmoy         # base precalculee : voir utils_base.R
+  if ((is.null(nb) && !nrow(ref)) || !nrow(cur)) return(data.frame())
 
-  norm <- stats::aggregate(list(t_norm = ref$t_moy), by = list(doy = ref$doy),
-                           FUN = function(x) mean(x, na.rm = TRUE))
+  norm <- if (!is.null(nb)) data.frame(doy = 1:366, t_norm = as.numeric(nb))
+          else stats::aggregate(list(t_norm = ref$t_moy), by = list(doy = ref$doy),
+                                FUN = function(x) mean(x, na.rm = TRUE))
   jour <- stats::aggregate(list(t_cur = cur$t_moy), by = list(doy = cur$doy),
                            FUN = function(x) mean(x, na.rm = TRUE))
 
@@ -1512,6 +1569,7 @@ calc_vpd_mensuel <- function(don, ctx) {
 #' Seuil de vent soutenu, calcule sur la periode de reference du point.
 #' @keywords internal
 seuil_vent_reference <- function(don, ctx) {
+  if (!is.null(ctx$base$seuil_vent)) return(as.numeric(ctx$base$seuil_vent))   # voir utils_base.R
   q <- ctx$seuils$vent_percentile %||% CONFIG$seuils$vent_percentile
   ref <- sel_annees(don, ctx$ref)
   v <- ref$ff[is.finite(ref$ff)]
