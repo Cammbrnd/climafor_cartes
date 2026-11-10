@@ -80,11 +80,10 @@ base_reference <- function(cle, lignes, stock, calc, titre) {
 
 .BASE_LISTE <- list(
   # ---- colonnes annuelles absentes des couches de la carte -------------------
-  base_annuelle("can",  "n_t1",          0),
   base_annuelle("vag",  "duree_max",     0),
   base_annuelle("vag",  "ecart_max",     1),
-  base_annuelle("gel",  "n_gel_severe",  0),
   base_annuelle("gel",  "doy_dernier_gel", 0),
+  base_annuelle("geltd", "doy_debourrement", 0),
   base_annuelle("pre",  "p_liq",         0),
   base_annuelle("pre",  "p_sol",         0),
   base_annuelle("neige", "neige_3j_max", 1),

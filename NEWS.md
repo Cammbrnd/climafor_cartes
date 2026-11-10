@@ -12,6 +12,7 @@ volontairement laissé de côté. La version est déclarée à deux endroits qui
 
 | Version | Ce qui change | Détail |
 |---|---|---|
+| **2.4** | **Bilan climatique juste après l'Accueil.** Jours de chaleur à **25, 30, 35 et 40 °C**, jours de gel à **0, −5 et −10 °C**, **premier jour à plus de 25 °C et à plus de 30 °C**, et **gel tardif** défini par le **débourrement estimé** (somme de degrés-jours), avec sa définition sourcée. La base précalculée est à reconstruire. | [README, version 2.4](README.md#version-24--seuils-de-chaleur-et-de-gel-premiers-jours-chauds-gel-tardif) |
 | **2.3** | Le **mode rapide** s'étend aux **stations Météo-France** : le bilan d'une station lit ses années passées dans le jeu précalculé et ne télécharge que l'année en cours. Le mode rapide devient le **mode par défaut**. Tests automatiques à chaque envoi sur GitHub. Historique des versions dans ce fichier. | [README, version 2.2](README.md#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
 | **2.2** | **Base précalculée** : le précalcul de la carte publie aussi les colonnes annuelles et les références dont le bilan d'une maille a besoin ; **mode rapide** (Paramètres → Mode de chargement). | [README](README.md#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
 | **2.1** | Stations publiées avec la carte (mesure et modèle côte à côte), comparaison de **deux lieux**, **synthèse du terrain** à envoyer par courriel. | [README](README.md#version-21--mesures-et-modèle-côte-à-côte-deux-lieux-synthèse-à-envoyer) |

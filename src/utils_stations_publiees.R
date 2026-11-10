@@ -154,7 +154,9 @@ stations_meta_valider <- function(meta) {
       }
       bp <- meta[["base_parametres"]]
       emp <- if (is.list(bp)) bp[["empreinte"]] else NULL
-      if (!is.character(emp) || length(emp) != 1L || !nzchar(emp) || nchar(emp) > 400L) {
+      # 3000 caracteres, comme pour la base des mailles (carte_base_valider) : l'empreinte liste tous
+      # les seuils, et chaque seuil ajoute a l'application (v2.4 : 405 caracteres) l'allonge.
+      if (!is.character(emp) || length(emp) != 1L || !nzchar(emp) || nchar(emp) > 3000L) {
         ajouter("Base précalculée : empreinte des réglages absente ou invalide.")
       }
       vi <- if (is.list(bp)) unlist(bp[["vides"]]) else NULL

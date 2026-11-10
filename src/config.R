@@ -19,7 +19,7 @@ CONFIG <- list(
   app = list(
     nom          = "ClimaFor",
     sous_titre   = "Bilan météorologique et climatique pour la gestion forestière",
-    version     = "2.3.0",
+    version     = "2.4.0",
     organisme    = "DSF — Département de la santé des forêts",
     annee        = format(Sys.Date(), "%Y"),
     # Detail technique d'un indicateur en echec, affiche sur sa carte (message
@@ -244,12 +244,25 @@ CONFIG <- list(
   # ---------------------------------------------------------------------------
   seuils = list(
     gel_t             = 0,    # degC — jour de gel si t_min < ce seuil
-    gel_severe_t      = -5,   # degC — gel severe
-    gel_tardif_debut  = 91,   # jour julien de debut de fenetre "gel tardif" (1er avril)
-    gel_tardif_fin    = 151,  # jour julien de fin (31 mai)
+    gel_severe_t      = -5,   # degC — gel fort (v2.4 : trois seuils de gel, 0, -5 et -10)
+    gel_extreme_t     = -10,  # degC — gel tres fort
+    # GEL TARDIF (v2.4) : un gel qui survient APRES le debourrement. La date du
+    # debourrement n'est pas observee : elle est estimee par un modele de forcage
+    # thermique (somme des degres-jours depuis le 1er janvier, base `gdd_base`),
+    # qui s'adapte au climat du point et a l'annee. Voir la fiche methode du
+    # gel tardif (registre_indicateurs.R) pour les sources et les limites.
+    gel_tardif_t      = 0,    # degC — gel tardif si t_min < ce seuil. Les seuils de dommage
+                              # varient d'une essence a l'autre (de -1 a -7,5 degC,
+                              # Bigler et Bugmann 2018) : 0 compte l'EXPOSITION, pas le degat.
+    gel_tardif_gdd    = 200,  # degres-jours (base gdd_base) cumules depuis le 1er janvier
+                              # pour atteindre le debourrement estime. VALEUR PAR DEFAUT
+                              # INDICATIVE, non specifique d'une essence : a caler sur les
+                              # observations de debourrement de l'essence visee.
+    gel_tardif_fin    = 181,  # jour julien de fin de la saison de gel tardif (30 juin)
     chaleur_t1        = 25,   # degC — jour d'ete (t_max)
     chaleur_t2        = 30,   # degC — forte chaleur
     chaleur_t3        = 35,   # degC — chaleur extreme (seuil de stress majeur)
+    chaleur_t4        = 40,   # degC — chaleur tres extreme
     vague_ecart       = 5,    # degC — un jour de vague de chaleur a une T max d'au
                               # moins cet ecart AU-DESSUS DE LA NORMALE DU JOUR
                               # (seuil RELATIF, contrairement a chaleur_t1 a t3)

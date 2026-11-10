@@ -261,7 +261,7 @@ verifier(carte_meta_valider({ m <- meta22; m$base[[length(m$base) + 1L]] <- list
 
 # Un fichier de la base manquant : le jeu n'est pas lisible.
 dos_m22 <- tempfile("carte22m"); dir.create(dos_m22); file.copy(list.files(dos22, full.names = TRUE), dos_m22)
-unlink(file.path(dos_m22, "c_b_gel_n_gel_severe.bin.gz"))
+unlink(file.path(dos_m22, "c_b_gel_doy_dernier_gel.bin.gz"))
 verifier(is.null(carte_lire_meta_locale(dos_m22)$meta), "un fichier de la base manquant : jeu refuse")
 
 

@@ -271,41 +271,43 @@ tendance <- function(annees, valeurs, unite = "", exclure = NULL, dec = 2,
 # ------------------------------------------------------------------------------
 
 #' Retard du debourrement avec l'altitude, en jours par 100 m (fourchette).
-#' Vitasse, Signarbieux & Fu (2018) : environ 5 semaines par 1 000 m au debut des
+#' Vitasse, Signarbieux & Fu (2018a) : environ 5 semaines par 1 000 m au debut des
 #' annees 1960, au plus 3 semaines aujourd'hui, soit 3,5 a 2,1 jours par 100 m.
 #' C'est un ORDRE DE GRANDEUR de terrain europeen, pas une loi : il depend de
 #' l'essence, de l'annee et du massif.
 #' @keywords internal
 GEL_RETARD_J_PAR_100M <- c(bas = 2, haut = 3.5)
 
-#' Altitude (m) au-dela de laquelle on signale que la fenetre de gel tardif par
-#' defaut risque d'etre trop precoce. En dessous, le decalage attendu (moins de
-#' une a deux semaines) reste dans la marge de la fenetre.
+#' Altitude (m) au-dela de laquelle on signale que la fin de la saison de gel tardif
+#' par defaut (30 juin) risque d'etre trop precoce. En dessous, le decalage attendu
+#' (moins d'une a deux semaines) reste dans la marge de la saison.
 #' @keywords internal
 GEL_ALTITUDE_ALERTE_M <- 400
 
-#' Conseil sur la fenetre de gel tardif, selon l'altitude du point.
+#' Conseil sur la fin de la saison de gel tardif, selon l'altitude du point.
 #'
-#' La fenetre est calendaire et la temperature, sous abri : elle ne suit pas le
-#' debourrement reel (audit M7). L'application connait l'altitude du point ; elle
-#' s'en sert pour dire, SANS modifier le calcul, de combien la fin de fenetre
-#' pourrait etre reculee.
+#' Le debourrement est estime a partir de la temperature du point (calc_gel_tardif) :
+#' il y est donc retardé, comme le gel. Mais la FIN de la saison de gel tardif est une
+#' date fixe (30 juin par defaut). L'application connait l'altitude du point ; elle s'en
+#' sert pour dire, SANS modifier le calcul, que cette date peut etre trop precoce en
+#' montagne.
 #'
 #' @param alt altitude du point, m.
-#' @param fin_fenetre jour julien de fin de la fenetre en vigueur.
+#' @param fin_saison jour julien de fin de la saison de gel tardif en vigueur.
 #' @return une phrase, ou NULL si l'altitude est inconnue ou inferieure a
 #'   GEL_ALTITUDE_ALERTE_M.
 #' @export
-gel_tardif_conseil <- function(alt, fin_fenetre = CONFIG$seuils$gel_tardif_fin) {
+gel_tardif_conseil <- function(alt, fin_saison = CONFIG$seuils$gel_tardif_fin) {
   if (length(alt) != 1L || !is.finite(alt) || alt < GEL_ALTITUDE_ALERTE_M) return(NULL)
   d <- round(alt / 100 * GEL_RETARD_J_PAR_100M)
   sprintf(paste(
     "Gel tardif : le point est à %.0f m. Le débourrement y est retardé d'environ",
     "%d à %d jours par rapport à la plaine (de 2 à 3,5 jours par 100 m,",
-    "Vitasse et al. 2018), alors que la fenêtre de gel tardif est fixe",
-    "(jusqu'au jour %d de l'année). Reculer la fin de fenêtre dans Paramètres si",
-    "le peuplement débourre tard ; le calcul n'est pas modifié."),
-    alt, d[["bas"]], d[["haut"]], as.integer(fin_fenetre))
+    "Vitasse et al. 2018a) et le débourrement estimé suit la température du point ;",
+    "mais la saison de gel tardif s'arrête toujours au jour %d de l'année.",
+    "Reculer cette date dans Paramètres si le peuplement débourre tard ; le calcul",
+    "n'est pas modifié."),
+    alt, d[["bas"]], d[["haut"]], as.integer(fin_saison))
 }
 
 
@@ -603,27 +605,29 @@ calc_temperature_annuelle <- function(don, ctx) {
   res
 }
 
-#' 04 — Jours de gel et gel tardif.
-#' Le gel tardif est le gel survenant apres le debourrement potentiel : il est
-#' le plus dommageable pour les jeunes pousses (chene, hetre, douglas, noyer).
+#' 04 — Jours de gel : trois seuils (0, -5 et -10 degC par defaut) et date du dernier gel.
+#' Un jour de gel est un jour dont la temperature minimale, sous abri, passe SOUS le
+#' seuil (inegalite stricte, comme l'indice FD de Zhang et al. 2011). Le gel TARDIF
+#' (apres le debourrement) a son propre indicateur : calc_gel_tardif().
 #' @export
 calc_gel <- function(don, ctx) {
   # Aucune ligne : pas d'indicateur (et surtout pas d'erreur dans aggregate()).
   if (is.null(don) || !nrow(don)) return(data.frame())
   s <- ctx$seuils
-  don$gel        <- don$t_min < s$gel_t
-  don$gel_severe <- don$t_min < s$gel_severe_t
-  don$gel_tardif <- don$gel & don$doy >= s$gel_tardif_debut & don$doy <= s$gel_tardif_fin
+  don$gel         <- don$t_min < s$gel_t
+  don$gel_severe  <- don$t_min < s$gel_severe_t
+  don$gel_extreme <- don$t_min < s$gel_extreme_t
 
-  cpt <- function(col) {
+  cpt <- function(col, nom) {
     a <- stats::aggregate(list(n = don[[col]]), by = list(annee = don$annee),
                           FUN = function(x) sum(x, na.rm = TRUE))
-    a$annee <- as.integer(a$annee); a
+    a$annee <- as.integer(a$annee)
+    names(a)[2] <- nom
+    a
   }
-  res <- cpt("gel");        names(res)[2] <- "n_gel"
-  r2  <- cpt("gel_severe"); names(r2)[2]  <- "n_gel_severe"
-  r3  <- cpt("gel_tardif"); names(r3)[2]  <- "n_gel_tardif"
-  res <- merge(merge(res, r2, by = "annee"), r3, by = "annee")
+  res <- Reduce(function(x, y) merge(x, y, by = "annee"),
+                list(cpt("gel", "n_gel"), cpt("gel_severe", "n_gel_severe"),
+                     cpt("gel_extreme", "n_gel_extreme")))
 
   # Date du dernier gel de printemps (jour julien), indicateur de risque direct
   gels_print <- don[don$gel & don$doy <= CONFIG$methode$gel_printemps_doy_max &
@@ -640,7 +644,68 @@ calc_gel <- function(don, ctx) {
   enrichir_annuel(res, don, ctx, "n_gel", vars = "t_min")
 }
 
-#' 05 — Jours de chaleur (trois seuils cumulatifs sur la temperature maximale).
+#' Jour de l'annee du debourrement ESTIME, par annee (modele de forcage thermique).
+#'
+#' Le debourrement n'est pas mesure : il est estime comme le premier jour ou la somme
+#' des degres-jours max(0 ; min(T moy ; plafond) - base), cumulee depuis le 1er janvier,
+#' atteint `s$gel_tardif_gdd`. C'est l'approche classique des modeles de phenologie
+#' printaniere (somme de temperatures au-dessus d'un seuil, a partir d'une date fixe :
+#' Delpierre et al. 2016), reduite a son plus simple. Un jour sans temperature moyenne
+#' n'ajoute rien a la somme : le debourrement est alors estime plus tard qu'il ne l'est.
+#'
+#' @param don tableau journalier (annee, doy, t_moy) ; @param s seuils.
+#' @return data.frame(annee, doy_debourrement) ; NA si la somme n'est pas atteinte.
+#' @keywords internal
+debourrement_estime <- function(don, s) {
+  vide <- data.frame(annee = integer(0), doy_debourrement = numeric(0))
+  if (is.null(don) || !nrow(don)) return(vide)
+  d <- don[order(don$annee, don$doy), c("annee", "doy", "t_moy"), drop = FALSE]
+  gdd_j <- pmax(0, pmin(d$t_moy, s$gdd_plafond) - s$gdd_base)
+  gdd_j[is.na(gdd_j)] <- 0
+  cumul <- stats::ave(gdd_j, d$annee, FUN = cumsum)
+  doy <- ifelse(cumul >= s$gel_tardif_gdd, d$doy, NA_real_)
+  deb <- tapply(doy, d$annee, function(x) if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE))
+  data.frame(annee = as.integer(names(deb)), doy_debourrement = as.numeric(deb))
+}
+
+#' 04 bis — Gel tardif : jours de gel survenant apres le debourrement estime.
+#'
+#' DEFINITION. Un jour de gel tardif est un jour qui verifie les trois conditions :
+#'  1. sa temperature minimale, sous abri, est inferieure a `gel_tardif_t` ;
+#'  2. il est POSTERIEUR au debourrement estime de l'annee (debourrement_estime()) ;
+#'  3. il est au plus le jour `gel_tardif_fin` de l'annee (30 juin).
+#' Avant le debourrement, un gel ne touche pas de tissus fragiles ; apres, les jeunes
+#' feuilles et pousses peuvent geler. Une annee dont le debourrement estime n'est pas
+#' atteint avant la fin de la saison compte zero jour de gel tardif.
+#' @export
+calc_gel_tardif <- function(don, ctx) {
+  # Aucune ligne : pas d'indicateur (et surtout pas d'erreur dans aggregate()).
+  if (is.null(don) || !nrow(don)) return(data.frame())
+  s <- ctx$seuils
+  deb <- debourrement_estime(don, s)
+  res <- stats::aggregate(list(n_gel_tardif = gel_tardif_jours(don, s, deb)),
+                          by = list(annee = don$annee),
+                          FUN = function(x) sum(x, na.rm = TRUE))
+  res$annee <- as.integer(res$annee)
+  res <- merge(res, deb, by = "annee", all.x = TRUE)
+  enrichir_annuel(res, don, ctx, "n_gel_tardif", vars = c("t_min", "t_moy"))
+}
+
+#' Quels jours sont des jours de gel tardif ? (un booleen par ligne de `don`)
+#' La definition vit ICI, pour que l'indicateur annuel (calc_gel_tardif) et la synthese
+#' a periode egale (calc_synthese) comptent la meme chose.
+#' @param don tableau journalier (annee, doy, t_min, t_moy) ; @param s seuils ;
+#'   @param deb debourrement_estime(don, s), si deja calcule.
+#' @return logical, NA quand la temperature minimale manque un jour candidat.
+#' @keywords internal
+gel_tardif_jours <- function(don, s, deb = debourrement_estime(don, s)) {
+  d_deb <- deb$doy_debourrement[match(don$annee, deb$annee)]
+  !is.na(d_deb) & don$doy > d_deb & don$doy <= s$gel_tardif_fin & don$t_min < s$gel_tardif_t
+}
+
+#' 05 — Jours de chaleur (quatre seuils cumulatifs sur la temperature maximale).
+#' Un jour est compte quand sa T max est STRICTEMENT superieure au seuil (25, 30, 35 et
+#' 40 degC par defaut) ; 25 degC est le « jour d'ete » de l'indice SU (Zhang et al. 2011).
 #' @export
 calc_chaleur <- function(don, ctx) {
   # Aucune ligne : pas d'indicateur (et surtout pas d'erreur dans aggregate()).
@@ -656,8 +721,52 @@ calc_chaleur <- function(don, ctx) {
   res <- Reduce(function(x, y) merge(x, y, by = "annee"),
                 list(cpt(s$chaleur_t1, "n_t1"),
                      cpt(s$chaleur_t2, "n_t2"),
-                     cpt(s$chaleur_t3, "n_t3")))
+                     cpt(s$chaleur_t3, "n_t3"),
+                     cpt(s$chaleur_t4, "n_t4")))
   enrichir_annuel(res, don, ctx, "n_t2", vars = "t_max")
+}
+
+#' 05 ter — Premier jour de l'annee a plus de 25 degC, et a plus de 30 degC.
+#' Date (jour de l'annee) du PREMIER jour dont la T max depasse chaque seuil
+#' (`chaleur_t1` et `chaleur_t2`, 25 et 30 degC par defaut). NA si le seuil n'est pas
+#' atteint dans l'annee : pour l'annee en cours, cela veut dire « pas encore ». Un jour
+#' sans mesure ne peut pas etre le premier jour : sur une annee a lacunes, la date est
+#' une borne TARDIVE (n_manquants dit combien de jours manquent).
+#' @export
+calc_premiers_jours_chauds <- function(don, ctx) {
+  # Aucune ligne : pas d'indicateur (et surtout pas d'erreur dans aggregate()).
+  if (is.null(don) || !nrow(don)) return(data.frame())
+  s <- ctx$seuils
+  premier <- function(seuil, nom) {
+    d <- don[!is.na(don$t_max) & don$t_max > seuil, c("annee", "doy"), drop = FALSE]
+    if (!nrow(d)) {
+      a <- data.frame(annee = integer(0), v = numeric(0))
+    } else {
+      a <- stats::aggregate(list(v = d$doy), by = list(annee = d$annee), FUN = min)
+      a$annee <- as.integer(a$annee)
+    }
+    names(a)[2] <- nom
+    a
+  }
+  res <- data.frame(annee = sort(unique(as.integer(don$annee))))
+  res <- merge(res, premier(s$chaleur_t1, "doy_t1"), by = "annee", all.x = TRUE)
+  res <- merge(res, premier(s$chaleur_t2, "doy_t2"), by = "annee", all.x = TRUE)
+  enrichir_annuel(res, don, ctx, "doy_t1", vars = "t_max")
+}
+
+#' Jour de l'annee -> « 12 avril » (annee non bissextile : le jour 60 est le 1er mars,
+#' comme sur les axes des graphiques ; le jour 366 est ramene au 31 decembre).
+#' @param doy jour julien, vecteur. @return chaines, NA pour une valeur non finie.
+#' @export
+doy_date_fr <- function(doy) {
+  d <- as.integer(round(pmin(doy, 365)))
+  ok <- is.finite(doy) & !is.na(d) & d >= 1L
+  out <- rep(NA_character_, length(doy))
+  if (any(ok)) {
+    dt <- as.Date(d[ok] - 1L, origin = "2001-01-01")
+    out[ok] <- sprintf("%d %s", as.integer(format(dt, "%d")), MOIS_LONG[as.integer(format(dt, "%m"))])
+  }
+  out
 }
 
 #' Les 366 jours du calendrier, « MM-JJ », 29 fevrier compris.
@@ -1189,6 +1298,21 @@ calc_synthese <- function(don, ctx) {
                                n = length(v))
   }
 
+  # Une ligne par seuil de CONFIG$seuils nomme « <prefixe>_t1 », « _t2 »... (chaleur) ou
+  # « gel_t », « gel_severe_t », « gel_extreme_t » (gel) : meme comptage que calc_chaleur()
+  # et calc_gel(), a periode egale. `sens` : « chaud » colore l'ecart, « neutre » non.
+  lignes_seuils <- function(type, modele, col, op, sens, famille) {
+    noms <- if (type == "chaleur") paste0("chaleur_t", 1:4) else c("gel_t", "gel_severe_t", "gel_extreme_t")
+    do.call(rbind, lapply(noms, function(nm) {
+      seuil <- ctx$seuils[[nm]]
+      test <- if (op == ">") function(x) x > seuil else function(x) x < seuil
+      ligne(sprintf(modele, seuil), "j",
+            ou_na(cur_ok("t"), som(test(cur[[col]]))),
+            stat_an(ref_t, col, function(x) sum(test(x), na.rm = TRUE)),
+            sens, "%.0f", famille = famille)
+    }))
+  }
+
   res <- rbind(
     ligne("Température moyenne", "°C",
           ou_na(cur_ok("t"), moy(cur$t_moy)), stat_an(ref_t, "t_moy", moy), "chaud",
@@ -1205,19 +1329,19 @@ calc_synthese <- function(don, ctx) {
           ou_na(cur_ok("p", "t"), {
             fc <- sel_fenetre(cur, ctx$fenetre); som(fc$p_tot) - som(fc$etp)
           }), st_petp, "sec", "%.0f", famille = "hydrique"),
-    ligne(sprintf("Jours à T max > %g °C", ctx$seuils$chaleur_t2), "j",
-          ou_na(cur_ok("t"), som(cur$t_max > ctx$seuils$chaleur_t2)),
-          stat_an(ref_t, "t_max", function(x) sum(x > ctx$seuils$chaleur_t2, na.rm = TRUE)),
-          "chaud", "%.0f", famille = "thermique"),
+    # Quatre seuils de T max (25, 30, 35 et 40 degC par defaut), comptes comme dans calc_chaleur().
+    lignes_seuils("chaleur", "Jours à T max > %g °C", "t_max", ">", "chaud", "thermique"),
     if (!is.null(vag) && st_vag[["n"]] > 0)
       ligne("Vagues de chaleur", "vagues",
             ou_na(cur_ok("t"), sum(vag$debut[vag$annee == ctx$courante])),
             st_vag, "chaud", "%.0f", famille = "thermique"),
     # Le gel n'a pas de bon sens : moins de gel, c'est un hiver plus doux, donc un
     # debourrement plus precoce et, souvent, davantage de gel tardif.
-    ligne("Jours de gel", "j",
-          ou_na(cur_ok("t"), som(cur$t_min < ctx$seuils$gel_t)),
-          stat_an(ref_t, "t_min", function(x) sum(x < ctx$seuils$gel_t, na.rm = TRUE)),
+    # Trois seuils de T min (0, -5 et -10 degC par defaut), comptes comme dans calc_gel().
+    lignes_seuils("gel", "Jours de gel (T min < %g °C)", "t_min", "<", "neutre", "gel"),
+    ligne("Jours de gel tardif", "j",
+          ou_na(cur_ok("t"), som(gel_tardif_jours(cur, ctx$seuils))),
+          stat_an(transform(ref_t, gt = gel_tardif_jours(ref_t, ctx$seuils)), "gt", som),
           "neutre", "%.0f", famille = "gel")
   )
   # Lignes dont ni la valeur ni la normale ne sont evaluables (variable absente

@@ -208,7 +208,7 @@ verifier(all(vapply(titres, function(t) identical(sans_blancs(texte_de(cf_terme(
          "les infobulles n'alterent aucun titre d'indicateur (le texte est seulement enveloppe)")
 
 avec <- function(id) grepl("class=\"cf-terme\"", html_de14(cf_terme(INDICATEURS[[id]]$titre)))
-verifier(all(vapply(c("petp", "swi", "gdd", "mart", "vpd", "ombro", "gel", "dry"), avec, logical(1))),
+verifier(all(vapply(c("petp", "swi", "gdd", "mart", "vpd", "ombro", "geltd", "dry"), avec, logical(1))),
          "P - ETP, SWI, GDD, De Martonne, VPD, ombrothermique, gel tardif, sequences seches : infobulle")
 verifier(is.character(cf_terme(INDICATEURS[["bh"]]$titre)),
          "un titre sans terme technique reste un simple texte")

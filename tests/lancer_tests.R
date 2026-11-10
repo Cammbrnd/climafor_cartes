@@ -432,6 +432,7 @@ source("tests/test_v20.R")
 source("tests/test_v21.R")
 source("tests/test_v22.R")
 source("tests/test_v22_stations.R")
+source("tests/test_v24.R")
 
 
 # ==============================================================================

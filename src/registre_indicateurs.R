@@ -305,23 +305,68 @@ INDICATEURS <- list(
   can = list(
     id = "can", titre = "Jours de chaleur", famille = "thermique",
     calc = calc_chaleur, plot = plot_chaleur,
-    colonnes = c("annee", "n_t1", "n_t2", "n_t3", "normale", "anomalie", "ecart_type_ref", "n_manquants", "partielle"),
+    colonnes = c("annee", "n_t1", "n_t2", "n_t3", "n_t4", "normale", "anomalie", "ecart_type_ref", "n_manquants", "partielle"),
     comparaison = TRUE, fenetre = FALSE,
     methode = paste(
       "Dénombrement annuel des journées dont la température maximale dépasse",
-      "trois seuils emboîtés (25, 30 et 35 °C par défaut, modifiables dans",
-      "l'onglet Paramètres). Les épisodes de chaleur (vagues) ont leur propre",
-      "indicateur : un seuil absolu ne tient pas compte de la saison."),
+      "strictement quatre seuils emboîtés : 25, 30, 35 et 40 °C par défaut",
+      "(modifiables dans l'onglet Paramètres). 25 °C est le « jour d'été » de",
+      "l'indice SU (Zhang et al. 2011) ; 30, 35 et 40 °C sont des repères d'usage.",
+      "Les épisodes de chaleur (vagues) ont leur propre indicateur : un seuil",
+      "absolu ne tient pas compte de la saison. La date du premier jour à plus de",
+      "25 °C et de 30 °C est donnée par l'indicateur « Premiers jours de chaleur »."),
     lecture = paste(
       "Vers 35 °C et au-delà, l'assimilation nette des essences tempérées diminue",
       "le plus souvent : l'optimum se situe en général entre 20 et 30 °C, selon",
       "l'essence et l'acclimatation (Sage et Kubien 2007). 35 °C est un repère,",
       "non une limite physiologique unique. Le nombre de jours au-dessus de ce",
       "seuil, et sa progression, entrent dans le choix d'une essence en station",
-      "exposée, avec le sol et l'humidité de l'air."),
+      "exposée, avec le sol et l'humidité de l'air. Le seuil de 40 °C est rarement",
+      "atteint en France : un nombre nul est la situation courante, et un seul jour",
+      "au-dessus est déjà un événement."),
     resume = function(dat, ctx) resume_standard(
       dat, ctx, "n_t2", sprintf("Nombre de jours à plus de %g °C", ctx$seuils$chaleur_t2),
       "jours", 0)
+  ),
+
+  premchaud = list(
+    id = "premchaud", titre = "Premiers jours de chaleur", famille = "thermique",
+    calc = calc_premiers_jours_chauds, plot = plot_premiers_jours_chauds,
+    colonnes = c("annee", "doy_t1", "doy_t2", "normale", "anomalie", "ecart_type_ref", "n_manquants", "partielle"),
+    comparaison = TRUE, fenetre = FALSE,
+    methode = paste(
+      "Pour chaque année, date (jour de l'année) du premier jour dont la",
+      "température maximale dépasse strictement 25 °C, puis 30 °C (seuils des jours de",
+      "chaleur, modifiables dans l'onglet Paramètres). Quand le seuil n'est pas atteint",
+      "dans l'année, la date est vide ; pour l'année en cours, cela veut dire « pas",
+      "encore ». Un jour sans mesure ne peut pas être le premier jour : sur une année",
+      "à lacunes, la date est une borne tardive. La normale est la moyenne des dates des",
+      "années de la référence où le seuil a été atteint (elle ne porte que sur le seuil",
+      "de 25 °C)."),
+    lecture = paste(
+      "Une date de plus en plus précoce signale une chaleur qui arrive plus tôt dans",
+      "l'année ; elle ne dit rien de la durée ni de l'intensité de la saison chaude",
+      "(voir les jours de chaleur et les vagues). C'est un événement unique : un seul",
+      "jour chaud isolé suffit à la fixer, d'où une forte variabilité d'une année à",
+      "l'autre. On lit la tendance sur plusieurs décennies plutôt qu'une année."),
+    resume = function(dat, ctx) {
+      s <- ctx$seuils
+      inc <- annee_incomplete(dat, ctx)
+      phrase <- function(seuil, col) {
+        v <- val_annee(dat, ctx$courante, col)
+        if (is.finite(v)) sprintf("premier jour à plus de %g °C le %s", seuil, doy_date_fr(v))
+        else if (isTRUE(inc$oui)) sprintf("plus de %g °C : pas encore atteint", seuil)
+        else sprintf("plus de %g °C : jamais atteint", seuil)
+      }
+      n <- if (nrow(dat) && "normale" %in% names(dat)) dat$normale[1] else NA_real_
+      txt <- sprintf("En %d, %s ; %s.", ctx$courante,
+                     phrase(s$chaleur_t1, "doy_t1"), phrase(s$chaleur_t2, "doy_t2"))
+      if (is.finite(n)) {
+        txt <- paste(txt, sprintf("Date normale %s du premier jour à plus de %g °C : %s.",
+                                  ctx$ref_label, s$chaleur_t1, doy_date_fr(n)))
+      }
+      txt
+    }
   ),
 
   vag = list(
@@ -363,31 +408,77 @@ INDICATEURS <- list(
 
   # ---- Gel -----------------------------------------------------------------
   gel = list(
-    id = "gel", titre = "Jours de gel et gel tardif", famille = "gel",
+    id = "gel", titre = "Jours de gel", famille = "gel",
     calc = calc_gel, plot = plot_gel,
-    colonnes = c("annee", "n_gel", "n_gel_severe", "n_gel_tardif",
+    colonnes = c("annee", "n_gel", "n_gel_severe", "n_gel_extreme",
                  "doy_dernier_gel", "normale", "anomalie", "ecart_type_ref", "n_manquants", "partielle"),
     comparaison = TRUE, fenetre = FALSE,
     methode = paste(
-      "Dénombrement des journées à température minimale négative, sous abri",
-      "(à 2 m). Le gel tardif est compté sur une fenêtre de dates fixe, du 1er",
-      "avril au 31 mai par défaut (réglable dans Paramètres) : elle ne suit pas le",
-      "débourrement réel du peuplement, qui varie avec l'essence, l'année et",
-      "l'altitude. La date du dernier gel de printemps est le jour julien du",
-      "dernier événement survenu avant le 30 juin."),
+      "Dénombrement des journées dont la température minimale, sous abri (à 2 m),",
+      "est strictement inférieure à trois seuils emboîtés : 0, -5 et -10 °C par défaut",
+      "(modifiables dans Paramètres). Le seuil de 0 °C est celui de l'indice FD",
+      "(Zhang et al. 2011) ; -5 et -10 °C sont des repères d'usage. La date du dernier",
+      "gel de printemps est le jour julien du dernier jour sous le seuil de 0 °C survenu",
+      "avant le 30 juin. Le gel tardif, qui compte les gels survenus après le",
+      "débourrement, a son propre indicateur."),
     lecture = paste(
       "Le réchauffement réduit le nombre total de jours de gel mais avance le",
       "débourrement : l'exposition au gel tardif peut donc augmenter alors",
       "même que le gel recule, ce que l'on observe en Europe entre 1959 et 2017",
-      "(Zohner et al. 2020). C'est un point de vigilance pour les essences à",
-      "débourrement précoce, en fond de vallon froid : l'air froid y stagne, et",
-      "le gel y est plus fréquent et plus intense que sous l'abri météorologique",
-      "dont sont tirées les données."),
+      "(Zohner et al. 2020). Les jours de gel sont mesurés sous abri : dans un",
+      "fond de vallon froid, l'air froid stagne et le gel est plus fréquent et plus",
+      "intense que sous l'abri météorologique dont sont tirées les données."),
+    resume = function(dat, ctx) resume_standard(dat, ctx, "n_gel", "Nombre de jours de gel",
+                                                "jours", 0)
+  ),
+
+  geltd = list(
+    id = "geltd", titre = "Gel tardif", famille = "gel",
+    calc = calc_gel_tardif, plot = plot_gel_tardif,
+    colonnes = c("annee", "n_gel_tardif", "doy_debourrement", "normale", "anomalie",
+                 "ecart_type_ref", "n_manquants", "partielle"),
+    comparaison = TRUE, fenetre = FALSE,
+    methode = paste(
+      "DÉFINITION. Un jour de gel tardif est un jour (1) dont la température minimale,",
+      "sous abri, est strictement inférieure à 0 °C, (2) postérieur au débourrement estimé",
+      "de l'année, (3) au plus le 30 juin (jour 181 de l'année). Le seuil, la somme de",
+      "degrés-jours du débourrement et la date de fin sont modifiables dans Paramètres.",
+      "POURQUOI. Un gel ne menace les jeunes feuilles et pousses qu'une fois qu'elles",
+      "sont sorties : ce qui compte est sa position par rapport au débourrement, non une",
+      "date du calendrier. C'est le cadre des travaux de référence : Vitasse et al. 2018b",
+      "comparent la date du dernier gel à celle du débourrement ; Bigler et Bugmann 2018",
+      "comptent un dommage quand la température minimale passe sous la résistance au gel",
+      "des feuilles dépliées, propre à chaque essence ; Lenz et al. 2013 mesurent la marge",
+      "de sécurité entre cette résistance et les gels de printemps.",
+      "DÉBOURREMENT ESTIMÉ. Il n'est pas observé : il est estimé comme le premier jour où",
+      "la somme des degrés-jours (base 5 °C, plafond 30 °C), cumulée depuis le 1er janvier,",
+      "atteint 200 °C-jours. Une somme de températures au-dessus d'un seuil à partir d'une",
+      "date fixe est la forme la plus simple des modèles de phénologie printanière",
+      "(Delpierre et al. 2016) : elle suit le climat du point et l'année, ce qu'une fenêtre",
+      "de dates fixes ne fait pas. Un gel le jour même du débourrement estimé n'est pas",
+      "compté : la température minimale précède la chaleur de la journée.",
+      "LIMITES. Les 200 °C-jours sont une valeur par défaut INDICATIVE, qu'aucune étude",
+      "ne fixe pour l'ensemble des essences : à caler sur les dates de débourrement observées",
+      "de l'essence visée. Le modèle ignore le froid d'hiver (dormance) et la durée du jour,",
+      "qui jouent aussi (Delpierre et al. 2016). Le seuil de 0 °C compte l'exposition, non",
+      "le dégât : la résistance au gel des feuilles dépliées varie d'une essence à l'autre,",
+      "avec des seuils de dommage de l'ordre de -1 à -7,5 °C (Bigler et Bugmann 2018). Un jour",
+      "sans température moyenne n'ajoute rien à la somme : le débourrement est alors estimé",
+      "plus tard qu'il ne l'est."),
+    lecture = paste(
+      "Un nombre élevé de jours de gel tardif mesure une exposition, pas un dégât : il",
+      "faut que la température passe sous la résistance des tissus de l'essence considérée.",
+      "Pour mesurer le dégât, relever le seuil de gel tardif dans Paramètres (-2, -3 °C...)",
+      "selon l'essence. Le réchauffement avance le débourrement : l'exposition au gel",
+      "tardif peut augmenter alors même que le nombre total de jours de gel recule, ce que",
+      "l'on observe en Europe entre 1959 et 2017 (Zohner et al. 2020). Dans un fond de",
+      "vallon froid, l'air froid stagne et le gel est plus fréquent et plus intense que sous",
+      "l'abri météorologique dont sont tirées les données."),
     resume = function(dat, ctx) {
-      base <- resume_standard(dat, ctx, "n_gel", "Nombre de jours de gel",
+      base <- resume_standard(dat, ctx, "n_gel_tardif", "Nombre de jours de gel tardif",
                               "jours", 0)
-      gt <- val_annee(dat, ctx$courante, "n_gel_tardif")
-      if (is.finite(gt)) paste(base, sprintf("Dont %d jour(s) de gel tardif.", gt)) else base
+      deb <- val_annee(dat, ctx$courante, "doy_debourrement")
+      if (is.finite(deb)) paste(base, sprintf("Débourrement estimé le %s.", doy_date_fr(deb))) else base
     }
   ),
 
@@ -842,7 +933,7 @@ INDICATEURS <- list(
 #' Modifier ce vecteur suffit a reorganiser toute l'interface.
 #' @export
 ORDRE_INDICATEURS <- c(
-  "bh", "ombro", "tmp", "tmp_mois", "tmp_jour", "gel", "can", "vag", "pre", "pre_mois",
+  "bh", "ombro", "tmp", "tmp_mois", "tmp_jour", "gel", "geltd", "can", "premchaud", "vag", "pre", "pre_mois",
   "jja", "swi", "dry", "mart", "vpd", "vpd_mois", "gdd", "veg",
   "petp", "neige", "neige_mois", "vent", "vent_mois", "vent_soutenu", "vent_sol"
 )
@@ -891,6 +982,7 @@ REQUIS <- list(
   swi = "swi",                    dry = "p_tot",
   tmp = "t_moy",                  jja = c("t_moy", "p_tot"),
   can = "t_max",                  gel = "t_min",
+  geltd = c("t_min", "t_moy"),    premchaud = "t_max",
   vag = "t_max",
   pre = "p_tot",                  neige = "p_sol",
   mart = c("p_tot", "t_moy"),     gdd = "t_moy",

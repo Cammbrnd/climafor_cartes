@@ -64,8 +64,8 @@ la grille SAFRAN en alternative.
 | Thématique | Indicateurs |
 |---|---|
 | Eau et bilan hydrique | Bilan hydrique mensuel, P − ETP sur fenêtre choisie, SWI estival, séquences sèches, précipitations annuelles |
-| Températures | Évolution thermique annuelle, été JJA, jours de chaleur |
-| Gel | Jours de gel et gel tardif |
+| Températures | Évolution thermique annuelle, été JJA, jours de chaleur (25, 30, 35, 40 °C), premiers jours de chaleur, vagues de chaleur |
+| Gel | Jours de gel (0, −5, −10 °C), gel tardif |
 | Aridité et bioclimat | Diagramme ombrothermique, indice de De Martonne |
 | Phénologie | Degrés-jours de croissance, saison de végétation |
 | Neige | Précipitations neigeuses |
@@ -196,6 +196,7 @@ les versions suivantes ajoutent des fonctions et sont décrites dans ce README.
 
 | Version | Ajout | Où |
 |---|---|---|
+| 2.4 | Bilan juste après l'Accueil ; seuils de chaleur et de gel ; premiers jours chauds ; gel tardif défini par le débourrement | [Version 2.4](#version-24--seuils-de-chaleur-et-de-gel-premiers-jours-chauds-gel-tardif) |
 | 2.3 | Mode rapide pour les stations ; tests automatiques | [Version 2.2](#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
 | 2.2 | Base précalculée, mode rapide (mailles) | [Version 2.2](#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
 | 2.1 | Stations publiées, deux lieux, synthèse du terrain | [Version 2.1](#version-21--mesures-et-modèle-côte-à-côte-deux-lieux-synthèse-à-envoyer) |
@@ -806,6 +807,60 @@ publication réelle (9 892 mailles, 1959-2025) : la base des mailles ajoute **22
 
 ---
 
+## Version 2.4 — seuils de chaleur et de gel, premiers jours chauds, gel tardif
+
+**Onglet Bilan climatique.** Dans le profil permanent DSF, il vient juste après l'Accueil.
+
+**Jours de chaleur : quatre seuils.** Nombre de jours dont la température maximale dépasse **25, 30, 35 et 40 °C**
+(inégalité stricte : un jour à 25,0 °C n'est pas « à plus de 25 °C »). 25 °C est le « jour d'été » de l'indice SU
+(Zhang et al. 2011) ; les trois autres sont des repères d'usage. Les seuils se règlent dans Paramètres.
+
+**Jours de gel : trois seuils.** Nombre de jours dont la température minimale passe sous **0, −5 et −10 °C**
+(0 °C : indice FD, Zhang et al. 2011).
+
+**Premiers jours chauds** (indicateur `premchaud`). Date du premier jour de l'année à plus de 25 °C, et du premier
+jour à plus de 30 °C. Date vide quand le seuil n'est pas atteint ; pour l'année en cours, « pas encore ». La
+normale est la moyenne des dates des années de la référence où le seuil a été atteint.
+
+**Gel tardif** (indicateur `geltd`, à part des jours de gel). La définition tient en trois conditions : un jour de
+gel tardif est un jour (1) de température minimale **sous 0 °C** (sous abri), (2) **postérieur au débourrement
+estimé** de l'année, (3) au plus le **30 juin** (jour 181).
+
+- *Pourquoi.* Un gel ne menace les jeunes feuilles et pousses qu'une fois sorties : ce qui compte est sa position
+  par rapport au débourrement, non une date du calendrier. C'est le cadre de la littérature : Vitasse et al. 2018b
+  comparent la date du dernier gel à celle du débourrement ; Bigler et Bugmann 2018 comptent un dommage quand la
+  température minimale passe sous la résistance au gel des feuilles dépliées, propre à chaque essence ; Lenz et al.
+  2013 mesurent la marge de sécurité entre cette résistance et les gels de printemps.
+- *Débourrement estimé.* Premier jour où la somme des degrés-jours (base 5 °C, plafond 30 °C, comme l'indicateur GDD),
+  cumulée depuis le 1er janvier, atteint **200 °C-jours**. Une somme de températures au-dessus d'un seuil, à partir
+  d'une date fixe, est la forme la plus simple des modèles de phénologie printanière (Delpierre et al. 2016). Elle suit le
+  climat du point et l'année, ce qu'une fenêtre de dates fixes (1er avril – 31 mai, jusqu'en 2.3) ne faisait pas.
+- *Ce que cela ne dit pas.* Les **200 °C-jours sont une valeur par défaut indicative**, qu'aucune étude ne fixe pour
+  l'ensemble des essences : à caler sur les dates de débourrement observées de l'essence visée (Paramètres). Le modèle
+  ignore le froid d'hiver et la durée du jour. Le seuil de 0 °C compte l'**exposition**, non le dégât : les seuils de
+  dommage des feuilles dépliées vont de −1 à −7,5 °C selon l'essence (Bigler et Bugmann 2018) ; mettre −2 ou −3 °C dans
+  Paramètres pour s'en approcher. Un gel le jour même du débourrement estimé n'est pas compté.
+
+Le gel tardif a aussi une couche sur la carte et une colonne `doy_debourrement` (date estimée du débourrement) dans
+les exports.
+
+### Ce qui change pour qui maintient le code
+
+- Nouveaux seuils dans `CONFIG$seuils` : `gel_extreme_t`, `gel_tardif_t`, `gel_tardif_gdd`, `chaleur_t4` ;
+  `gel_tardif_debut` disparaît (un lien partagé qui le porte est ignoré) ; `gel_tardif_fin` passe de 151 à 181.
+- Colonnes : `n_t4` (indicateur `can`), `n_gel_extreme` (indicateur `gel`, qui perd `n_gel_tardif`), indicateurs
+  `geltd` (`n_gel_tardif`, `doy_debourrement`) et `premchaud` (`doy_t1`, `doy_t2`).
+- Nouvelles couches de la carte : `can1`, `can4`, `gel5`, `gel10`, `chaud1`, `chaud2` ; `geltd` s'appuie sur
+  l'indicateur `geltd`.
+- **La base précalculée publiée ne vaut plus** (les seuils et les colonnes ont changé) : relancer le workflow
+  « Construire la carte » (mailles et stations), puis « Vérifier la publication ». Tant que ce n'est pas fait, le
+  mode rapide se désactive de lui-même et le chargement complet sert de repli.
+- La définition du gel tardif vit dans `gel_tardif_jours()` (`src/utils_calc.R`) : l'indicateur annuel et la
+  synthèse à période égale comptent la même chose.
+- Tests : `tests/test_v24.R`, avec des attendus calculés à la main.
+
+---
+
 ## Architecture
 
 ```
@@ -823,7 +878,7 @@ climafor/
 │                               test_v19.R, test_v19_comparer.R (vagues, export, Comparer)
 │                               test_v21.R, test_v22.R, test_v22_stations.R (stations, deux lieux ;
 │                               base précalculée, mode rapide des mailles et des stations)
-├── DESCRIPTION                 Paquets et versions requis (v2.3.0)
+├── DESCRIPTION                 Paquets et versions requis (v2.4.0)
 ├── NEWS.md                     Historique des versions (audits 1.2 → 1.7.3 en détail)
 ├── LICENSE                     Licence du code : EUPL-1.2
 ├── docs/                       maquette_interface.html (maquette d'origine, plus mise à jour)

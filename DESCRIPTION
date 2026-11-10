@@ -1,6 +1,6 @@
 Package: climafor
 Title: ClimaFor, bilan meteorologique et climatique pour la gestion forestiere
-Version: 2.3.0
+Version: 2.4.0
 Description: Application R/Shiny qui produit, pour un point de France
     metropolitaine, un bilan climatique (station Meteo-France ou reanalyse
     SAFRAN-ISBA) avec vingt-cinq indicateurs forestiers, des tendances et des

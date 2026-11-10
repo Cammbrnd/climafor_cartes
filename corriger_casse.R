@@ -148,6 +148,7 @@ attendus <- c(
   "tests/test_v21.R",
   "tests/test_v22.R",
   "tests/test_v22_stations.R",
+  "tests/test_v24.R",
   "www",
   "www/app.js",
   "www/carte",

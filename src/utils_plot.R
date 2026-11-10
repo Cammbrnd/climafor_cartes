@@ -557,33 +557,65 @@ plot_temperature_annuelle <- function(dat, ctx, mobile = FALSE) {
   p
 }
 
-#' 04 — Jours de gel et gel tardif.
+#' 04 — Jours de gel : trois seuils emboites.
 #' @export
 plot_gel <- function(dat, ctx, mobile = FALSE) {
   a <- lignes_affichees(dat, ctx); if (is.null(a$d)) return(a$repli)
   d <- a$d; ok <- d[!d$partielle, , drop = FALSE]
 
+  s <- ctx$seuils
+  lib <- c(sprintf("T min < %g °C", s$gel_t),
+           sprintf("T min < %g °C", s$gel_severe_t),
+           sprintf("T min < %g °C", s$gel_extreme_t))
+
   p <- ggplot2::ggplot(ok, ggplot2::aes(x = .data$annee)) +
-    ggplot2::geom_col(ggplot2::aes(y = .data$n_gel, fill = "Jours de gel (T min < 0 °C)"),
-                      width = 0.75, na.rm = TRUE) +
-    ggplot2::geom_col(ggplot2::aes(y = .data$n_gel_tardif,
-                                   fill = "dont gel tardif (avril-mai)"),
-                      width = 0.75, na.rm = TRUE) +
+    ggplot2::geom_col(ggplot2::aes(y = .data$n_gel, fill = lib[1]), width = 0.75, na.rm = TRUE) +
+    ggplot2::geom_col(ggplot2::aes(y = .data$n_gel_severe, fill = lib[2]), width = 0.75, na.rm = TRUE) +
+    ggplot2::geom_col(ggplot2::aes(y = .data$n_gel_extreme, fill = lib[3]), width = 0.75, na.rm = TRUE) +
     barre_partielle(d, "n_gel") +
     ggplot2::geom_hline(yintercept = d$normale[1], colour = CL$reference,
                         linetype = "dashed", linewidth = 0.5) +
-    ggplot2::scale_fill_manual(values = c(
-      "Jours de gel (T min < 0 °C)"  = CL$neige,
-      "dont gel tardif (avril-mai)"    = CL$alerte
-    )) +
+    ggplot2::scale_fill_manual(values = stats::setNames(
+      c(CL$neige, "#3E6FB0", "#1B2F6B"), lib), breaks = lib) +
     ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
     ggplot2::labs(x = NULL, y = "Nombre de jours", fill = NULL,
-                  subtitle = "Le gel tardif frappe après le débourrement : c'est le plus dommageable") +
+                  subtitle = sprintf(
+                    "Seuils emboîtés : chaque barre englobe la suivante | Tirets : normale %s (seuil de %g °C)",
+                    ctx$ref_label, s$gel_t)) +
     theme_climafor(mobile = mobile)
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
 }
 
-#' 05 — Jours de chaleur (trois seuils emboites).
+#' 04 bis — Gel tardif : nombre de jours de gel apres le debourrement estime.
+#' @export
+plot_gel_tardif <- function(dat, ctx, mobile = FALSE) {
+  a <- lignes_affichees(dat, ctx); if (is.null(a$d)) return(a$repli)
+  d <- a$d; ok <- d[!d$partielle, , drop = FALSE]
+
+  s <- ctx$seuils
+  deb <- ok$doy_debourrement[is.finite(ok$doy_debourrement) & ok$annee %in% ctx$ref]
+  sous_titre <- sprintf(
+    "Jours à T min < %g °C après le débourrement estimé, jusqu'au jour %d de l'année\nDébourrement estimé : %g °C-jours depuis le 1er janvier%s",
+    s$gel_tardif_t, as.integer(s$gel_tardif_fin), s$gel_tardif_gdd,
+    if (length(deb)) sprintf(" (en moyenne le %s, %s)", doy_date_fr(mean(deb)), ctx$ref_label) else "")
+
+  p <- ggplot2::ggplot(ok, ggplot2::aes(x = .data$annee)) +
+    ggplot2::geom_col(ggplot2::aes(y = .data$n_gel_tardif), fill = CL$alerte,
+                      width = 0.75, na.rm = TRUE) +
+    barre_partielle(d, "n_gel_tardif") +
+    ggplot2::geom_hline(yintercept = d$normale[1], colour = CL$reference,
+                        linetype = "dashed", linewidth = 0.5) +
+    ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
+    # Un nombre de jours est entier : pas de graduation a 0,5.
+    ggplot2::scale_y_continuous(breaks = function(lim) {
+      b <- pretty(c(0, lim[2])); b[b == round(b)]
+    }) +
+    ggplot2::labs(x = NULL, y = "Nombre de jours", subtitle = sous_titre) +
+    theme_climafor(mobile = mobile)
+  avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
+}
+
+#' 05 — Jours de chaleur (quatre seuils emboites).
 #' @export
 plot_chaleur <- function(dat, ctx, mobile = FALSE) {
   a <- lignes_affichees(dat, ctx); if (is.null(a$d)) return(a$repli)
@@ -592,18 +624,56 @@ plot_chaleur <- function(dat, ctx, mobile = FALSE) {
   s <- ctx$seuils
   lib <- c(sprintf("T max > %g °C", s$chaleur_t1),
            sprintf("T max > %g °C", s$chaleur_t2),
-           sprintf("T max > %g °C", s$chaleur_t3))
+           sprintf("T max > %g °C", s$chaleur_t3),
+           sprintf("T max > %g °C", s$chaleur_t4))
 
   p <- ggplot2::ggplot(ok, ggplot2::aes(x = .data$annee)) +
     ggplot2::geom_col(ggplot2::aes(y = .data$n_t1, fill = lib[1]), width = 0.75, na.rm = TRUE) +
     ggplot2::geom_col(ggplot2::aes(y = .data$n_t2, fill = lib[2]), width = 0.75, na.rm = TRUE) +
     ggplot2::geom_col(ggplot2::aes(y = .data$n_t3, fill = lib[3]), width = 0.75, na.rm = TRUE) +
+    ggplot2::geom_col(ggplot2::aes(y = .data$n_t4, fill = lib[4]), width = 0.75, na.rm = TRUE) +
     barre_partielle(d, "n_t1") +
     ggplot2::scale_fill_manual(values = stats::setNames(
-      c("#FFCA00", CL$attention, CL$erreur), lib), breaks = lib) +
+      c("#FFCA00", CL$attention, CL$erreur, "#6B0F1A"), lib), breaks = lib) +
     ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
     ggplot2::labs(x = NULL, y = "Nombre de jours", fill = NULL,
                   subtitle = "Seuils emboîtés : chaque barre englobe la suivante") +
+    theme_climafor(mobile = mobile)
+  avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
+}
+
+#' 05 ter — Premiers jours de chaleur : date du premier jour a plus de 25 puis 30 degC.
+#' La date d'une annee en cours est definitive des qu'elle est observee : l'annee
+#' partielle est tracee quand la date existe (elle n'est ni comparee ni comptee dans la normale).
+#' @export
+plot_premiers_jours_chauds <- function(dat, ctx, mobile = FALSE) {
+  a <- lignes_affichees(dat, ctx); if (is.null(a$d)) return(a$repli)
+  d <- a$d
+
+  s <- ctx$seuils
+  lib <- c(sprintf("Premier jour > %g °C", s$chaleur_t1),
+           sprintf("Premier jour > %g °C", s$chaleur_t2))
+  long <- rbind(
+    data.frame(annee = d$annee, doy = d$doy_t1, seuil = lib[1]),
+    data.frame(annee = d$annee, doy = d$doy_t2, seuil = lib[2]))
+  long <- long[is.finite(long$doy), , drop = FALSE]
+  if (!nrow(long)) return(graphe_message("Aucun jour n'atteint ces seuils sur la période affichée."))
+
+  p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$annee, y = .data$doy,
+                                          colour = .data$seuil, group = .data$seuil)) +
+    ggplot2::geom_line(linewidth = 0.4, alpha = 0.6, na.rm = TRUE) +
+    ggplot2::geom_point(size = 1.6, na.rm = TRUE) +
+    ggplot2::geom_hline(yintercept = d$normale[1], colour = CL$reference,
+                        linetype = "dashed", linewidth = 0.5) +
+    ggplot2::scale_colour_manual(values = stats::setNames(c("#E0A800", CL$erreur), lib), breaks = lib) +
+    ggplot2::scale_y_continuous(
+      breaks = c(1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335),
+      labels = c("1 jan", "1 fév", "1 mar", "1 avr", "1 mai", "1 juin",
+                 "1 juil", "1 août", "1 sep", "1 oct", "1 nov", "1 déc")) +
+    ggplot2::scale_x_continuous(breaks = graphe_ruptures_annees(d$annee, mobile)) +
+    ggplot2::labs(x = NULL, y = NULL, colour = NULL,
+                  subtitle = sprintf("Tirets : date normale %s du premier jour à plus de %g °C",
+                                     ctx$ref_label, s$chaleur_t1)) +
     theme_climafor(mobile = mobile)
   avec_notes(p, notes_annuelles(d, ctx, attr(dat, "meta"), attr(dat, "ref_n")))
 }

@@ -49,7 +49,7 @@ PROFILS <- list(
   dsf = list(
     id = "dsf", libelle = "Permanent DSF",
     resume = "Tous les indicateurs, la comparaison de deux lieux (maille, station, département) ou de lieux importés, l'import de fiches et les bilans par territoire.",
-    onglets = c("accueil", "carte", "comparer", "synthese", "bilan", "rapport", "parametres", "sources"),
+    onglets = c("accueil", "bilan", "carte", "comparer", "synthese", "rapport", "parametres", "sources"),
     echelles = c("departement", "region", "fiches", "point"), multi = TRUE, restreint = FALSE)
 )
 

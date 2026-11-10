@@ -203,7 +203,7 @@ groupe("v1.5 — references et statut des seuils (M6)")
 
 verifier(!anyDuplicated(REFERENCES$id) && all(nzchar(REFERENCES$court)),
          "identifiants de references uniques, formes courtes renseignees")
-annee_de <- function(x) sub(".*?((?:19|20)[0-9]{2})$", "\\1", x, perl = TRUE)
+annee_de <- function(x) sub(".*?((?:19|20)[0-9]{2})[a-z]?$", "\\1", x, perl = TRUE)
 verifier(all(mapply(function(court, cit) grepl(sprintf("(%s)", annee_de(court)), cit, fixed = TRUE),
                     REFERENCES$court, REFERENCES$citation)),
          "l'annee de la forme courte est celle de la citation complete")
@@ -226,10 +226,10 @@ textes <- c(vapply(INDICATEURS, function(i) paste(i$methode, i$lecture), charact
             GLOSSAIRE$definition, DESCRIPTIF_SEUILS$aide,
             lire_src("src/mod_sources.R"), lire_src("src/utils_calc.R"),
             CORRECTIONS_METHODE$texte)
-motif_cite <- "(*UCP)(?<![[:alpha:]-])[[:upper:]][[:alpha:]-]+(?: et al\\.| et [[:upper:]][[:alpha:]]+)? (?:19|20)[0-9]{2}(?![0-9-])"
+motif_cite <- "(*UCP)(?<![[:alpha:]-])[[:upper:]][[:alpha:]-]+(?: et al\\.| et [[:upper:]][[:alpha:]]+)? (?:19|20)[0-9]{2}[ab]?(?![0-9-])"
 cites <- unique(unlist(regmatches(textes, gregexpr(motif_cite, textes, perl = TRUE))))
 cites <- sub("^[[:space:]]+", "", cites)
-# « Vitasse et al. 2018 » du texte = « Vitasse et al. 2018 » de la table ; on ecarte
+# « Vitasse et al. 2018a » du texte = « Vitasse et al. 2018a » de la table (deux travaux de 2018 : a, b) ; on ecarte
 # les formes qui ne sont pas des citations (mois, 1re ligne d'un titre...).
 cites <- cites[!grepl("^(Version|Vers|Mars|Mai|Juin|Juillet|Août|Avril) ", cites)]
 manquantes <- setdiff(cites, REFERENCES$court)
@@ -264,7 +264,7 @@ verifier(sum(gregexpr("cf-statut ", h_param, fixed = TRUE)[[1]] > 0) == nrow(DES
 
 
 # ==============================================================================
-groupe("v1.5 — gel tardif : fenetre fixe, temperature sous abri (M7)")
+groupe("v1.5 — gel tardif : altitude et temperature sous abri (M7)")
 # ==============================================================================
 
 verifier(is.null(gel_tardif_conseil(150)) && is.null(gel_tardif_conseil(NA_real_)) &&
@@ -272,24 +272,20 @@ verifier(is.null(gel_tardif_conseil(150)) && is.null(gel_tardif_conseil(NA_real_
          "pas de conseil en plaine, ni sans altitude")
 # 800 m : 8 x 2 = 16 jours et 8 x 3,5 = 28 jours
 c800 <- gel_tardif_conseil(800)
-verifier(grepl("800 m", c800) && grepl("16 à 28 jours", c800) && grepl("Vitasse et al. 2018", c800),
+verifier(grepl("800 m", c800) && grepl("16 à 28 jours", c800) && grepl("Vitasse et al. 2018a", c800),
          "a 800 m : debourrement retarde de 16 a 28 jours, source citee")
-verifier(grepl("jour 151", c800) && grepl("jour 170", gel_tardif_conseil(800, 170)),
-         "le conseil cite la fin de fenetre en vigueur")
+verifier(grepl("jour 181", c800) && grepl("jour 200", gel_tardif_conseil(800, 200)),
+         "le conseil cite la fin de saison de gel tardif en vigueur")
 verifier(grepl("le calcul n'est pas modifié", c800),
          "le conseil ne modifie pas le calcul")
 verifier(!is.null(gel_tardif_conseil(GEL_ALTITUDE_ALERTE_M)) && is.null(gel_tardif_conseil(GEL_ALTITUDE_ALERTE_M - 1)),
          "le conseil commence a l'altitude d'alerte")
-verifier(grepl("sous abri", INDICATEURS$gel$methode) && grepl("ne suit pas le", INDICATEURS$gel$methode),
-         "la fiche du gel dit : temperature sous abri, fenetre qui ne suit pas le debourrement")
+verifier(grepl("sous abri", INDICATEURS$gel$methode) && grepl("sous abri", INDICATEURS$geltd$methode) &&
+           grepl("débourrement estimé", INDICATEURS$geltd$methode),
+         "les fiches du gel et du gel tardif disent : temperature sous abri ; le gel tardif, debourrement estime")
 
-# La fenetre reste le seul critere du decompte (comportement inchange).
-don_g <- serie_synthetique(2001, t_moy = 12, amplitude = 1)
-don_g$t_min[don_g$doy == 100] <- -2     # dans la fenetre (91 a 151)
-don_g$t_min[don_g$doy == 160] <- -2     # apres la fenetre
-g <- calc_gel(don_g, ctx_test(ref = 2001, courante = 2001, affichage = 2001))
-verifier(g$n_gel[1] == 2 && g$n_gel_tardif[1] == 1,
-         "deux jours de gel, dont un seul dans la fenetre de gel tardif")
+# (Le decompte du gel tardif ne repose plus sur une fenetre de dates fixe depuis la v2.4 :
+# ses tests sont dans tests/test_v24.R.)
 
 
 # ==============================================================================

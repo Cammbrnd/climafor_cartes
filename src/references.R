@@ -37,7 +37,8 @@ REFERENCES <- data.frame(
     "wmo2017", "zhang2011", "frich2002",
     "mann1945", "kendall1975", "sen1968", "hamed1998", "pettitt1979",
     "granier1999", "breda2006", "netherer2015", "grossiord2020", "sage2007",
-    "zohner2020", "vitasse2018", "gardiner2016", "piedallu2013"),
+    "zohner2020", "vitasse2018", "gardiner2016", "piedallu2013",
+    "bigler2018", "lenz2013", "vitasse2018gel", "delpierre2016"),
   court = c(
     "Vidal et al. 2010", "Quintana-Seguí et al. 2008", "Soubeyroux et al. 2008",
     "Allen et al. 1998", "Hargreaves et Samani 1985", "Bagnouls et Gaussen 1953",
@@ -46,8 +47,10 @@ REFERENCES <- data.frame(
     "Mann 1945", "Kendall 1975", "Sen 1968", "Hamed et Rao 1998", "Pettitt 1979",
     "Granier et al. 1999", "Bréda et al. 2006", "Netherer et al. 2015",
     "Grossiord et al. 2020", "Sage et Kubien 2007",
-    "Zohner et al. 2020", "Vitasse et al. 2018", "Gardiner et al. 2016",
-    "Piedallu et al. 2013"),
+    "Zohner et al. 2020", "Vitasse et al. 2018a", "Gardiner et al. 2016",
+    "Piedallu et al. 2013",
+    "Bigler et Bugmann 2018", "Lenz et al. 2013", "Vitasse et al. 2018b",
+    "Delpierre et al. 2016"),
   citation = c(
     "Vidal J.-P. et al. (2010). A 50-year high-resolution atmospheric reanalysis over France with the Safran system. International Journal of Climatology, 30(11).",
     "Quintana-Seguí P., Le Moigne P., Durand Y., Martin E., Habets F., Baillon M., Canellas C., Franchisteguy L., Morel S. (2008). Analysis of near-surface atmospheric variables: validation of the SAFRAN analysis over France. Journal of Applied Meteorology and Climatology, 47(1), 92-107. doi:10.1175/2007JAMC1636.1",
@@ -72,7 +75,11 @@ REFERENCES <- data.frame(
     "Zohner C.M. et al. (2020). Late-spring frost risk between 1959 and 2017 decreased in North America but increased in Europe and Asia. Proceedings of the National Academy of Sciences, 117(22), 12192-12200.",
     "Vitasse Y., Signarbieux C., Fu Y.H. (2018). Global warming leads to more uniform spring phenology across elevations. Proceedings of the National Academy of Sciences, 115(5), 1004-1008. doi:10.1073/pnas.1717342115",
     "Gardiner B., Berry P., Moulia B. (2016). Review: Wind impacts on plant growth, mechanics and damage. Plant Science, 245, 94-118.",
-    "Piedallu C. et al. (2013). Soil water balance performs better than climatic water variables in tree species distribution modelling. Global Ecology and Biogeography, 22(4)."),
+    "Piedallu C. et al. (2013). Soil water balance performs better than climatic water variables in tree species distribution modelling. Global Ecology and Biogeography, 22(4).",
+    "Bigler C., Bugmann H. (2018). Climate-induced shifts in leaf unfolding and frost risk of European trees and shrubs. Scientific Reports, 8, 9865. doi:10.1038/s41598-018-27893-1",
+    "Lenz A., Hoch G., Vitasse Y., Körner C. (2013). European deciduous trees exhibit similar safety margins against damage by spring freeze events along elevational gradients. New Phytologist, 200(4), 1166-1175. doi:10.1111/nph.12452",
+    "Vitasse Y., Schneider L., Rixen C., Christen D., Rebetez M. (2018). Increase in the risk of exposure of forest and fruit trees to spring frosts at higher elevation in Switzerland over the last four decades. Agricultural and Forest Meteorology, 248, 60-69. doi:10.1016/j.agrformet.2017.09.005",
+    "Delpierre N., Vitasse Y., Chuine I., Guillemot J., Bazot S., Rutishauser T., Rathgeber C.B.K. (2016). Temperate and boreal forest tree phenology: from organ-scale processes to terrestrial ecosystem models. Annals of Forest Science, 73, 5-25. doi:10.1007/s13595-015-0477-6"),
   stringsAsFactors = FALSE
 )
 
@@ -118,12 +125,17 @@ STATUTS_SEUIL_AIDE <- c(
 #' de la v1.1 ne donne plus les memes valeurs.
 #' @keywords internal
 CORRECTIONS_METHODE <- data.frame(
-  version = c("1.5", "1.2", "1.2"),
+  version = c("2.4", "1.5", "1.2", "1.2"),
   sujet = c(
+    "Gel tardif",
     "VPD",
     "Année en cours",
     "Tendance"),
   texte = c(
+    paste("Le gel tardif n'est plus compté sur une fenêtre de dates fixe (du 1er avril au 31 mai) :",
+          "c'est un jour de gel postérieur au débourrement estimé de l'année, au plus tard le 30 juin.",
+          "Il devient un indicateur à part, et le tableau des jours de gel ne le porte plus. Les valeurs",
+          "d'un rapport ou d'un export antérieur ne sont pas comparables."),
     paste("Formule du déficit de pression de vapeur corrigée (FAO-56) : la pression",
           "de vapeur réelle est calculée sur la moyenne des saturations aux",
           "températures extrêmes, comme la saturation. Les versions antérieures",
