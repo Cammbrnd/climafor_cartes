@@ -868,8 +868,13 @@ Les stations Météo-France publiées avec la carte (`stations.json`, depuis la 
 les deux cartes de l'application, et se choisissent d'un clic. **Aucune donnée n'est à reconstruire** : le fichier est
 celui qui est déjà publié.
 
-**Onglet Carte.** Les stations s'affichent en **points noirs cernés de blanc**, au-dessus des mailles. Une case, sous
-la carte, les masque ou les réaffiche (affichées au départ). Passer la souris sur un point donne le nom et l'altitude ;
+**Onglet Carte.** Les stations s'affichent en points, au-dessus des mailles ; leur rendu dit **ce qu'elles mesurent**
+(2.5.1) : **noir cerné de blanc** = pluie et températures, **blanc cerné de noir** = pluie seule, **gris** = températures
+seules. Les trois types se distinguent par leur clarté et par la forme (disque plein ou anneau), pas par une teinte :
+ils se lisent aussi sans les couleurs. Une case, sous la carte, masque ou réaffiche les stations (affichées au départ) ;
+trois cases de type, avec l'effectif de chacun, n'en gardent que certains types — par exemple les seules stations
+qui mesurent la température, pour choisir la source d'un bilan. Masquer un type ferme la fiche de la station choisie
+si elle en relève. Passer la souris sur un point donne le nom et l'altitude ;
 **un clic ouvre la fiche** de la station (département, altitude, mesures — pluie, températures —, date de la dernière
 mesure, complétude des 12 derniers mois, années exploitables). Le bouton **« Analyser cette station »** lance le bilan
 climatique avec **ses mesures** comme source des données (profil permanent DSF ; les autres profils voient la fiche
@@ -888,6 +893,10 @@ derrière des stations voisines complètes) : la recherche garde la station dema
 
 ### Ce qui change pour qui maintient le code
 
+- **Types de station (2.5.1).** `carte.js` déduit le type de `a_pluie` / `a_temp` (`verifierStations()` : 0 pluie et
+  températures, 1 pluie seule, 2 températures seules, 3 aucune, qui ne se publie pas) ; la peinture et le filtre de la
+  couche `stations` sont des expressions MapLibre sur cette propriété (`COULEUR_STATION`, `filtrerStations()`). Les
+  pastilles de `www/climafor.css` (`.cf-carto__pastille--*`) reprennent ces trois rendus : un test garde l'accord.
 - **Le navigateur ne dicte que l'identifiant.** Un clic sur une station envoie un identifiant ; le serveur en
   retrouve la position et le nom dans sa propre lecture de `stations.json` (`stations_point_depuis_id()` dans
   `src/utils_stations_publiees.R`) et refuse tout identifiant mal formé ou absent de la table.
@@ -936,7 +945,7 @@ climafor/
 │                               test_v19.R, test_v19_comparer.R (vagues, export, Comparer)
 │                               test_v21.R, test_v22.R, test_v22_stations.R (stations, deux lieux ;
 │                               base précalculée, mode rapide des mailles et des stations)
-├── DESCRIPTION                 Paquets et versions requis (v2.5.0)
+├── DESCRIPTION                 Paquets et versions requis (v2.5.1)
 ├── NEWS.md                     Historique des versions (audits 1.2 → 1.7.3 en détail)
 ├── LICENSE                     Licence du code : EUPL-1.2
 ├── docs/                       maquette_interface.html (maquette d'origine, plus mise à jour)

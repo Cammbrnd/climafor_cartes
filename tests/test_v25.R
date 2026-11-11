@@ -258,6 +258,28 @@ for (r in c("stations", "stations-bloc", "stations-note")) {
            sprintf("le role « %s » existe dans le squelette R et dans carte.js", r))
 }
 verifier(grepl('data-role="stations-bloc"[^>]*hidden', html25), "le bloc des stations est masque jusqu'a ce que carte.js ait lu le fichier")
+# Types de station (ce qu'elles mesurent) : cases, pastilles, effectifs.
+for (r in c("stations-types", "station-type")) {
+  verifier(grepl(sprintf('data-role="%s"', r), html25, fixed = TRUE) && grepl(sprintf('"%s"', r), js25, fixed = TRUE),
+           sprintf("le role « %s » existe dans le squelette R et dans carte.js", r))
+}
+verifier(grepl('data-role="stations-types"[^>]*hidden', html25), "les cases de type sont masquees jusqu'a ce que les stations soient chargees")
+types25 <- regmatches(html25, gregexpr('data-role="station-type" data-type="[a-z]+"', html25))[[1]]
+types25 <- sub('.*data-type="([a-z]+)"', "\\1", types25)
+verifier(identical(sort(types25), c("complete", "pluie", "temp")), "une case par type de station : pluie et temperatures, pluie seule, temperatures seules")
+verifier(length(gregexpr('data-role="station-type"[^>]*checked', html25)[[1]]) == 3, "les trois types sont affiches au depart")
+verifier(length(gregexpr("data-count", html25, fixed = TRUE)[[1]]) == 3, "chaque case porte un emplacement pour l'effectif de son type")
+cat_js25 <- regmatches(js25, regexec("var CATEGORIES = \\{ complete: 0, pluie: 1, temp: 2 \\};", js25))[[1]]
+verifier(length(cat_js25) == 1, "carte.js numerote les types comme verifierStations() : 0 pluie et temperatures, 1 pluie seule, 2 temperatures seules")
+couleurs_js25 <- regmatches(js25, regexec('var COULEUR_STATION = \\["match", \\["get", "cat"\\], 0, "(#[0-9a-f]{6})", 1, "(#[0-9a-f]{6})", "(#[0-9a-f]{6})"\\];', js25))[[1]]
+css25 <- lire25("www/climafor.css")
+for (i in 1:3) {
+  t <- c("complete", "pluie", "temp")[i]
+  fond_css <- regmatches(css25, regexec(sprintf("\\.cf-carto__pastille--%s \\{ background: (#[0-9a-f]{6});", t), css25))[[1]][2]
+  verifier(length(couleurs_js25) == 4 && identical(fond_css, couleurs_js25[i + 1]),
+           sprintf("la pastille « %s » de la legende a la couleur des points sur la carte", t))
+}
+verifier(length(unique(couleurs_js25[-1])) == 3, "les trois types se distinguent par leur clarte (noir, blanc, gris), pas par une teinte")
 verifier(grepl('data-role="stations"[^>]*checked', html25), "sur la Carte, les stations sont affichees au depart")
 nom_st_js25 <- regmatches(js25, regexec("(?m)^\\s*var NOM_STATION = /(.*)/;$", js25, perl = TRUE))[[1]][2]
 verifier(identical(nom_st_js25, "^[A-Za-z0-9]{3,12}$"),
@@ -292,6 +314,11 @@ if (nzchar(Sys.which("node"))) {
              "memes coordonnees des deux cotes")
     verifier(identical(as.logical(unlist(js_st25$pluie)), tab25$a_pluie) && identical(as.logical(unlist(js_st25$temp)), tab25$a_temp),
              "les grandeurs mesurees (pluie, temperatures) sont lues de la meme facon")
+    cat_r25 <- ifelse(tab25$a_pluie & tab25$a_temp, 0L, ifelse(tab25$a_pluie, 1L, ifelse(tab25$a_temp, 2L, 3L)))
+    verifier(identical(as.integer(unlist(js_st25$cat)), cat_r25),
+             "le type de chaque station (pluie et temperatures, pluie seule, temperatures seules) est le meme des deux cotes")
+    verifier(is.null(js_st25$cat_combinaisons) || identical(as.integer(unlist(js_st25$cat_combinaisons)), 0:3),
+             "les quatre combinaisons pluie / temperatures donnent les types 0, 1, 2 et 3")
     verifier(all(unlist(js_st25$rejets)),
              if (!all(unlist(js_st25$rejets))) paste("accepte a tort :", paste(names(js_st25$rejets)[!unlist(js_st25$rejets)], collapse = ", "))
              else "le navigateur refuse schema inconnu, fichier illisible, colonnes absentes ou inegales, identifiants pieges ou en double, coordonnees impossibles")

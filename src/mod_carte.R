@@ -102,7 +102,30 @@ mod_carte_ui <- function(id) {
         shiny::tags$label(
           class = "cf-carto__case",
           shiny::tags$input(type = "checkbox", `data-role` = "stations", checked = NA),
-          shiny::span("Afficher les stations Météo-France (points noirs ; clic : fiche)")),
+          shiny::span("Afficher les stations Météo-France (clic : fiche)")),
+        # Les types de station : une case par ce que la station mesure. carte.js les remplit (effectifs)
+        # et les montre quand les stations sont chargees. Les pastilles reprennent le rendu des points.
+        shiny::div(
+          class = "cf-carto__types", `data-role` = "stations-types", hidden = "hidden",
+          role = "group", `aria-label` = "Types de station affichés",
+          shiny::tags$label(
+            class = "cf-carto__case cf-carto__case--type",
+            shiny::tags$input(type = "checkbox", `data-role` = "station-type", `data-type` = "complete", checked = NA),
+            shiny::span(class = "cf-carto__pastille cf-carto__pastille--complete", `aria-hidden` = "true"),
+            shiny::span("Pluie et températures"),
+            shiny::span(class = "cf-mention", `data-count` = "")),
+          shiny::tags$label(
+            class = "cf-carto__case cf-carto__case--type",
+            shiny::tags$input(type = "checkbox", `data-role` = "station-type", `data-type` = "pluie", checked = NA),
+            shiny::span(class = "cf-carto__pastille cf-carto__pastille--pluie", `aria-hidden` = "true"),
+            shiny::span("Pluie seule"),
+            shiny::span(class = "cf-mention", `data-count` = "")),
+          shiny::tags$label(
+            class = "cf-carto__case cf-carto__case--type",
+            shiny::tags$input(type = "checkbox", `data-role` = "station-type", `data-type` = "temp", checked = NA),
+            shiny::span(class = "cf-carto__pastille cf-carto__pastille--temp", `aria-hidden` = "true"),
+            shiny::span("Températures seules"),
+            shiny::span(class = "cf-mention", `data-count` = ""))),
         shiny::span(class = "cf-mention", `data-role` = "stations-note")),
 
       shiny::div(class = "cf-carto__legende", `data-role` = "legende"),

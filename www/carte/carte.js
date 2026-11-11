@@ -42,6 +42,14 @@
   var NOM_STATION = /^[A-Za-z0-9]{3,12}$/;
   var BORNES = { lon: [-6, 10], lat: [41, 52] };
   var STATIONS_MAX = 8000;
+  // Ce qu'une station mesure : 0 pluie et temperatures, 1 pluie seule, 2 temperatures seules, 3 rien
+  // d'exploitable (ne se publie pas ; garde par prudence). Le noir plein, le blanc cerne et le gris
+  // different par leur CLARTE et non par une teinte : ils se lisent aussi sans les couleurs. Les
+  // pastilles du squelette (climafor.css, .cf-carto__pastille) reprennent ces trois rendus.
+  var CATEGORIES = { complete: 0, pluie: 1, temp: 2 };
+  var COULEUR_STATION = ["match", ["get", "cat"], 0, "#1b1b1b", 1, "#ffffff", "#8a8a8a"];
+  var CONTOUR_STATION = ["match", ["get", "cat"], 1, "#1b1b1b", "#ffffff"];
+  var EPAISSEUR_STATION = ["match", ["get", "cat"], 1, 2, 1.2];
 
   // Degrades ColorBrewer (sans danger pour le daltonisme), du plus bas au plus haut.
   var SEQ = {
@@ -184,6 +192,7 @@
         derniere: /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(jour) ? jour : "",
         fr_p: part(t.fr_p[i]), fr_t: part(t.fr_t[i]),
         pluie: t.a_pluie[i] === true, temp: t.a_temp[i] === true,
+        cat: t.a_pluie[i] === true && t.a_temp[i] === true ? 0 : t.a_pluie[i] === true ? 1 : t.a_temp[i] === true ? 2 : 3,
         n_p: nombreOuNaN(t.n_p[i]), n_t: nombreOuNaN(t.n_t[i])
       });
     }
@@ -265,8 +274,10 @@
       couche: q("couche"), annee: q("annee"), anneeSortie: q("annee-sortie"), lecture: q("lecture"),
       carte: q("carte"), info: q("info"), legende: q("legende"), etat: q("etat"),
       methode: q("methode"), liste: q("liste"), listeDetails: q("liste") && q("liste").closest("details"),
-      stations: q("stations"), stationsBloc: q("stations-bloc"), stationsNote: q("stations-note")
+      stations: q("stations"), stationsBloc: q("stations-bloc"), stationsNote: q("stations-note"),
+      stationsTypes: q("stations-types")
     };
+    this.typesStation = Array.prototype.slice.call(racine.querySelectorAll('input[data-role="station-type"]'));
     this.modes = Array.prototype.slice.call(racine.querySelectorAll('input[data-role="mode"]'));
     this.construireSelecteur();
     this.construireCarte();
@@ -346,6 +357,7 @@
     this.dom.lecture.addEventListener("click", function () { self.basculerLecture(); });
     if (this.dom.listeDetails) this.dom.listeDetails.addEventListener("toggle", function () { if (this.open) self.remplirListe(); });
     if (this.dom.stations) this.dom.stations.addEventListener("change", function () { self.afficherStations(self.dom.stations.checked); });
+    this.typesStation.forEach(function (t) { t.addEventListener("change", function () { self.filtrerStations(); }); });
     map.on("click", function (e) {
       if (!map.getLayer("cellules")) return;
       // Une station recouvre une maille : le clic va a la station, sur ou pres de son point.
@@ -638,24 +650,49 @@
   Carte.prototype.ajouterStations = function (st) {
     var map = this.map;
     var fc = { type: "FeatureCollection", features: st.stations.map(function (s) {
-      return { type: "Feature", id: s.idx, properties: { idx: s.idx }, geometry: { type: "Point", coordinates: [s.lon, s.lat] } };
+      return { type: "Feature", id: s.idx, properties: { idx: s.idx, cat: s.cat }, geometry: { type: "Point", coordinates: [s.lon, s.lat] } };
     }) };
     var visible = !this.dom.stations || this.dom.stations.checked;
     map.addSource("stations", { type: "geojson", data: fc });
     map.addLayer({ id: "stations", type: "circle", source: "stations",
       layout: { visibility: visible ? "visible" : "none" },
       paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2.5, 8, 4.5, 12, 7],
-               "circle-color": "#1b1b1b", "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.2 } });
+               "circle-color": COULEUR_STATION, "circle-stroke-color": CONTOUR_STATION, "circle-stroke-width": EPAISSEUR_STATION } });
     map.addLayer({ id: "stations-sel", type: "circle", source: "stations", filter: ["==", ["get", "idx"], -1],
       layout: { visibility: visible ? "visible" : "none" },
       paint: { "circle-radius": 10, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#000091", "circle-stroke-width": 3 } });
     if (this.dom.stationsBloc) this.dom.stationsBloc.hidden = false;
+    if (this.dom.stationsTypes) this.dom.stationsTypes.hidden = false;
     if (this.dom.stationsNote) this.dom.stationsNote.textContent = st.n + " stations (Météo-France, publiées le " + (st.genere_le || "?") + ")";
+    // Effectif de chaque type, ecrit a cote de sa case.
+    var compte = [0, 0, 0, 0];
+    st.stations.forEach(function (s) { compte[s.cat]++; });
+    this.typesStation.forEach(function (t) {
+      var n = t.parentNode.querySelector("[data-count]");
+      if (n) n.textContent = "(" + formater(compte[CATEGORIES[t.getAttribute("data-type")]], 0) + ")";
+    });
+  };
+
+  // Les types de station affiches : un filtre sur la categorie. Une station « sans rien d'exploitable »
+  // (categorie 3, qui ne se publie pas) reste affichee, faute de case pour la masquer.
+  Carte.prototype.filtrerStations = function () {
+    if (!this.stations) return;
+    var actifs = [];
+    this.typesStation.forEach(function (t) { if (t.checked) actifs.push(CATEGORIES[t.getAttribute("data-type")]); });
+    this.map.setFilter("stations", ["any", ["==", ["get", "cat"], 3],
+      ["match", ["get", "cat"], actifs.length ? actifs : [-1], true, false]]);
+    var sel = this.etat.station;
+    if (sel >= 0) {
+      var c = this.stations.stations[sel].cat;
+      if (c !== 3 && actifs.indexOf(c) < 0) { this.deselectionnerStation(); this.majInfo(); }
+    }
+    this.tooltip.style.display = "none";
   };
 
   Carte.prototype.afficherStations = function (visible) {
     if (!this.stations) return;
     var v = visible ? "visible" : "none";
+    this.typesStation.forEach(function (t) { t.disabled = !visible; });
     this.map.setLayoutProperty("stations", "visibility", v);
     this.map.setLayoutProperty("stations-sel", "visibility", v);
     if (!visible && this.etat.station >= 0) { this.deselectionnerStation(); this.majInfo(); }

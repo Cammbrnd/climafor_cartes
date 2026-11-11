@@ -45,8 +45,28 @@ UI_CARTE = r'''<h2 class="cf-titre-section">Carte des indicateurs</h2>
   <div class="cf-carto__stations" data-role="stations-bloc" hidden="hidden">
     <label class="cf-carto__case">
       <input type="checkbox" data-role="stations" checked/>
-      <span>Afficher les stations Météo-France (points noirs ; clic : fiche)</span>
+      <span>Afficher les stations Météo-France (clic : fiche)</span>
     </label>
+    <div class="cf-carto__types" data-role="stations-types" hidden="hidden" role="group" aria-label="Types de station affichés">
+      <label class="cf-carto__case cf-carto__case--type">
+        <input type="checkbox" data-role="station-type" data-type="complete" checked/>
+        <span class="cf-carto__pastille cf-carto__pastille--complete" aria-hidden="true"></span>
+        <span>Pluie et températures</span>
+        <span class="cf-mention" data-count=""></span>
+      </label>
+      <label class="cf-carto__case cf-carto__case--type">
+        <input type="checkbox" data-role="station-type" data-type="pluie" checked/>
+        <span class="cf-carto__pastille cf-carto__pastille--pluie" aria-hidden="true"></span>
+        <span>Pluie seule</span>
+        <span class="cf-mention" data-count=""></span>
+      </label>
+      <label class="cf-carto__case cf-carto__case--type">
+        <input type="checkbox" data-role="station-type" data-type="temp" checked/>
+        <span class="cf-carto__pastille cf-carto__pastille--temp" aria-hidden="true"></span>
+        <span>Températures seules</span>
+        <span class="cf-mention" data-count=""></span>
+      </label>
+    </div>
     <span class="cf-mention" data-role="stations-note"></span>
   </div>
   <div class="cf-carto__legende" data-role="legende"></div>

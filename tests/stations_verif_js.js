@@ -22,6 +22,7 @@ const sortie = {
   lon: st.stations.map((s) => s.lon), lat: st.stations.map((s) => s.lat),
   alt: st.stations.map((s) => nan(s.alt)), derniere: st.stations.map((s) => s.derniere),
   pluie: st.stations.map((s) => s.pluie), temp: st.stations.map((s) => s.temp),
+  cat: st.stations.map((s) => s.cat),
   rejets: {}
 };
 
@@ -46,6 +47,15 @@ R.lat_nulle = rejette(() => { const x = copie(); x.stations.lat[0] = null; I.ver
 sortie.alt_nulle_reste_absente = (() => {
   const x = copie(); x.stations.alt[0] = null;
   return Number.isNaN(I.verifierStations(x, 1).stations[0].alt);
+})();
+// Le type d'une station (0 pluie et temperatures, 1 pluie seule, 2 temperatures seules, 3 rien) se
+// deduit des deux colonnes a_pluie / a_temp : les quatre combinaisons.
+sortie.cat_combinaisons = (() => {
+  const x = copie(); const t = x.stations;
+  const comb = [[true, true], [true, false], [false, true], [false, false]];
+  while (t.id.length < 4) return null;
+  comb.forEach((c, i) => { t.a_pluie[i] = c[0]; t.a_temp[i] = c[1]; });
+  return I.verifierStations(x, 1).stations.slice(0, 4).map((s) => s.cat);
 })();
 // Un nom hostile reste du TEXTE (carte.js n'insere jamais de HTML) et est borne.
 sortie.nom_borne = (() => {
