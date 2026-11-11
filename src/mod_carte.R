@@ -20,10 +20,18 @@
 #
 # CONTRAT
 # -------
-#   mod_carte_server(id, onglet, ouvrir_maille)
-#     onglet         reactive() -> identifiant de l'onglet affiche
-#     ouvrir_maille  function(point) appelee avec list(lon, lat, nom, source)
-#                    quand l'utilisateur demande l'analyse d'une maille
+#   mod_carte_server(id, onglet, ouvrir_maille, ouvrir_station = NULL)
+#     onglet          reactive() -> identifiant de l'onglet affiche
+#     ouvrir_maille   function(point) appelee avec list(lon, lat, nom, source)
+#                     quand l'utilisateur demande l'analyse d'une maille
+#     ouvrir_station  function(point, id) appelee quand il demande l'analyse d'une station
+#                     (point : sa position, id : son identifiant) ; NULL quand le profil n'a
+#                     pas d'analyse de station : la fiche de la station s'affiche sans bouton
+#
+# STATIONS. carte.js lit stations.json (publie a cote de meta.json) et pose les stations en
+# points sur les mailles. Le navigateur ne renvoie que l'IDENTIFIANT d'une station : le
+# serveur en retrouve la position et le nom dans sa propre lecture du fichier
+# (stations_point_depuis_id), comme il assainit le clic sur une maille.
 # ==============================================================================
 
 #' Interface de l'onglet Carte : le squelette que carte.js anime.
@@ -44,7 +52,8 @@ mod_carte_ui <- function(id) {
     shiny::p(class = "cf-chapeau", paste(
       "Un indicateur climatique forestier pour chaque maille de 8 km de la grille",
       "SAFRAN : sa valeur une année donnée, son écart à la normale ou sa tendance",
-      "depuis 1959. Cliquez sur une maille pour l'analyser en détail.")),
+      "depuis 1959. Cliquez sur une maille, ou sur une station Météo-France, pour la lire",
+      "et l'analyser en détail.")),
 
     shiny::uiOutput(ns("indisponible")),
 
@@ -87,6 +96,15 @@ mod_carte_ui <- function(id) {
                    "Cliquez sur une maille pour lire ses valeurs."))
       ),
 
+      # -- Stations Meteo-France : carte.js affiche ce bloc si le jeu publie en porte ----
+      shiny::div(
+        class = "cf-carto__stations", `data-role` = "stations-bloc", hidden = "hidden",
+        shiny::tags$label(
+          class = "cf-carto__case",
+          shiny::tags$input(type = "checkbox", `data-role` = "stations", checked = NA),
+          shiny::span("Afficher les stations Météo-France (points noirs ; clic : fiche)")),
+        shiny::span(class = "cf-mention", `data-role` = "stations-note")),
+
       shiny::div(class = "cf-carto__legende", `data-role` = "legende"),
       shiny::p(class = "cf-mention", `data-role` = "etat", role = "status"),
 
@@ -105,7 +123,7 @@ mod_carte_ui <- function(id) {
 
 #' Serveur de l'onglet Carte.
 #' @export
-mod_carte_server <- function(id, onglet, ouvrir_maille) {
+mod_carte_server <- function(id, onglet, ouvrir_maille, ouvrir_station = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -124,7 +142,11 @@ mod_carte_server <- function(id, onglet, ouvrir_maille) {
       if (!identical(tr$mode, "absent")) {
         session$sendCustomMessage("cf-carte-init", list(
           racine = ns("racine"), entree = ns("clic"), base = tr$base,
-          tuiles = CONFIG$api$wmts_ign_plan, schema = CONFIG$carte$schema))
+          tuiles = CONFIG$api$wmts_ign_plan, schema = CONFIG$carte$schema,
+          # "" : pas de stations (recherche de stations desactivee)
+          stations = if (isTRUE(CONFIG$stations$actif)) CONFIG$stations$publie$fichier else "",
+          schema_stations = CONFIG$stations$publie$schema,
+          entree_station = ns("clic_station"), analyse_station = is.function(ouvrir_station)))
       }
     }, ignoreInit = FALSE)
 
@@ -151,6 +173,19 @@ mod_carte_server <- function(id, onglet, ouvrir_maille) {
       }
       ouvrir_maille(p)
     })
+
+    # Clic sur « Analyser cette station » : on ne retient que l'identifiant, et la station doit
+    # exister dans la table publiee que LE SERVEUR a lue.
+    shiny::observeEvent(input$clic_station, {
+      if (!is.function(ouvrir_station)) return()
+      id <- if (is.list(input$clic_station)) input$clic_station$id else NULL
+      p <- stations_point_depuis_id(id, stations_publiees_table(transport()))
+      if (is.null(p)) {
+        shiny::showNotification("Cette station n'a pas pu être ouverte.", type = "warning", duration = 6)
+        return()
+      }
+      ouvrir_station(p, p$station)
+    })
   })
 }
 
@@ -169,7 +204,8 @@ mod_carte_server <- function(id, onglet, ouvrir_maille) {
 #' @param choix_initial reactiveVal de la source demandee a la prochaine recherche.
 #' @param source_donnees reactive de la source en vigueur (mod_station_server).
 #' @param lancer function() qui lance l'analyse (lancer_analyse du serveur).
-#' @return function(point) a passer comme `ouvrir_maille` de mod_carte_server().
+#' @return function(point, source = "safran") : `ouvrir_maille` de mod_carte_server() ; avec
+#'   `source` = identifiant d'une station, c'est l'analyse de cette station (`ouvrir_station`).
 #' @export
 mod_carte_ouverture_server <- function(lieu, choix_initial, source_donnees, lancer) {
   a_ouvrir <- shiny::reactiveVal(NULL)
@@ -187,13 +223,14 @@ mod_carte_ouverture_server <- function(lieu, choix_initial, source_donnees, lanc
     shiny::isolate(lancer())
   })
 
-  function(p) {
-    shiny::showNotification("Analyse de la maille en préparation…",
+  function(p, source = "safran") {
+    shiny::showNotification(if (identical(source, "safran")) "Analyse de la maille en préparation…"
+                            else "Analyse de la station en préparation…",
                             id = "carte_attente", type = "message", duration = 8)
     # Meme point que celui deja choisi : aucune nouvelle recherche de stations ne
     # partira, la demande de source ne serait donc jamais consommee (et s'appliquerait
     # a tort au point suivant). L'analyse part alors avec la source en vigueur.
-    if (!identical(shiny::isolate(lieu()), p)) choix_initial("safran")
+    if (!identical(shiny::isolate(lieu()), p)) choix_initial(source)
     lieu(p)
     a_ouvrir(p)
   }

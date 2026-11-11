@@ -18,11 +18,13 @@
 # @param aller_a         function(onglet) : change d'onglet
 # @param mobile,tactile  reactives de largeur et de pointeur
 # @param prefixe_adresse debut de l'adresse a conserver (« id=... & » ou « profil=... & »)
-# @return function(point) a passer comme `ouvrir_maille` de mod_carte_server()
+# @param choix_initial   reactiveVal de la source demandee avec le point (app.R) ; NULL : le serveur
+#                        cree la sienne
+# @return function(point, source = "safran") a passer comme `ouvrir_maille` de mod_carte_server()
 # ==============================================================================
 
 serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
-                        prefixe_adresse = "") {
+                        prefixe_adresse = "", choix_initial = NULL) {
 
   # -- Modules de réglage ----------------------------------------------------
   parametres <- mod_parametres_server("parametres")
@@ -31,7 +33,7 @@ serveur_dsf <- function(input, output, session, lieu, aller_a, mobile, tactile,
   # Source des données : station Météo-France proposée, ou grille SAFRAN.
   # `choix_initial` : source demandée par un lien partagé, consommée par la
   # première recherche de stations.
-  choix_initial  <- shiny::reactiveVal(NULL)
+  if (is.null(choix_initial)) choix_initial <- shiny::reactiveVal(NULL)
   source_donnees <- mod_station_server("station", lieu, choix_initial)
 
   mod_comparer_server("comparer", ctx = ctx, lieu = lieu, mobile = mobile)  # v1.9 : points et zones

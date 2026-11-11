@@ -18,6 +18,12 @@
 # www/app.js emet un « resize » au depliage, et la sortie de la carte est
 # declaree sans suspension (suspendWhenHidden = FALSE) pour exister des le debut.
 #
+# STATIONS (v2.5). Sous la carte, une case « Afficher les stations Météo-France » pose les
+# stations publiees (stations.json) en points ; toucher une station la choisit comme POINT et,
+# quand l'application sait l'utiliser (`choix_station`), comme SOURCE des donnees. Le serveur
+# retrouve la position et le nom dans sa propre lecture du fichier : du clic, il ne garde que
+# l'identifiant (stations_point_depuis_id).
+#
 # Contrat de sortie : reactiveVal -> list(lon, lat, nom, source) ou NULL.
 # Le module ne telecharge aucune donnee : il designe un point.
 #
@@ -79,7 +85,9 @@ loc_resultat_html <- function(nom, cp, departement) {
     texte(nom), texte(cp), texte(departement)))
 }
 
-mod_localisation_ui <- function(id) {
+#' @param source_station TRUE quand la station touchee devient aussi la source des donnees
+#'   (profil permanent) : la consigne le dit.
+mod_localisation_ui <- function(id, source_station = FALSE) {
   ns <- shiny::NS(id)
 
   shiny::div(
@@ -120,7 +128,16 @@ mod_localisation_ui <- function(id) {
     cf_repli(
       shiny::tagList(cf_icone("carte"), "Placer le point sur la carte"),
       leaflet::leafletOutput(ns("carte"), height = "280px"),
-      shiny::div(class = "cf-aide", "Touchez ou cliquez pour placer le point.")
+      if (isTRUE(CONFIG$stations$actif)) shiny::checkboxInput(
+        ns("stations"), "Afficher les stations Météo-France", value = FALSE),
+      shiny::div(
+        class = "cf-aide",
+        "Touchez ou cliquez pour placer le point.",
+        if (isTRUE(CONFIG$stations$actif))
+          if (isTRUE(source_station))
+            " Avec les stations affichées, touchez une station pour la choisir : elle devient le point et la source des données."
+          else
+            " Avec les stations affichées, touchez une station pour placer le point à son emplacement.")
     ),
     cf_repli(
       shiny::tagList(cf_icone("position"), "Saisir des coordonnées"),
@@ -137,17 +154,25 @@ mod_localisation_ui <- function(id) {
   )
 }
 
+#' @param choix_station reactiveVal de la source demandee avec le point (app.R) : une station
+#'   touchee sur la carte y est posee, et la recherche de stations la propose en premier. NULL :
+#'   le point seul est choisi.
 #' @return reactive(list(lon, lat, nom, source)) ou NULL.
-mod_localisation_server <- function(id) {
+mod_localisation_server <- function(id, choix_station = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     point     <- shiny::reactiveVal(NULL)   # point courant
     candidats <- shiny::reactiveVal(NULL)   # resultats de recherche
+    stations  <- shiny::reactiveVal(NULL)   # table des stations publiees, lue au premier affichage
+    # Instant du dernier clic sur une station : un navigateur peut annoncer aussi le clic « sur la
+    # carte » qui l'accompagne, et celui-ci ne doit pas deplacer le point sur le clic brut.
+    dernier <- new.env(parent = emptyenv()); dernier$station <- -Inf
 
     # -- Carte ---------------------------------------------------------------
     output$carte <- leaflet::renderLeaflet({
-      leaflet::leaflet() |>
+      # preferCanvas : plusieurs milliers de stations se dessinent sur un seul canevas, pas en SVG.
+      leaflet::leaflet(options = leaflet::leafletOptions(preferCanvas = TRUE)) |>
         leaflet::addTiles(
           urlTemplate = CONFIG$api$wmts_ign_plan,
           attribution = "IGN — Géoplateforme",
@@ -160,6 +185,7 @@ mod_localisation_server <- function(id) {
     shiny::observeEvent(input$carte_click, {
       clic <- input$carte_click
       if (is.null(clic)) return()
+      if (as.numeric(Sys.time()) - dernier$station < 0.5) return()
       if (!loc_point_valide(clic$lng, clic$lat)) { hors_france(); return() }
       lon <- round(as.numeric(clic$lng), 4); lat <- round(as.numeric(clic$lat), 4)
       nom <- geo_commune_par_point(lon, lat)
@@ -270,15 +296,71 @@ mod_localisation_server <- function(id) {
     })
 
     # -- Synchronisation de l'affichage sur le point courant -----------------
-    placer_marqueur <- function(p) {
-      leaflet::leafletProxy("carte") |>
-        leaflet::clearMarkers() |>
+    # Le point a son GROUPE : clearMarkers() effacerait aussi les stations (ce sont des marqueurs).
+    placer_marqueur <- function(p, recentrer = TRUE) {
+      m <- leaflet::leafletProxy("carte") |>
+        leaflet::clearGroup("point") |>
         leaflet::addCircleMarkers(
-          lng = p$lon, lat = p$lat, radius = 8,
+          lng = p$lon, lat = p$lat, radius = 8, group = "point",
           color = CONFIG$couleurs$vert, fillOpacity = 0.85, weight = 2,
-          label = htmltools::htmlEscape(p$nom)) |>
-        leaflet::setView(lng = p$lon, lat = p$lat, zoom = 11)
+          label = htmltools::htmlEscape(p$nom))
+      if (isTRUE(recentrer)) leaflet::setView(m, lng = p$lon, lat = p$lat, zoom = 11)
+      invisible(m)
     }
+
+    # -- Stations Meteo-France --------------------------------------------------
+    # La case affiche ou efface le groupe « stations ». La table est lue UNE fois (stations.json,
+    # quelques centaines de Ko), au premier affichage : l'Accueil ne la demande pas avant.
+    dessiner_stations <- function(tab) {
+      lab <- sprintf("%s%s", htmltools::htmlEscape(tab$nom),
+                     ifelse(is.finite(tab$alt), sprintf(" · %.0f m", tab$alt), ""))
+      leaflet::leafletProxy("carte") |>
+        leaflet::clearGroup("stations") |>
+        leaflet::addCircleMarkers(
+          lng = tab$lon, lat = tab$lat, layerId = tab$id, group = "stations", radius = 5,
+          color = "#FFFFFF", weight = 1.2, fillColor = "#1B1B1B", fillOpacity = 0.95, opacity = 1,
+          label = lab,
+          # Un clic sur une station ne doit pas devenir aussi un clic sur la carte.
+          options = leaflet::pathOptions(bubblingMouseEvents = FALSE))
+      # Le point choisi reste visible AU-DESSUS des stations (ajoute apres elles).
+      p <- point()
+      if (!is.null(p)) placer_marqueur(p, recentrer = FALSE)
+    }
+
+    shiny::observeEvent(input$stations, {
+      if (!isTRUE(input$stations)) {
+        leaflet::leafletProxy("carte") |> leaflet::clearGroup("stations")
+        return()
+      }
+      tab <- stations()
+      if (is.null(tab)) {
+        tab <- shiny::withProgress(message = "Chargement des stations", value = 0.3, {
+          tryCatch(stations_publiees_table(carte_transport()), error = function(e) NULL)
+        })
+        stations(tab)
+      }
+      if (is.null(tab)) {
+        shiny::showNotification(
+          "Les stations ne sont pas disponibles pour le moment : le jeu publié n'en contient pas, ou il est injoignable.",
+          type = "warning", duration = 8)
+        shiny::updateCheckboxInput(session, "stations", value = FALSE)
+        return()
+      }
+      dessiner_stations(tab)
+    }, ignoreInit = TRUE)
+
+    # Toucher une station : elle devient le point et, si l'application le permet, la source.
+    shiny::observeEvent(input$carte_marker_click, {
+      clic <- input$carte_marker_click
+      if (!is.list(clic) || !identical(clic$group, "stations")) return()
+      p <- stations_point_depuis_id(clic$id, stations())
+      if (is.null(p)) return()
+      dernier$station <- as.numeric(Sys.time())
+      # Meme point : aucune nouvelle recherche de stations ne partirait, la demande resterait en
+      # attente et s'appliquerait a tort au point suivant.
+      if (!is.null(choix_station) && !identical(shiny::isolate(point()), p)) choix_station(p$station)
+      point(p)
+    })
 
     shiny::observeEvent(point(), {
       p <- point(); if (is.null(p)) return()

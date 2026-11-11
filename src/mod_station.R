@@ -59,11 +59,16 @@ mod_station_server <- function(id, lieu, choix_initial = NULL) {
       p <- lieu()
       if (is.null(p) || !CONFIG$stations$actif) { recherche(NULL); return() }
 
+      # Source demandee (lien partage, station cliquee sur une carte) : lue AVANT la recherche, pour
+      # que la station designee soit proposee meme si le classement la place plus loin.
+      demande <- if (!is.null(choix_initial)) shiny::isolate(choix_initial()) else NULL
+      forcer <- if (is.character(demande) && length(demande) == 1L && !identical(demande, "safran")) demande
+
       res <- shiny::withProgress(
         message = "Recherche des stations Météo-France", value = 0.1, {
           alt <- mf_altitude(p$lon, p$lat)
           shiny::setProgress(0.3)
-          cand <- tryCatch(mf_stations_proches(p$lon, p$lat, alt),
+          cand <- tryCatch(mf_stations_proches(p$lon, p$lat, alt, forcer = forcer),
                            error = function(e) {
                              v <- mf_stations_proches_vide()
                              attr(v, "erreurs") <- paste("Recherche des stations :", conditionMessage(e))
@@ -72,9 +77,8 @@ mod_station_server <- function(id, lieu, choix_initial = NULL) {
           list(candidats = cand, alt = alt, erreurs = attr(cand, "erreurs") %||% character(0),
                point = p)
         })
-      # Source demandee par un lien : retenue si elle fait partie des sources
-      # proposees, sinon on le dit et la source par defaut s'applique.
-      demande <- if (!is.null(choix_initial)) shiny::isolate(choix_initial()) else NULL
+      # Source demandee : retenue si elle fait partie des sources proposees, sinon on le dit
+      # et la source par defaut s'applique.
       if (!is.null(demande)) {
         choix_initial(NULL)
         valides <- c("safran", res$candidats$id)
@@ -82,7 +86,7 @@ mod_station_server <- function(id, lieu, choix_initial = NULL) {
           res$initial <- demande
         } else {
           shiny::showNotification(
-            paste("La station indiquée dans le lien n'est pas proposée pour ce point :",
+            paste("La station demandée n'est pas proposée pour ce point :",
                   "la source par défaut est utilisée."),
             type = "warning", duration = 10)
         }

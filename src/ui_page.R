@@ -138,7 +138,7 @@ ui_page_onglet <- function(nom, profil, etat = NULL) {
           shiny::div(
             class = "cf-carte",
             cf_etape(1, "Où ?", "le point à analyser"),
-            mod_localisation_ui("loc"),
+            mod_localisation_ui("loc", source_station = TRUE),
             # Apparait des qu'un point est designe : station proposee et qualite
             mod_station_ui("station")),
           # Colonne 2 : la periode

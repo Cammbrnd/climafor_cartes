@@ -196,6 +196,7 @@ les versions suivantes ajoutent des fonctions et sont décrites dans ce README.
 
 | Version | Ajout | Où |
 |---|---|---|
+| 2.5 | Stations Météo-France sur la Carte et sur la carte de l'Accueil, choix d'une station au clic | [Version 2.5](#version-25--les-stations-sur-les-cartes) |
 | 2.4 | Bilan juste après l'Accueil ; seuils de chaleur et de gel ; premiers jours chauds ; gel tardif défini par le débourrement | [Version 2.4](#version-24--seuils-de-chaleur-et-de-gel-premiers-jours-chauds-gel-tardif) |
 | 2.3 | Mode rapide pour les stations ; tests automatiques | [Version 2.2](#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
 | 2.2 | Base précalculée, mode rapide (mailles) | [Version 2.2](#version-22--une-base-précalculée-pour-le-bilan-dun-point-mode-rapide) |
@@ -861,6 +862,62 @@ les exports.
 
 ---
 
+## Version 2.5 — les stations sur les cartes
+
+Les stations Météo-France publiées avec la carte (`stations.json`, depuis la version 2.1) se voient maintenant sur
+les deux cartes de l'application, et se choisissent d'un clic. **Aucune donnée n'est à reconstruire** : le fichier est
+celui qui est déjà publié.
+
+**Onglet Carte.** Les stations s'affichent en **points noirs cernés de blanc**, au-dessus des mailles. Une case, sous
+la carte, les masque ou les réaffiche (affichées au départ). Passer la souris sur un point donne le nom et l'altitude ;
+**un clic ouvre la fiche** de la station (département, altitude, mesures — pluie, températures —, date de la dernière
+mesure, complétude des 12 derniers mois, années exploitables). Le bouton **« Analyser cette station »** lance le bilan
+climatique avec **ses mesures** comme source des données (profil permanent DSF ; les autres profils voient la fiche
+sans le bouton, car ils lisent des mailles). Un clic sur une station prime sur la maille qu'elle recouvre ; la
+tolérance est de 9 pixels, pour que le doigt la touche. Si le jeu publié n'a pas de stations (avant la 2.1), la case
+n'apparaît pas et la carte marche comme avant.
+
+*Limite connue.* Les points des stations ne se choisissent pas au clavier (la liste « Mailles extrêmes » ne couvre que
+les mailles) ; la recherche d'une commune, sur l'Accueil, reste la voie accessible vers la même analyse.
+
+**Accueil.** Sous la carte « Placer le point sur la carte », la case **« Afficher les stations Météo-France »**
+(décochée au départ : la liste n'est lue qu'à la première demande). Toucher une station en fait **le point** et la
+**source des données** : le bloc « Source des données » propose cette station en premier. Elle l'est même quand le
+classement de pertinence la place après les trois premières (un pluviomètre, désavantagé faute de température,
+derrière des stations voisines complètes) : la recherche garde la station demandée et laisse tomber la dernière.
+
+### Ce qui change pour qui maintient le code
+
+- **Le navigateur ne dicte que l'identifiant.** Un clic sur une station envoie un identifiant ; le serveur en
+  retrouve la position et le nom dans sa propre lecture de `stations.json` (`stations_point_depuis_id()` dans
+  `src/utils_stations_publiees.R`) et refuse tout identifiant mal formé ou absent de la table.
+- `carte.js` lit `stations.json` (`verifierStations()`, mêmes règles que `stations_meta_valider()` : motif d'identifiant,
+  bornes du territoire, plafond de stations) ; un fichier altéré est refusé en entier, un fichier absent (HTTP 404)
+  se tait. Nouvelles options envoyées par `mod_carte_server()` : `stations`, `schema_stations`, `entree_station`,
+  `analyse_station`.
+- `mod_carte_server(id, onglet, ouvrir_maille, ouvrir_station = NULL)` ; la fonction que renvoie
+  `mod_carte_ouverture_server()` prend un second argument `source` (`"safran"` par défaut, ou l'identifiant d'une
+  station).
+- `mod_localisation_server(id, choix_station = NULL)` : `choix_station` est le `reactiveVal` de la source demandée,
+  créé dans `app.R` et partagé avec `serveur_dsf()` (paramètre `choix_initial`). Le marqueur du point a son groupe
+  Leaflet (`"point"`) : `clearMarkers()` effaçait aussi les stations. Le clic sur une station ne doit pas devenir un
+  clic sur la carte (`bubblingMouseEvents = FALSE`, et un garde-fou de 0,5 s côté serveur).
+- `mf_classer_stations(..., forcer = id)` et `mf_stations_proches(..., forcer = id)` : station à proposer en tout cas,
+  si elle est dans le rayon de recherche. Le message d'une station non proposée ne parle plus d'un « lien » : la
+  demande peut venir d'une carte.
+- Tests : `tests/test_v25.R` et `tests/stations_verif_js.js` (lecture croisée R / navigateur de `stations.json`). Le
+  dessin lui-même (MapLibre) s'essaie dans un navigateur avec l'aperçu de la carte (`outils/apercu_carte.py`, qui
+  porte les options des stations) ; la carte Leaflet de l'Accueil ne s'essaie que dans l'application déployée.
+
+### À savoir au déploiement
+
+- Publier de nouvelles données **avant** de redéployer l'application peut casser l'ancienne : `carte_meta_valider()`
+  refuse un `meta.json` qui porte une couche qu'elle ne connaît pas (« Couche inconnue »). C'est ce qui est arrivé
+  entre la 2.3 et la 2.4 : l'onglet Autour de moi affichait « Les données ne sont pas disponibles ». Après un
+  « Construire la carte » qui ajoute des couches, **redéployer tout de suite** (`source("deploy.R")`).
+
+---
+
 ## Architecture
 
 ```
@@ -875,10 +932,11 @@ climafor/
 │                               + simulation_vpd.R (VPD : ancienne formule et FAO-56)
 │                               test_v12.R … test_v17.R, test_v171.R (correctifs et revue)
 │                               test_v18.R + carte_verif_js.js (onglet Carte)
+│                               test_v25.R + stations_verif_js.js (stations sur les cartes)
 │                               test_v19.R, test_v19_comparer.R (vagues, export, Comparer)
 │                               test_v21.R, test_v22.R, test_v22_stations.R (stations, deux lieux ;
 │                               base précalculée, mode rapide des mailles et des stations)
-├── DESCRIPTION                 Paquets et versions requis (v2.4.0)
+├── DESCRIPTION                 Paquets et versions requis (v2.5.0)
 ├── NEWS.md                     Historique des versions (audits 1.2 → 1.7.3 en détail)
 ├── LICENSE                     Licence du code : EUPL-1.2
 ├── docs/                       maquette_interface.html (maquette d'origine, plus mise à jour)

@@ -144,7 +144,11 @@ serveur_demarrer <- function(input, output, session) {
   }
 
   # -- Le point : choisi dans l'Accueil, l'ecran Terrain ou la Synthese ---------
-  lieu <- mod_localisation_server("loc")
+  # `choix_initial` : source de donnees demandee avec le point (une station cliquee sur une carte,
+  # ou un lien partage). Posee ici parce que deux modules y ecrivent : la carte de l'Accueil
+  # (mod_localisation_server) et le serveur d'analyse (serveur_dsf), qui la lit.
+  choix_initial <- shiny::reactiveVal(NULL)
+  lieu <- mod_localisation_server("loc", choix_station = if (a_onglet("accueil")) choix_initial)
   mod_sources_server("sources")
 
   # -- Onglet Carte : un clic sur une maille ouvre l'analyse de son point ---------
@@ -153,7 +157,7 @@ serveur_demarrer <- function(input, output, session) {
   declencheur <- shiny::reactiveVal(NULL)
   ouvrir_maille <- if (a_onglet("accueil")) {
     serveur_dsf(input, output, session, lieu, aller_a, mobile, tactile,
-                prefixe_adresse = profil_prefixe_adresse(pr))
+                prefixe_adresse = profil_prefixe_adresse(pr), choix_initial = choix_initial)
   } else {
     function(p) {
       lieu(p)
@@ -161,7 +165,11 @@ serveur_demarrer <- function(input, output, session) {
       aller_a(if (a_onglet("synthese")) "synthese" else "terrain")
     }
   }
-  mod_carte_server("carte", onglet = shiny::reactive(input$onglets), ouvrir_maille = ouvrir_maille)
+  # Une station n'est analysable que par le profil permanent (source de donnees = la station) ;
+  # les autres profils lisent des mailles : la fiche de la station s'y affiche sans bouton.
+  ouvrir_station <- if (a_onglet("accueil")) function(p, id) ouvrir_maille(p, id) else NULL
+  mod_carte_server("carte", onglet = shiny::reactive(input$onglets), ouvrir_maille = ouvrir_maille,
+                   ouvrir_station = ouvrir_station)
 
   # -- Synthese et Terrain (v2.0) ---------------------------------------------------
   if (a_onglet("synthese")) {

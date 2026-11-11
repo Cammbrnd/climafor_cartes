@@ -367,7 +367,8 @@ attendus171 <- unique(unlist(regmatches(casse171, gregexpr("\"[A-Za-z0-9_./-]+\"
 attendus171 <- gsub("\"", "", attendus171)
 sur_disque171 <- list.files(".", recursive = TRUE, all.files = FALSE)
 # config/acces_local.csv : liste personnelle et facultative (hors depot) ; elle n'est pas livree.
-sur_disque171 <- sur_disque171[!grepl("^cache/|^rsconnect/|^\\.|\\.Rhistory$|^config/acces_local\\.csv$", sur_disque171)]
+# __pycache__ : octets compiles que Python laisse a cote des scripts de outils/ (hors depot, .gitignore).
+sur_disque171 <- sur_disque171[!grepl("^cache/|^rsconnect/|^\\.|\\.Rhistory$|^config/acces_local\\.csv$|__pycache__/|\\.pyc$", sur_disque171)]
 manquants171 <- sur_disque171[!vapply(sur_disque171, function(f) any(tolower(attendus171) == tolower(f)), logical(1))]
 verifier(!length(manquants171),
          if (length(manquants171)) paste("absent de corriger_casse.R :", paste(manquants171, collapse = ", "))

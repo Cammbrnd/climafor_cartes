@@ -1379,6 +1379,19 @@ abbr.cf-terme, abbr.cf-terme[title] {
 .cf-carto__courbe-normale { stroke: var(--cf-bordure-forte); stroke-width: 1; stroke-dasharray: 4 3; }
 .cf-carto__courbe-point { fill: var(--cf-vert); stroke: #FFFFFF; stroke-width: 1.5; }
 
+/* -- Stations Meteo-France (case sous la carte) ------------------------------------- */
+.cf-carto__stations {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2) var(--e-4);
+  margin-top: var(--e-3);
+}
+.cf-carto__stations[hidden] { display: none; }
+.cf-carto__case {
+  display: inline-flex; align-items: center; gap: var(--e-2);
+  margin: 0 !important; font-weight: 700 !important; font-size: var(--t-sm); cursor: pointer;
+}
+.cf-carto__case input { margin: 0; accent-color: var(--cf-vert); }
+.cf-carto__stations .cf-mention { margin: 0; }
+
 /* -- Legende ------------------------------------------------------------------------ */
 .cf-carto__legende {
   margin-top: var(--e-4); padding: var(--e-3) var(--e-4);

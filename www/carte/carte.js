@@ -36,6 +36,13 @@
   var MANQUANT = -32768;
   var SOURCE = "cellules";
 
+  // Stations Meteo-France publiees (stations.json). Memes regles que stations_meta_valider() (R) :
+  // identifiants de 3 a 12 caracteres alphanumeriques, coordonnees dans les bornes du territoire
+  // (PARTAGE_BORNES), au plus CONFIG$stations$publie$stations_max stations.
+  var NOM_STATION = /^[A-Za-z0-9]{3,12}$/;
+  var BORNES = { lon: [-6, 10], lat: [41, 52] };
+  var STATIONS_MAX = 8000;
+
   // Degrades ColorBrewer (sans danger pour le daltonisme), du plus bas au plus haut.
   var SEQ = {
     chaud:  ["#ffffcc", "#ffeda0", "#fed976", "#feb24c", "#fd8d3c", "#fc4e2a", "#e31a1c", "#bd0026", "#800026"],
@@ -65,6 +72,8 @@
 
   function txt(x, max) { return String(x == null ? "" : x).slice(0, max || 400); }
   function nombre(x) { var v = Number(x); return isFinite(v) ? v : NaN; }
+  // `null` (valeur absente de stations.json) donnerait 0 avec Number() : on le garde absent.
+  function nombreOuNaN(x) { return x == null || x === "" ? NaN : nombre(x); }
 
   function el(tag, attrs, enfants) {
     var e = document.createElement(tag);
@@ -137,6 +146,50 @@
     };
   }
 
+  // « TOULOUSE-BLAGNAC » -> « Toulouse-Blagnac » (meme regle que stations_nom_lisible() en R : les
+  // petits mots restent en minuscules sauf en tete).
+  var PETITS = ["de", "du", "des", "la", "le", "les", "sur", "sous", "en", "et", "aux", "au", "d", "l"];
+  function nomLisible(x) {
+    var morceaux = String(x == null ? "" : x).toLowerCase().match(/[^ '’-]+|[ '’-]+/g) || [], premier = true;
+    return morceaux.map(function (m) {
+      if (/^[ '’-]+$/.test(m)) return m;
+      var garde = !premier && PETITS.indexOf(m) >= 0;
+      premier = false;
+      return garde ? m : m.charAt(0).toUpperCase() + m.slice(1);
+    }).join("");
+  }
+
+  // stations.json : un vecteur par colonne, tous de la longueur annoncee. Chaque champ est controle
+  // avant usage (le fichier vient d'un hote tiers) ; une station mal formee fait refuser le fichier.
+  function verifierStations(j, schema) {
+    if (!j || typeof j !== "object") throw new Error("stations.json illisible");
+    if (Number(j.schema) !== Number(schema)) throw new Error("version du format des stations " + txt(j.schema, 10) + " non prise en charge");
+    var n = Number(j.n_stations);
+    if (!(n >= 1 && n <= STATIONS_MAX) || n !== Math.floor(n)) throw new Error("nombre de stations invalide");
+    var t = j.stations;
+    ["id", "nom", "dept", "lon", "lat", "alt", "derniere_obs", "fr_p", "fr_t", "a_pluie", "a_temp", "premiere", "n_p", "n_t"].forEach(function (c) {
+      if (!t || !Array.isArray(t[c]) || t[c].length !== n) throw new Error("table des stations incomplète");
+    });
+    var vus = {}, out = [];
+    for (var i = 0; i < n; i++) {
+      var id = String(t.id[i]), lon = nombreOuNaN(t.lon[i]), lat = nombreOuNaN(t.lat[i]);
+      if (!NOM_STATION.test(id) || vus[id]) throw new Error("identifiants de stations absents, en double ou mal formés");
+      if (!(lon >= BORNES.lon[0] && lon <= BORNES.lon[1] && lat >= BORNES.lat[0] && lat <= BORNES.lat[1])) throw new Error("coordonnées de stations hors du territoire");
+      vus[id] = true;
+      var jour = String(t.derniere_obs[i] == null ? "" : t.derniere_obs[i]);
+      var part = function (v) { var f = nombreOuNaN(v); return isFinite(f) ? Math.min(1, Math.max(0, f)) : NaN; };
+      out.push({
+        idx: i, id: id, nom: nomLisible(txt(t.nom[i], 80)) || "Station", dept: txt(t.dept[i], 3),
+        lon: lon, lat: lat, alt: nombreOuNaN(t.alt[i]),
+        derniere: /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(jour) ? jour : "",
+        fr_p: part(t.fr_p[i]), fr_t: part(t.fr_t[i]),
+        pluie: t.a_pluie[i] === true, temp: t.a_temp[i] === true,
+        n_p: nombreOuNaN(t.n_p[i]), n_t: nombreOuNaN(t.n_t[i])
+      });
+    }
+    return { stations: out, n: n, genere_le: txt(j.genere_le, 12) };
+  }
+
   // Decoupe le tampon d'une couche. La longueur est controlee : un fichier tronque
   // par un telechargement interrompu est refuse, pas affiche de travers.
   function decoderCouche(buf, n, nAnnees, stock) {
@@ -200,7 +253,8 @@
     var self = this;
     this.racine = racine; this.opts = opts; this.meta = meta; this.grille = grille;
     this.ml = maplibre;
-    this.etat = { couche: null, mode: "valeur", k: meta.annees.length - 1, sel: -1, lecture: null };
+    this.etat = { couche: null, mode: "valeur", k: meta.annees.length - 1, sel: -1, station: -1, lecture: null };
+    this.stations = null;     // stations publiees (verifierStations), ou null
     this.cache = {};          // cle de couche -> donnees decodees (4 au plus)
     this.ordre = [];
     this.xs = new Float32Array(meta.n);   // valeur affichee de chaque maille (NaN = absente)
@@ -210,7 +264,8 @@
     this.dom = {
       couche: q("couche"), annee: q("annee"), anneeSortie: q("annee-sortie"), lecture: q("lecture"),
       carte: q("carte"), info: q("info"), legende: q("legende"), etat: q("etat"),
-      methode: q("methode"), liste: q("liste"), listeDetails: q("liste") && q("liste").closest("details")
+      methode: q("methode"), liste: q("liste"), listeDetails: q("liste") && q("liste").closest("details"),
+      stations: q("stations"), stationsBloc: q("stations-bloc"), stationsNote: q("stations-note")
     };
     this.modes = Array.prototype.slice.call(racine.querySelectorAll('input[data-role="mode"]'));
     this.construireSelecteur();
@@ -290,13 +345,25 @@
     });
     this.dom.lecture.addEventListener("click", function () { self.basculerLecture(); });
     if (this.dom.listeDetails) this.dom.listeDetails.addEventListener("toggle", function () { if (this.open) self.remplirListe(); });
+    if (this.dom.stations) this.dom.stations.addEventListener("change", function () { self.afficherStations(self.dom.stations.checked); });
     map.on("click", function (e) {
       if (!map.getLayer("cellules")) return;
+      // Une station recouvre une maille : le clic va a la station, sur ou pres de son point.
+      var st = self.stationPres(e.point, 9);
+      if (st) { self.selectionnerStation(st.idx); return; }
       var f = map.queryRenderedFeatures(e.point, { layers: ["cellules"] })[0];
       if (f) self.selectionner(Number(f.properties.id));
     });
     map.on("mousemove", function (e) {
       if (!map.getLayer("cellules") || e.originalEvent.pointerType === "touch") return;
+      var st = self.stationPres(e.point, 6);
+      if (st) {
+        map.getCanvas().style.cursor = "pointer";
+        self.tooltip.textContent = st.nom + (isFinite(st.alt) ? " · " + formater(st.alt, 0) + " m" : "") + " (station)";
+        self.tooltip.style.display = "block";
+        self.tooltip.style.left = (e.point.x + 14) + "px"; self.tooltip.style.top = (e.point.y + 14) + "px";
+        return;
+      }
       var f = map.queryRenderedFeatures(e.point, { layers: ["cellules"] })[0];
       if (!f) { self.tooltip.style.display = "none"; map.getCanvas().style.cursor = ""; return; }
       var i = Number(f.properties.id), x = self.xs[i];
@@ -462,6 +529,7 @@
     if (!(i >= 0 && i < this.meta.n)) return;
     this.etat.sel = i;
     this.map.setFilter("selection", ["==", ["get", "id"], i]);
+    if (this.etat.station >= 0) this.deselectionnerStation();
     this.majInfo();
   };
 
@@ -505,7 +573,10 @@
     return svg;
   };
 
+  function ligneInfo(lib, val) { return el("div", { classe: "cf-carto__ligne" }, [el("dt", { texte: lib }), el("dd", { texte: val })]); }
+
   Carte.prototype.majInfo = function () {
+    if (this.etat.station >= 0 && this.stations) return this.infoStation();
     var I = this.dom.info, i = this.etat.sel, c = this.etat.couche, d = this.donnees;
     while (I.firstChild) I.removeChild(I.firstChild);
     if (i < 0 || !c || !d) {
@@ -514,7 +585,7 @@
     }
     var an = this.meta.annees[this.etat.k], v = d.valeurs[this.etat.k * this.meta.n + i];
     var valeur = v === MANQUANT ? NaN : v / d.echelle, normale = d.normale[i], pente = d.pente[i];
-    var ligne = function (lib, val) { return el("div", { classe: "cf-carto__ligne" }, [el("dt", { texte: lib }), el("dd", { texte: val })]); };
+    var ligne = ligneInfo;
     I.appendChild(el("h3", { classe: "cf-carto__info-titre", texte: "Maille " + formater(this.grille.cy[i], 2) + " °N, " + formater(this.grille.cx[i], 2) + " °E" }));
     var dl = el("dl", { classe: "cf-carto__valeurs" });
     dl.appendChild(ligne(String(an), isFinite(valeur) ? avecUnite(valeur, c) : "pas de valeur"));
@@ -536,6 +607,123 @@
       window.Shiny.setInputValue(this.opts.entree, detail, { priority: "event" });
     }
     this.racine.dispatchEvent(new CustomEvent("cf-carte-analyser", { detail: detail }));
+  };
+
+  /* ---- Stations Meteo-France ------------------------------------------------------- */
+  // Les stations publiees (stations.json) sont posees EN POINTS au-dessus des mailles. Un clic ouvre
+  // leur fiche ; « Analyser cette station » envoie son identifiant au serveur, qui retrouve la
+  // position et le nom dans sa propre copie du fichier (le navigateur ne dicte que l'identifiant).
+
+  Carte.prototype.chargerStations = function () {
+    var self = this, o = this.opts;
+    if (!o.stations || !NOM_SUR.test(String(o.stations))) return Promise.resolve(null);
+    return lireFichier(o.base + o.stations)
+      .then(function (r) { return r.json(); })
+      .then(function (j) { return verifierStations(j, o.schema_stations); })
+      .then(function (st) { self.stations = st; self.ajouterStations(st); return st; })
+      .catch(function (e) {
+        // Un jeu publie sans stations (HTTP 404) n'a rien a dire. Tout autre echec est signale.
+        if (!/HTTP 404/.test(String(e && e.message))) self.noteStations("Les stations n'ont pas pu être chargées (" + txt(e && e.message, 80) + ").");
+        return null;
+      });
+  };
+
+  Carte.prototype.noteStations = function (t) {
+    if (!this.dom.stationsBloc) return;
+    this.dom.stationsBloc.hidden = false;
+    if (this.dom.stations) this.dom.stations.disabled = true;
+    if (this.dom.stationsNote) this.dom.stationsNote.textContent = t;
+  };
+
+  Carte.prototype.ajouterStations = function (st) {
+    var map = this.map;
+    var fc = { type: "FeatureCollection", features: st.stations.map(function (s) {
+      return { type: "Feature", id: s.idx, properties: { idx: s.idx }, geometry: { type: "Point", coordinates: [s.lon, s.lat] } };
+    }) };
+    var visible = !this.dom.stations || this.dom.stations.checked;
+    map.addSource("stations", { type: "geojson", data: fc });
+    map.addLayer({ id: "stations", type: "circle", source: "stations",
+      layout: { visibility: visible ? "visible" : "none" },
+      paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2.5, 8, 4.5, 12, 7],
+               "circle-color": "#1b1b1b", "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.2 } });
+    map.addLayer({ id: "stations-sel", type: "circle", source: "stations", filter: ["==", ["get", "idx"], -1],
+      layout: { visibility: visible ? "visible" : "none" },
+      paint: { "circle-radius": 10, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#000091", "circle-stroke-width": 3 } });
+    if (this.dom.stationsBloc) this.dom.stationsBloc.hidden = false;
+    if (this.dom.stationsNote) this.dom.stationsNote.textContent = st.n + " stations (Météo-France, publiées le " + (st.genere_le || "?") + ")";
+  };
+
+  Carte.prototype.afficherStations = function (visible) {
+    if (!this.stations) return;
+    var v = visible ? "visible" : "none";
+    this.map.setLayoutProperty("stations", "visibility", v);
+    this.map.setLayoutProperty("stations-sel", "visibility", v);
+    if (!visible && this.etat.station >= 0) { this.deselectionnerStation(); this.majInfo(); }
+    if (!visible) this.tooltip.style.display = "none";
+  };
+
+  // La station la plus proche (a `rayon` pixels pres) du point de l'ecran, ou null. Une station est
+  // un petit disque : sans cette tolerance, un doigt ne la toucherait presque jamais.
+  Carte.prototype.stationPres = function (point, rayon) {
+    var map = this.map;
+    if (!this.stations || !map.getLayer("stations") || map.getLayoutProperty("stations", "visibility") === "none") return null;
+    var fs = map.queryRenderedFeatures([[point.x - rayon, point.y - rayon], [point.x + rayon, point.y + rayon]], { layers: ["stations"] });
+    var tous = this.stations.stations, meilleure = null, d0 = Infinity;
+    fs.forEach(function (f) {
+      var s = tous[Number(f.properties.idx)];
+      if (!s) return;
+      var p = map.project([s.lon, s.lat]), d = Math.pow(p.x - point.x, 2) + Math.pow(p.y - point.y, 2);
+      if (d < d0) { d0 = d; meilleure = s; }
+    });
+    return meilleure;
+  };
+
+  Carte.prototype.selectionnerStation = function (i) {
+    if (!this.stations || !(i >= 0 && i < this.stations.stations.length)) return;
+    this.etat.station = i;
+    this.map.setFilter("stations-sel", ["==", ["get", "idx"], i]);
+    if (this.etat.sel >= 0) { this.etat.sel = -1; this.map.setFilter("selection", ["==", ["get", "id"], -1]); }
+    this.majInfo();
+  };
+
+  Carte.prototype.deselectionnerStation = function () {
+    this.etat.station = -1;
+    if (this.map.getLayer("stations-sel")) this.map.setFilter("stations-sel", ["==", ["get", "idx"], -1]);
+  };
+
+  Carte.prototype.infoStation = function () {
+    var self = this, I = this.dom.info, s = this.stations.stations[this.etat.station];
+    while (I.firstChild) I.removeChild(I.firstChild);
+    var pourcent = function (f) { return isFinite(f) ? formater(100 * f, 0) + " %" : "n.d."; };
+    var mesures = [s.pluie ? "précipitations" : null, s.temp ? "températures" : null].filter(Boolean).join(" et ");
+    var jour = s.derniere ? s.derniere.split("-").reverse().join("/") : "n.d.";
+    I.appendChild(el("h3", { classe: "cf-carto__info-titre", texte: s.nom }));
+    I.appendChild(el("p", { classe: "cf-mention", texte: "Station Météo-France : une mesure, pas un modèle." }));
+    var dl = el("dl", { classe: "cf-carto__valeurs" });
+    dl.appendChild(ligneInfo("Département", s.dept || "n.d."));
+    dl.appendChild(ligneInfo("Altitude", isFinite(s.alt) ? formater(s.alt, 0) + " m" : "n.d."));
+    dl.appendChild(ligneInfo("Mesures", mesures || "aucune exploitable"));
+    dl.appendChild(ligneInfo("Dernière mesure", jour));
+    var comp = [s.pluie ? "pluie " + pourcent(s.fr_p) : null, s.temp ? "T " + pourcent(s.fr_t) : null].filter(Boolean).join(" · ");
+    dl.appendChild(ligneInfo("Complétude (12 mois)", comp || "n.d."));
+    var annees = [s.pluie && isFinite(s.n_p) ? "pluie " + formater(s.n_p, 0) : null, s.temp && isFinite(s.n_t) ? "T " + formater(s.n_t, 0) : null].filter(Boolean).join(" · ");
+    dl.appendChild(ligneInfo("Années exploitables", annees || "n.d."));
+    I.appendChild(dl);
+    if (this.opts.analyse_station && this.opts.entree_station) {
+      I.appendChild(el("button", { type: "button", classe: "cf-btn cf-btn--principal cf-btn--pleine", texte: "Analyser cette station" }))
+        .addEventListener("click", function () { self.analyserStation(s); });
+    } else {
+      I.appendChild(el("p", { classe: "cf-mention", texte: "Cliquez ailleurs pour revenir aux mailles." }));
+    }
+  };
+
+  Carte.prototype.analyserStation = function (s) {
+    // Le serveur ne retient que l'identifiant : position et nom viennent de sa copie de stations.json.
+    var detail = { id: s.id };
+    if (window.Shiny && window.Shiny.setInputValue && this.opts.entree_station) {
+      window.Shiny.setInputValue(this.opts.entree_station, detail, { priority: "event" });
+    }
+    this.racine.dispatchEvent(new CustomEvent("cf-carte-analyser-station", { detail: { id: s.id, lon: s.lon, lat: s.lat, nom: s.nom } }));
   };
 
   /* ---- Alternative au clavier : les mailles extremes --------------------------------- */
@@ -606,6 +794,7 @@
         var carte = new Carte(racine, opts, meta, grille, r[0]);
         carte.donneesGrille = g;
         return carte.prete.then(function () {
+          carte.chargerStations();      // sans attendre : une carte sans stations reste une carte
           return carte.choisirCouche(meta.couches[0].cle).then(function () { return carte; });
         });
       });
@@ -622,6 +811,7 @@
     // Promesse du composant d'une racine (ou null) : point d'entree des tests de bout en bout.
     instance: function (racine) { return instances[racine] || null; },
     _interne: { verifierMeta: verifierMeta, decoderCouche: decoderCouche, verifierGrille: verifierGrille,
+                verifierStations: verifierStations, nomLisible: nomLisible,
                 NOM_SUR: NOM_SUR, SEQ: SEQ, DIV: DIV, MANQUANT: MANQUANT }
   };
 

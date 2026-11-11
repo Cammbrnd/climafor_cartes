@@ -28,6 +28,8 @@ const fichier = args[0], base = args[1] && args[1] !== '-' ? args[1] : '';
       const c = await window.CarteClimaFor.instance('carte-racine');
       out.couche = c.etat.couche.cle;
       out.rendues = c.map.queryRenderedFeatures({ layers: ['cellules'] }).length;
+      // Stations Meteo-France (v2.5) : nombre lu dans stations.json et nombre dessine a l'ecran.
+      out.stations = c.stations ? { lues: c.stations.n, dessinees: c.map.queryRenderedFeatures({ layers: ['stations'] }).length } : null;
       const xs = c.xs; let nb = 0, mn = Infinity, mx = -Infinity;
       for (let i = 0; i < xs.length; i++) { const v = xs[i]; if (isFinite(v)) { nb++; if (v < mn) mn = v; if (v > mx) mx = v; } }
       out.valeurs = { finies: nb, sur: xs.length, min: mn, max: mx };

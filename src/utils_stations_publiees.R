@@ -295,6 +295,46 @@ stations_detail <- function(s, qualite = TRUE) {
 
 
 # ------------------------------------------------------------------------------
+# 3 bis. Une station designee sur une carte (Accueil, onglet Carte)
+# ------------------------------------------------------------------------------
+
+#' La table des stations publiees, pour un jeu de fichiers.
+#'
+#' Une seule lecture par `CONFIG$comparer$cache_h` heures (cmp_stations garde le fichier en
+#' memoire). Sert a deux ecrans qui designent une station sur une carte : le serveur retrouve
+#' la position et le nom ICI, il ne les prend jamais au navigateur.
+#' @param transport carte_transport() ; @param executer requete HTTP (injectable).
+#' @return data.frame (stations_table) ou NULL si aucune station n'est publiee ou lisible.
+#' @keywords internal
+stations_publiees_table <- function(transport, executer = httr2::req_perform) {
+  if (!is.list(transport) || identical(transport$mode, "absent") || !isTRUE(CONFIG$stations$actif)) return(NULL)
+  sj <- tryCatch(cmp_stations(list(transport = transport), executer = executer), error = function(e) NULL)
+  if (is.null(sj) || !isTRUE(sj$ok)) NULL else sj$table
+}
+
+#' Le point d'une station designee par son identifiant.
+#'
+#' L'identifiant est une entree utilisateur comme une autre (clic d'un navigateur : une valeur
+#' forgee est possible) : il doit avoir la forme d'un identifiant ET exister dans la table lue par
+#' le serveur. Position et nom viennent de la table, jamais du clic.
+#' @param id identifiant recu ; @param table stations_table().
+#' @return list(lon, lat, nom, source = "station", station = id), ou NULL.
+#' @keywords internal
+stations_point_depuis_id <- function(id, table) {
+  if (!is.data.frame(table) || !nrow(table)) return(NULL)
+  if (!is.character(id) || length(id) != 1L || is.na(id) || !grepl("^[A-Za-z0-9]{3,12}$", id)) return(NULL)
+  i <- match(id, table$id)
+  if (is.na(i)) return(NULL)
+  lon <- suppressWarnings(as.numeric(table$lon[i])); lat <- suppressWarnings(as.numeric(table$lat[i]))
+  if (!isTRUE(is.finite(lon)) || !isTRUE(is.finite(lat)) ||
+      lat < PARTAGE_BORNES$lat[1] || lat > PARTAGE_BORNES$lat[2] ||
+      lon < PARTAGE_BORNES$lon[1] || lon > PARTAGE_BORNES$lon[2]) return(NULL)
+  list(lon = round(lon, 4), lat = round(lat, 4), nom = as.character(table$nom[i]),
+       source = "station", station = id)
+}
+
+
+# ------------------------------------------------------------------------------
 # 4. Une station, comme lieu de comparaison
 # ------------------------------------------------------------------------------
 

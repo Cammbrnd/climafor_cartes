@@ -84,6 +84,14 @@ SCRIPT_PAGE = r"""
       " dans l'onglet Bilan.";
   });
 
+  // « Analyser cette station » : meme chose pour une station Meteo-France.
+  racine.addEventListener("cf-carte-analyser-station", function (e) {
+    var d = (e && e.detail) || {};
+    bandeau.hidden = false;
+    bandeau.textContent = "Dans l'application, ce bouton ouvre l'analyse complète de la station" +
+      (d.nom ? " « " + String(d.nom).slice(0, 60) + " »" : "") + " dans l'onglet Bilan, avec ses mesures comme source.";
+  });
+
   // -- Diagnostic technique ---------------------------------------------------------------------
   log("Navigateur : " + navigator.userAgent);
   log("Adresse de la page : " + location.protocol + "//" + (location.host || "(fichier local)"));
@@ -175,7 +183,8 @@ SCRIPT_PAGE = r"""
       .catch(function (e) { log("Tests complémentaires interrompus : " + (e && e.message)); });
   }
 
-  window.CarteClimaFor.demarrer({ racine: "carte-racine", entree: "carte-clic", base: base, tuiles: TUILES, schema: 1 })
+  window.CarteClimaFor.demarrer({ racine: "carte-racine", entree: "carte-clic", base: base, tuiles: TUILES, schema: 1,
+    stations: "stations.json", schema_stations: 1, entree_station: "carte-clic_station", analyse_station: true })
     .then(function (carte) {
       log("Fichiers lus : " + carte.meta.n + " mailles, " + carte.meta.couches.length + " indicateurs, " +
           carte.meta.annees[0] + "–" + carte.meta.annees[carte.meta.annees.length - 1]);

@@ -2,7 +2,7 @@
 cf_icone() (icones des onglets). tests/test_v18.R verifie qu'elles n'ont pas derive de l'application."""
 
 UI_CARTE = r'''<h2 class="cf-titre-section">Carte des indicateurs</h2>
-<p class="cf-chapeau">Un indicateur climatique forestier pour chaque maille de 8 km de la grille SAFRAN : sa valeur une année donnée, son écart à la normale ou sa tendance depuis 1959. Cliquez sur une maille pour l'analyser en détail.</p>
+<p class="cf-chapeau">Un indicateur climatique forestier pour chaque maille de 8 km de la grille SAFRAN : sa valeur une année donnée, son écart à la normale ou sa tendance depuis 1959. Cliquez sur une maille, ou sur une station Météo-France, pour la lire et l'analyser en détail.</p>
 <div id="carte-indisponible" class="shiny-html-output"></div>
 <div id="carte-racine" class="cf-carto" data-cf-carto="1" hidden="hidden">
   <div class="cf-carto__barre">
@@ -41,6 +41,13 @@ UI_CARTE = r'''<h2 class="cf-titre-section">Carte des indicateurs</h2>
     <aside class="cf-carto__info" data-role="info" aria-live="polite">
       <p class="cf-mention">Cliquez sur une maille pour lire ses valeurs.</p>
     </aside>
+  </div>
+  <div class="cf-carto__stations" data-role="stations-bloc" hidden="hidden">
+    <label class="cf-carto__case">
+      <input type="checkbox" data-role="stations" checked/>
+      <span>Afficher les stations Météo-France (points noirs ; clic : fiche)</span>
+    </label>
+    <span class="cf-mention" data-role="stations-note"></span>
   </div>
   <div class="cf-carto__legende" data-role="legende"></div>
   <p class="cf-mention" data-role="etat" role="status"></p>

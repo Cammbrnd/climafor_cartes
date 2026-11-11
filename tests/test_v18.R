@@ -368,7 +368,9 @@ div_js18 <- regmatches(js_txt18, regexec("(?s)var DIV = \\{(.*?)\\n  \\};", js_t
 cles_div18 <- unique(unlist(regmatches(div_js18, gregexpr("positif_[a-z]+", div_js18))))
 verifier(setequal(cles_div18, CARTE_ECARTS), "carte.js connait exactement les couleurs d'ecart de CARTE_ECARTS")
 
-nom_sur_js18 <- regmatches(js_txt18, regexec("var NOM_SUR = /(.*)/;", js_txt18))[[1]][2]
+# Une ligne : sans (?m) et sans perl, « .* » avalerait tout jusqu'a la derniere « /; » du fichier,
+# et chaque expression reguliere ajoutee ensuite (identifiants de stations, v2.5) fausserait le test.
+nom_sur_js18 <- regmatches(js_txt18, regexec("(?m)^\\s*var NOM_SUR = /(.*)/;$", js_txt18, perl = TRUE))[[1]][2]
 verifier(identical(nom_sur_js18, "^[a-z0-9_]{1,60}\\.(json|bin\\.gz)$"),
          "carte.js applique le meme motif de nom de fichier que carte_nom_fichier_sur()")
 verifier(grepl(sprintf("n <= %d", CONFIG$carte$n_mailles_max), js_txt18, fixed = TRUE),

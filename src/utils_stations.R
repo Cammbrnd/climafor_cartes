@@ -711,10 +711,12 @@ mf_qualite_stations <- function(st) {
 #' @param tous data.frame de stations (id, nom, lat, lon, alt, derniere_obs, fr_p, fr_t,
 #'   a_pluie, a_temp, dept).
 #' @param alt altitude du point (NA : critere ignore) ; @param n nombre de stations gardees.
+#' @param forcer identifiant d'une station a garder en tout cas (si elle est dans le rayon).
 #' @return stations a moins de `rayon_km`, triees par pertinence, avec distance_km,
 #'   ecart_alt_m, les niveaux de qualite et `pertinence` ; vide si aucune n'est assez proche.
 #' @export
-mf_classer_stations <- function(tous, lon, lat, alt = NA_real_, n = CONFIG$stations$n_propositions) {
+mf_classer_stations <- function(tous, lon, lat, alt = NA_real_, n = CONFIG$stations$n_propositions,
+                                forcer = NULL) {
   cfg <- CONFIG$stations
   tous$distance_km <- mf_distance_km(lon, lat, tous$lon, tous$lat)
   tous <- tous[tous$distance_km <= cfg$rayon_km, , drop = FALSE]
@@ -731,9 +733,18 @@ mf_classer_stations <- function(tous, lon, lat, alt = NA_real_, n = CONFIG$stati
            cfg$penalite_inactive_km, 0)
 
   tous <- tous[order(tous$pertinence, tous$distance_km), , drop = FALSE]
-  tous <- utils::head(tous, n)
-  rownames(tous) <- NULL
-  tous
+  garde <- utils::head(tous, n)
+  # Station designee par l'utilisateur (un clic sur la carte, un lien partage) : elle fait partie
+  # des propositions meme si le classement ne la place pas parmi les `n` premieres (un pluviometre,
+  # desavantage faute de temperature, derriere des stations voisines). Elle prend la place de la
+  # derniere ; la liste reste classee par pertinence. Hors du rayon, elle n'est pas dans `tous`.
+  if (is.character(forcer) && length(forcer) == 1L && !is.na(forcer) && n >= 1L &&
+      !(forcer %in% garde$id) && forcer %in% tous$id) {
+    garde <- rbind(utils::head(garde, n - 1L), tous[tous$id == forcer, , drop = FALSE])
+    garde <- garde[order(garde$pertinence, garde$distance_km), , drop = FALSE]
+  }
+  rownames(garde) <- NULL
+  garde
 }
 
 #' Stations Meteo-France les plus pertinentes autour d'un point.
@@ -746,9 +757,10 @@ mf_classer_stations <- function(tous, lon, lat, alt = NA_real_, n = CONFIG$stati
 #' arretee. La distance reelle reste affichee ; le poids est dans CONFIG.
 #'
 #' @param alt altitude du point (NA : critere ignore).
+#' @param forcer identifiant d'une station a proposer en tout cas (si elle est dans le rayon).
 #' @return data.frame trie, ou vide ; attribut "erreurs" (vecteur de messages).
 #' @export
-mf_stations_proches <- function(lon, lat, alt = NA_real_) {
+mf_stations_proches <- function(lon, lat, alt = NA_real_, forcer = NULL) {
   erreurs <- character(0)
 
   deps <- mf_departements_proches(lon, lat)
@@ -777,7 +789,7 @@ mf_stations_proches <- function(lon, lat, alt = NA_real_) {
   }
   tous <- tous[!duplicated(tous$id), , drop = FALSE]
 
-  tous <- mf_classer_stations(tous, lon, lat, alt)
+  tous <- mf_classer_stations(tous, lon, lat, alt, forcer = forcer)
   attr(tous, "erreurs") <- erreurs
   tous
 }
