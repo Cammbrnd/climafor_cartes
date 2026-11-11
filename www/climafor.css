@@ -1395,15 +1395,14 @@ abbr.cf-terme, abbr.cf-terme[title] {
 .cf-carto__types[hidden] { display: none; }
 .cf-carto__case--type { font-weight: 400 !important; }
 .cf-carto__case--type input:disabled ~ span { opacity: .55; }
-/* Pastilles : meme rendu que les points de la carte (carte.js, COULEUR_STATION). Elles different par la
-   clarte (noir / blanc cerne / gris) et non par une teinte, donc se lisent sans les couleurs. */
+/* Pastilles : memes couleurs que les points de la carte (carte.js, COULEUR_STATION). */
 .cf-carto__pastille {
   display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 50%;
   box-sizing: border-box; border: 1.5px solid #ffffff; box-shadow: 0 0 0 1px #6b6b6b;
 }
-.cf-carto__pastille--complete { background: #1b1b1b; }
-.cf-carto__pastille--pluie { background: #ffffff; border: 2px solid #1b1b1b; box-shadow: none; }
-.cf-carto__pastille--temp { background: #8a8a8a; }
+.cf-carto__pastille--complete { background: #6a1b9a; }
+.cf-carto__pastille--pluie { background: #1565c0; }
+.cf-carto__pastille--temp { background: #d32f2f; }
 
 /* -- Legende ------------------------------------------------------------------------ */
 .cf-carto__legende {

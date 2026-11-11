@@ -279,7 +279,9 @@ for (i in 1:3) {
   verifier(length(couleurs_js25) == 4 && identical(fond_css, couleurs_js25[i + 1]),
            sprintf("la pastille « %s » de la legende a la couleur des points sur la carte", t))
 }
-verifier(length(unique(couleurs_js25[-1])) == 3, "les trois types se distinguent par leur clarte (noir, blanc, gris), pas par une teinte")
+verifier(length(unique(couleurs_js25[-1])) == 3, "les trois types ont trois couleurs differentes")
+verifier(identical(couleurs_js25[-1], c("#6a1b9a", "#1565c0", "#d32f2f")),
+         "violet = pluie et temperatures, bleu = pluie seule, rouge = temperatures seules")
 verifier(grepl('data-role="stations"[^>]*checked', html25), "sur la Carte, les stations sont affichees au depart")
 nom_st_js25 <- regmatches(js25, regexec("(?m)^\\s*var NOM_STATION = /(.*)/;$", js25, perl = TRUE))[[1]][2]
 verifier(identical(nom_st_js25, "^[A-Za-z0-9]{3,12}$"),

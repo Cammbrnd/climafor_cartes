@@ -43,13 +43,13 @@
   var BORNES = { lon: [-6, 10], lat: [41, 52] };
   var STATIONS_MAX = 8000;
   // Ce qu'une station mesure : 0 pluie et temperatures, 1 pluie seule, 2 temperatures seules, 3 rien
-  // d'exploitable (ne se publie pas ; garde par prudence). Le noir plein, le blanc cerne et le gris
-  // different par leur CLARTE et non par une teinte : ils se lisent aussi sans les couleurs. Les
-  // pastilles du squelette (climafor.css, .cf-carto__pastille) reprennent ces trois rendus.
+  // d'exploitable (ne se publie pas ; garde par prudence). Violet = les deux, bleu = pluie, rouge =
+  // temperatures (le rouge ressort sur les mailles grace au contour blanc). Les pastilles du
+  // squelette (climafor.css, .cf-carto__pastille) reprennent ces trois couleurs.
   var CATEGORIES = { complete: 0, pluie: 1, temp: 2 };
-  var COULEUR_STATION = ["match", ["get", "cat"], 0, "#1b1b1b", 1, "#ffffff", "#8a8a8a"];
-  var CONTOUR_STATION = ["match", ["get", "cat"], 1, "#1b1b1b", "#ffffff"];
-  var EPAISSEUR_STATION = ["match", ["get", "cat"], 1, 2, 1.2];
+  var COULEUR_STATION = ["match", ["get", "cat"], 0, "#6a1b9a", 1, "#1565c0", "#d32f2f"];
+  var CONTOUR_STATION = "#ffffff";
+  var EPAISSEUR_STATION = 2.4;   // un rouge sur une maille rouge ne se voit que par son contour
 
   // Degrades ColorBrewer (sans danger pour le daltonisme), du plus bas au plus haut.
   var SEQ = {
@@ -656,11 +656,11 @@
     map.addSource("stations", { type: "geojson", data: fc });
     map.addLayer({ id: "stations", type: "circle", source: "stations",
       layout: { visibility: visible ? "visible" : "none" },
-      paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2.5, 8, 4.5, 12, 7],
+      paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 3, 8, 5.5, 12, 8],
                "circle-color": COULEUR_STATION, "circle-stroke-color": CONTOUR_STATION, "circle-stroke-width": EPAISSEUR_STATION } });
     map.addLayer({ id: "stations-sel", type: "circle", source: "stations", filter: ["==", ["get", "idx"], -1],
       layout: { visibility: visible ? "visible" : "none" },
-      paint: { "circle-radius": 10, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#000091", "circle-stroke-width": 3 } });
+      paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#000091", "circle-stroke-width": 3 } });
     if (this.dom.stationsBloc) this.dom.stationsBloc.hidden = false;
     if (this.dom.stationsTypes) this.dom.stationsTypes.hidden = false;
     if (this.dom.stationsNote) this.dom.stationsNote.textContent = st.n + " stations (Météo-France, publiées le " + (st.genere_le || "?") + ")";

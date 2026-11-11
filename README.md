@@ -868,10 +868,10 @@ Les stations Météo-France publiées avec la carte (`stations.json`, depuis la 
 les deux cartes de l'application, et se choisissent d'un clic. **Aucune donnée n'est à reconstruire** : le fichier est
 celui qui est déjà publié.
 
-**Onglet Carte.** Les stations s'affichent en points, au-dessus des mailles ; leur rendu dit **ce qu'elles mesurent**
-(2.5.1) : **noir cerné de blanc** = pluie et températures, **blanc cerné de noir** = pluie seule, **gris** = températures
-seules. Les trois types se distinguent par leur clarté et par la forme (disque plein ou anneau), pas par une teinte :
-ils se lisent aussi sans les couleurs. Une case, sous la carte, masque ou réaffiche les stations (affichées au départ) ;
+**Onglet Carte.** Les stations s'affichent en points, au-dessus des mailles ; leur couleur dit **ce qu'elles mesurent**
+(2.5.1, couleurs de la 2.5.2) : **violet** = pluie et températures, **bleu** = pluie seule, **rouge** = températures
+seules, tous cernés de blanc pour ressortir sur les mailles. Les cases nomment chaque couleur, et la fiche d'une station
+dit ce qu'elle mesure. Une case, sous la carte, masque ou réaffiche les stations (affichées au départ) ;
 trois cases de type, avec l'effectif de chacun, n'en gardent que certains types — par exemple les seules stations
 qui mesurent la température, pour choisir la source d'un bilan. Masquer un type ferme la fiche de la station choisie
 si elle en relève. Passer la souris sur un point donne le nom et l'altitude ;
@@ -945,7 +945,7 @@ climafor/
 │                               test_v19.R, test_v19_comparer.R (vagues, export, Comparer)
 │                               test_v21.R, test_v22.R, test_v22_stations.R (stations, deux lieux ;
 │                               base précalculée, mode rapide des mailles et des stations)
-├── DESCRIPTION                 Paquets et versions requis (v2.5.1)
+├── DESCRIPTION                 Paquets et versions requis (v2.5.2)
 ├── NEWS.md                     Historique des versions (audits 1.2 → 1.7.3 en détail)
 ├── LICENSE                     Licence du code : EUPL-1.2
 ├── docs/                       maquette_interface.html (maquette d'origine, plus mise à jour)
