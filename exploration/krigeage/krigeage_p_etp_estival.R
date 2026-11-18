@@ -55,9 +55,9 @@ dir.create(file.path(DOSSIER, "fichiers"), recursive = TRUE, showWarnings = FALS
 dir.create(file.path(DOSSIER, "sorties"),  recursive = TRUE, showWarnings = FALSE)
 msg <- function(...) cat(sprintf(...), "\n", sep = "")
 
-if (is.null(DEPARTEMENTS)) {
-  DEPARTEMENTS <- c(sprintf("%02d", c(1:19, 21:95)), "2A", "2B")
-}
+# DEPARTEMENTS == NULL : France metropolitaine entiere, d'apres le catalogue (la Corse y figure
+# sous "20" ou sous "2A" et "2B" selon les fichiers). Liste de secours si le catalogue est muet :
+DEPARTEMENTS_SECOURS <- c(sprintf("%02d", c(1:19, 21:95)), "20", "2A", "2B")
 DEBUT <- as.Date(sprintf("%d-06-01", ANNEE))
 FIN   <- as.Date(sprintf("%d-08-31", ANNEE))
 JOURS <- seq(DEBUT, FIN, by = "day")
@@ -133,9 +133,10 @@ catalogue_fichiers <- function() {
   }
   if (is.null(out) || !nrow(out)) {
     msg("Catalogue data.gouv.fr indisponible : adresses du miroir (latest-2025-2026).")
-    out <- data.frame(dept = DEPARTEMENTS, debut = 2025L, fin = 2026L,
-                      url = sprintf("%s/Q_%s_latest-2025-2026_RR-T-Vent.csv.gz", URL_MIROIR, DEPARTEMENTS),
-                      nom = sprintf("Q_%s_latest-2025-2026_RR-T-Vent.csv.gz", DEPARTEMENTS),
+    liste <- if (is.null(DEPARTEMENTS)) DEPARTEMENTS_SECOURS else DEPARTEMENTS
+    out <- data.frame(dept = liste, debut = 2025L, fin = 2026L,
+                      url = sprintf("%s/Q_%s_latest-2025-2026_RR-T-Vent.csv.gz", URL_MIROIR, liste),
+                      nom = sprintf("Q_%s_latest-2025-2026_RR-T-Vent.csv.gz", liste),
                       stringsAsFactors = FALSE)
   }
   # Nom du fichier dans le cache : celui de Meteo-France (on peut donc y deposer a la main un
@@ -250,10 +251,15 @@ bilan_station <- function(s) {
 # ==============================================================================
 
 cat_f <- catalogue_fichiers()
-absents <- setdiff(DEPARTEMENTS, cat_f$dept)
-cat_f <- cat_f[cat_f$dept %in% DEPARTEMENTS, , drop = FALSE]
-msg("%d departement(s) a lire pour l'ete %d.", nrow(cat_f), ANNEE)
-if (length(absents)) msg("Sans fichier dans le catalogue : %s", paste(absents, collapse = ", "))
+if (is.null(DEPARTEMENTS)) {
+  cat_f <- cat_f[grepl("^([0-9]{2}|2[AB])$", cat_f$dept), , drop = FALSE]     # metropole (pas les DOM)
+} else {
+  absents <- setdiff(DEPARTEMENTS, cat_f$dept)
+  cat_f <- cat_f[cat_f$dept %in% DEPARTEMENTS, , drop = FALSE]
+  if (length(absents)) msg("Sans fichier dans le catalogue : %s", paste(absents, collapse = ", "))
+}
+cat_f <- cat_f[order(cat_f$dept), , drop = FALSE]
+msg("%d departement(s) a lire pour l'ete %d : %s", nrow(cat_f), ANNEE, paste(cat_f$dept, collapse = " "))
 
 brut <- list(); non_lus <- character(0)
 for (k in seq_len(nrow(cat_f))) {
@@ -293,21 +299,33 @@ pts <- sf::st_transform(sf::st_as_sf(obs, coords = c("lon", "lat"), crs = 4326),
 pts <- pts[!duplicated(sf::st_coordinates(pts)), ]       # deux stations au meme point : une seule
 xy  <- sf::st_coordinates(pts)
 
-# Contour de la France metropolitaine (API Geo) ; a defaut, enveloppe des stations.
+# Contours des departements de la France metropolitaine : on essaie plusieurs sources et on dit
+# pourquoi chacune echoue ; a defaut, enveloppe des stations.
 contour_france <- function() {
   f <- file.path(DOSSIER, "departements_contours.geojson")
-  if (!file.exists(f)) {
-    ok <- tryCatch({
-      suppressWarnings(utils::download.file(
-        "https://geo.api.gouv.fr/departements?fields=nom,code&format=geojson&geometry=contour",
-        f, mode = "wb", quiet = TRUE)); TRUE }, error = function(e) FALSE)
-    if (!ok) unlink(f)
-    if (!ok) return(NULL)
+  lire <- function(chemin) {
+    d <- tryCatch(sf::read_sf(chemin, quiet = TRUE),
+                  error = function(e) { msg("  lecture impossible : %s", conditionMessage(e)); NULL })
+    if (is.null(d)) return(NULL)
+    if (!("code" %in% names(d))) { msg("  pas de colonne code (colonnes : %s)", paste(names(d), collapse = ", ")); return(NULL) }
+    d <- d[grepl("^([0-9]{2}|2[AB])$", as.character(d$code)), ]
+    if (!nrow(d)) { msg("  aucun departement metropolitain reconnu"); return(NULL) }
+    d
   }
-  d <- tryCatch(sf::read_sf(f, quiet = TRUE), error = function(e) NULL)
-  if (is.null(d) || !("code" %in% names(d))) return(NULL)
-  d <- d[grepl("^([0-9]{2}|2[AB])$", d$code), ]
-  if (!nrow(d)) return(NULL)
+  d <- if (file.exists(f) && file.size(f) > 0) lire(f) else NULL
+  sources <- c(
+    "https://geo.api.gouv.fr/departements?fields=nom,code,contour&format=geojson&geometry=contour",
+    "https://geo.api.gouv.fr/departements?fields=nom,code&format=geojson&geometry=contour",
+    "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson")
+  for (u in sources) {
+    if (!is.null(d)) break
+    msg("Contour : %s", sub("\\?.*$", "", u))
+    ok <- tryCatch({ httr2::req_perform(requete(u), path = f); TRUE },
+                   error = function(e) { msg("  telechargement impossible : %s", conditionMessage(e)); FALSE })
+    if (ok) d <- lire(f)
+    if (is.null(d)) unlink(f)
+  }
+  if (is.null(d)) return(NULL)
   sf::st_transform(sf::st_make_valid(d), 2154)
 }
 deps <- contour_france()
