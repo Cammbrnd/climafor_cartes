@@ -1,0 +1,96 @@
+# Krigeage P-ETP estival — calcul EXPLORATOIRE, hors application. Il vit sur la branche
+# « krigeage-p-etp-estival » et ne doit pas etre fusionne dans main tel quel.
+#
+# Telecharge les fichiers quotidiens Meteo-France (RR-T-Vent, un par departement), calcule
+# P - ETP sur juin-aout (ETP de Hargreaves-Samani), krige les stations (gstat) et produit une
+# carte, une carte d'incertitude, un diagnostic et un tableau par station. Les resultats sont
+# deposes dans la branche (exploration/krigeage/resultats/<annee>/) ET gardes en artefact.
+#
+# Se lance tout seul quand on envoie un changement dans exploration/krigeage/ sur la branche
+# (par exemple parametres.env). Les entrees du lancement manuel remplacent parametres.env.
+name: Krigeage P-ETP estival
+
+on:
+  push:
+    branches: [krigeage-p-etp-estival]
+    paths:
+      - "exploration/krigeage/**"
+      - "!exploration/krigeage/resultats/**"
+      - ".github/workflows/krigeage-p-etp.yml"
+  workflow_dispatch:
+    inputs:
+      annee:
+        description: "Annee de l'ete (vide = parametres.env)"
+        default: ""
+      departements:
+        description: "Departements, ex. 31,09,2A (vide = parametres.env)"
+        default: ""
+
+permissions:
+  contents: write
+
+# Un seul calcul a la fois sur la branche : le dernier envoi gagne.
+concurrency:
+  group: krigeage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calculer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      # Les paquets sont ceux de exploration/krigeage/DESCRIPTION (pas ceux de l'application).
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: exploration/krigeage
+
+      - name: Lire les parametres
+        env:
+          IN_ANNEE: ${{ inputs.annee }}
+          IN_DEPARTEMENTS: ${{ inputs.departements }}
+        run: |
+          set -euo pipefail
+          # Seules les lignes KRIGEAGE_NOM=valeur sobres passent dans l'environnement.
+          grep -E '^KRIGEAGE_[A-Z_]+=[A-Za-z0-9,; .]*$' exploration/krigeage/parametres.env >> "$GITHUB_ENV" || true
+          if printf '%s' "$IN_ANNEE" | grep -Eq '^[0-9]{4}$'; then
+            echo "KRIGEAGE_ANNEE=$IN_ANNEE" >> "$GITHUB_ENV"
+          fi
+          if printf '%s' "$IN_DEPARTEMENTS" | grep -Eq '^[A-Za-z0-9,; ]+$'; then
+            echo "KRIGEAGE_DEPARTEMENTS=$IN_DEPARTEMENTS" >> "$GITHUB_ENV"
+          fi
+
+      - name: Calculer et cartographier
+        env:
+          LC_ALL: C.UTF-8
+        run: Rscript exploration/krigeage/krigeage_p_etp_estival.R
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: krigeage-p-etp-resultats
+          path: krigeage_p_etp/sorties/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Deposer les resultats dans la branche
+        run: |
+          set -euo pipefail
+          ANNEE="${KRIGEAGE_ANNEE:-2026}"
+          DEST="exploration/krigeage/resultats/${ANNEE}"
+          mkdir -p "$DEST"
+          cp krigeage_p_etp/sorties/* "$DEST/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          if git diff --cached --quiet; then
+            echo "Resultats identiques : rien a deposer."
+            exit 0
+          fi
+          git commit -q -m "Krigeage P-ETP estival ${ANNEE} : resultats du calcul"
+          git pull -q --rebase origin "$GITHUB_REF_NAME"
+          git push -q origin "HEAD:$GITHUB_REF_NAME"
