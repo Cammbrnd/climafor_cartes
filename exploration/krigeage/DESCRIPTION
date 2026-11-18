@@ -12,4 +12,5 @@ Imports:
     ggplot2,
     scales,
     httr2,
-    ragg
+    ragg,
+    terra

@@ -14,8 +14,12 @@ n'a pas de sens pour des résultats générés.
    - code qualité 2 (« douteux ») écarté ;
    - les jours sans pluie ou sans ETP sont retirés des **deux** sommes (jamais comptés comme zéro) ;
    - station gardée si au moins 95 % des jours sont exploitables (`KRIGEAGE_SEUIL`).
-3. Krigeage ordinaire (`gstat`), voisinage de 40 stations, variogramme Exp / Sph / Mat (le meilleur est retenu),
+3. Krigeage (`gstat`), voisinage de 40 stations, variogramme Exp / Sph / Mat (le meilleur est retenu),
    validation croisée en 10 blocs.
+4. **Avec MNT** (`KRIGEAGE_MNT=oui`, par défaut) : krigeage à dérive externe, l'altitude moyenne de chaque maille est la
+   tendance. Le MNT vient des tuiles ouvertes « terrarium » (AWS, altitude en mètres), moyennées sur chaque maille ; on peut
+   fournir son propre GeoTIFF avec `KRIGEAGE_MNT_FICHIER` (sur un poste). Le script calcule aussi le krigeage ordinaire
+   pour comparer : si l'altitude n'améliore pas la validation croisée, il garde le krigeage ordinaire et le dit.
 
 ## Lancer
 
@@ -27,10 +31,11 @@ n'a pas de sens pour des résultats générés.
 
 `resultats/<année>/` : `carte_p_etp_jja_<année>.png`, `incertitude_krigeage_<année>.png`,
 `diagnostic_krigeage_<année>.png` (variogramme et validation croisée), `stations_p_etp_jja_<année>.csv`.
+Avec MNT, les trois images portent le suffixe `_mnt` (le diagnostic ajoute P − ETP selon l'altitude).
 Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
 
 ## Limites à garder en tête
 
-- Pas d'altitude dans le krigeage : la surface est lissée en montagne.
+- Le MNT est moyenné sur la maille (5 km par défaut) : le relief plus fin que la maille n'apparaît pas.
 - ETP de Hargreaves : ignore vent et humidité.
 - La validation croisée garde le variogramme ajusté sur toutes les stations.

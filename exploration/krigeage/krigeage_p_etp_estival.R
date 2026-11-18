@@ -11,13 +11,16 @@
 #   - une station est gardee si pluie ET temperatures sont renseignees au moins
 #     SEUIL du temps sur la periode ; les jours sans pluie ou sans ETP sont
 #     retires des DEUX sommes (jamais compte comme zero)
-#   - krigeage ordinaire (gstat), voisinage glissant, variogramme ajuste par
-#     Exp / Sph / Mat (le meilleur est retenu), validation croisee
+#   - krigeage (gstat), voisinage glissant, variogramme ajuste par Exp / Sph / Mat
+#     (le meilleur est retenu), validation croisee
+#   - avec MNT (par defaut) : krigeage a derive externe, l'altitude moyenne de chaque
+#     maille (tuiles ouvertes, ou un GeoTIFF fourni) est la tendance ; sans MNT :
+#     krigeage ordinaire. Les deux sont evalues, le gain est affiche dans le journal.
 #
 # Sorties (dossier DOSSIER/sorties) : la carte, la carte d'incertitude, un
 # diagnostic (variogramme + validation croisee) et le tableau par station.
 #
-# Paquets : sf, gstat, ggplot2, httr2 (tous installables depuis CRAN).
+# Paquets : sf, gstat, ggplot2, httr2 ; terra pour le MNT (tous installables depuis CRAN).
 # ==============================================================================
 
 # ---- Reglages ----------------------------------------------------------------
@@ -34,12 +37,17 @@ DEPARTEMENTS <- {
 }
 SEUIL        <- as.numeric(env_ou("KRIGEAGE_SEUIL", "0.95"))      # part minimale de jours exploitables (comme l'appli)
 RESOLUTION_M <- as.numeric(env_ou("KRIGEAGE_RESOLUTION_M", "5000"))  # taille de maille de la carte, en metres
+# MNT : "oui" = l'altitude sert de tendance (derive externe), "non" = krigeage ordinaire.
+MNT          <- tolower(env_ou("KRIGEAGE_MNT", "oui")) %in% c("oui", "o", "1", "true", "vrai", "yes")
+MNT_ZOOM     <- as.integer(env_ou("KRIGEAGE_MNT_ZOOM", "7"))   # finesse des tuiles : 7 ~ 0,9 km, 8 ~ 0,4 km
+MNT_FICHIER  <- env_ou("KRIGEAGE_MNT_FICHIER", "")             # GeoTIFF d'altitude (m) a utiliser a la place des tuiles
 NMAX         <- 40        # nombre de stations voisines utilisees par le krigeage
 NFOLD_CV     <- 10        # validation croisee en N blocs ; NULL = "un a un" (exact, ~3 min pour 1400 stations)
 DOSSIER      <- env_ou("KRIGEAGE_DOSSIER", "krigeage_p_etp")   # cache des fichiers + sorties
 
 stopifnot(is.finite(ANNEE), ANNEE >= 1950L, ANNEE <= as.integer(format(Sys.Date(), "%Y")),
-          is.finite(SEUIL), SEUIL > 0, SEUIL <= 1, is.finite(RESOLUTION_M), RESOLUTION_M >= 500)
+          is.finite(SEUIL), SEUIL > 0, SEUIL <= 1, is.finite(RESOLUTION_M), RESOLUTION_M >= 500,
+          is.finite(MNT_ZOOM), MNT_ZOOM >= 5L, MNT_ZOOM <= 9L)
 if (!is.null(DEPARTEMENTS) && !all(grepl("^([0-9]{2}|2[AB])$", DEPARTEMENTS))) {
   stop("KRIGEAGE_DEPARTEMENTS : codes attendus sur deux caracteres (31, 09, 2A...).", call. = FALSE)
 }
@@ -54,6 +62,10 @@ options(timeout = max(600, getOption("timeout")))
 dir.create(file.path(DOSSIER, "fichiers"), recursive = TRUE, showWarnings = FALSE)
 dir.create(file.path(DOSSIER, "sorties"),  recursive = TRUE, showWarnings = FALSE)
 msg <- function(...) cat(sprintf(...), "\n", sep = "")
+if (MNT && !requireNamespace("terra", quietly = TRUE)) {
+  msg("Paquet terra absent : krigeage ordinaire, sans MNT (install.packages(\"terra\") pour l'activer).")
+  MNT <- FALSE
+}
 
 # DEPARTEMENTS == NULL : France metropolitaine entiere, d'apres le catalogue (la Corse y figure
 # sous "20" ou sous "2A" et "2B" selon les fichiers). Liste de secours si le catalogue est muet :
@@ -337,50 +349,183 @@ if (is.null(deps)) {
   masque <- sf::st_union(sf::st_geometry(deps))
 }
 
-# -- Variogramme experimental et ajustement ------------------------------------
-etendue <- sqrt(diff(range(xy[, 1]))^2 + diff(range(xy[, 2]))^2)
-cutoff  <- min(400000, etendue / 3)
-v <- gstat::variogram(bilan_mm ~ 1, pts, cutoff = cutoff, width = cutoff / 30)
-s2 <- stats::var(pts$bilan_mm)
-essais <- list()
-for (m in c("Exp", "Sph", "Mat")) {
-  ini <- gstat::vgm(psill = 0.8 * s2, model = m, range = cutoff / 3, nugget = 0.2 * s2,
-                    kappa = if (m == "Mat") 1 else 0.5)
-  aj <- tryCatch(suppressWarnings(gstat::fit.variogram(v, ini)), error = function(e) NULL)
-  if (!is.null(aj) && !isTRUE(attr(aj, "singular")) && all(aj$psill >= 0) && all(aj$range >= 0)) {
-    essais[[m]] <- list(modele = aj, sserr = attr(aj, "SSErr"))
-  }
-}
-if (!length(essais)) {
-  msg("Ajustement du variogramme impossible : modele exponentiel par defaut.")
-  modele <- gstat::vgm(0.8 * s2, "Exp", cutoff / 3, 0.2 * s2); choix <- "Exp (defaut)"
-} else {
-  best <- names(essais)[which.min(vapply(essais, function(e) e$sserr, 0))]
-  modele <- essais[[best]]$modele; choix <- best
-}
-msg("\nVariogramme retenu : %s | pepite %.0f, palier partiel %.0f, portee %.0f km (variance des donnees : %.0f)",
-    choix, modele$psill[1], sum(modele$psill[-1]), max(modele$range) / 1000, s2)
-
-# -- Validation croisee : un bloc de stations est retire, predit, puis compare -----
-# (le variogramme reste celui ajuste sur toutes les stations)
-set.seed(2026)
-nfold <- if (is.null(NFOLD_CV)) nrow(pts) else min(NFOLD_CV, nrow(pts))
-cv <- gstat::krige.cv(bilan_mm ~ 1, pts, model = modele, nmax = NMAX, nfold = nfold, verbose = FALSE)
-res <- cv$observed - cv$var1.pred
-rmse <- sqrt(mean(res^2)); biais <- mean(cv$var1.pred - cv$observed); mae <- mean(abs(res))
-nse <- 1 - sum(res^2) / sum((cv$observed - mean(cv$observed))^2)
-msg("Validation croisee (%d stations, %s) : RMSE %.0f mm | ecart absolu moyen %.0f mm | biais %+.1f mm | efficacite (Nash) %.2f",
-    nrow(pts), if (nfold == nrow(pts)) "un a un" else sprintf("%d blocs", nfold), rmse, mae, biais, nse)
-
-# -- Grille et prediction -------------------------------------------------------
+# -- Grille de prediction -----------------------------------------------------------
 grille <- sf::st_make_grid(masque, cellsize = RESOLUTION_M, what = "centers")
 grille <- grille[sf::st_intersects(grille, masque, sparse = FALSE)[, 1]]
-msg("Prediction sur %d mailles de %g km...", length(grille), RESOLUTION_M / 1000)
-pred <- gstat::krige(bilan_mm ~ 1, pts, newdata = sf::st_sf(geometry = grille), model = modele,
-                     nmax = NMAX, debug.level = 0)
+
+# -- MNT : altitude moyenne de chaque maille (tendance du krigeage) -------------------
+# Tuiles ouvertes "terrarium" (AWS) : PNG en Web Mercator, altitude (m) = R*256 + G + B/256 - 32768.
+# Telechargees une fois (cache : DOSSIER/mnt), puis moyennees sur chaque maille de la grille.
+mnt_etat <- new.env()
+mnt_etat$echecs <- 0L
+mnt_etat$premiere <- NULL
+
+tuile_mnt <- function(z, x, y) {
+  dest <- file.path(DOSSIER, "mnt", z, x, paste0(y, ".png"))
+  if (file.exists(dest) && file.size(dest) > 0) return(dest)
+  dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
+  tmp <- paste0(dest, ".part")
+  url <- sprintf("https://s3.amazonaws.com/elevation-tiles-prod/terrarium/%d/%d/%d.png", z, x, y)
+  ok <- tryCatch({ httr2::req_perform(requete(url), path = tmp); TRUE }, error = function(e) {
+    mnt_etat$echecs <- mnt_etat$echecs + 1L
+    if (is.null(mnt_etat$premiere)) {
+      mnt_etat$premiere <- paste(conditionMessage(e), if (!is.null(e$parent)) conditionMessage(e$parent) else "")
+    }
+    FALSE
+  })
+  if (ok && !identical(readBin(tmp, "raw", 4L), as.raw(c(0x89, 0x50, 0x4e, 0x47)))) {   # signature PNG
+    mnt_etat$echecs <- mnt_etat$echecs + 1L
+    if (is.null(mnt_etat$premiere)) mnt_etat$premiere <- "reponse qui n'est pas une image PNG"
+    ok <- FALSE
+  }
+  if (!ok) { unlink(tmp); return(NA_character_) }
+  file.rename(tmp, dest)
+  dest
+}
+
+mnt_brut <- function() {
+  if (nzchar(MNT_FICHIER)) {
+    if (!file.exists(MNT_FICHIER)) stop("fichier introuvable : ", MNT_FICHIER, call. = FALSE)
+    msg("MNT : fichier %s", MNT_FICHIER)
+    return(terra::rast(MNT_FICHIER)[[1L]])
+  }
+  z <- MNT_ZOOM; n <- 2^z
+  bb <- unname(sf::st_bbox(sf::st_transform(sf::st_as_sfc(sf::st_bbox(masque)), 4326)))   # lon/lat
+  colonne <- function(lon) floor((lon + 180) / 360 * n)
+  ligne   <- function(lat) floor((1 - asinh(tan(lat * pi / 180)) / pi) / 2 * n)
+  xs <- colonne(bb[1]):colonne(bb[3])
+  ys <- ligne(bb[4]):ligne(bb[2])
+  total <- length(xs) * length(ys)
+  msg("MNT : %d tuiles d'altitude (zoom %d).", total, z)
+  demi <- 20037508.342789244; pas <- 2 * demi / n
+  morceaux <- list()
+  for (x in xs) for (y in ys) {
+    if (!length(morceaux) && mnt_etat$echecs >= 5L) break      # rien ne passe : inutile d'insister
+    f <- tuile_mnt(z, x, y)
+    if (is.na(f)) next
+    r <- terra::rast(f)
+    if (terra::nlyr(r) < 3L) next
+    h <- r[[1L]] * 256 + r[[2L]] + r[[3L]] / 256 - 32768
+    terra::ext(h) <- c(-demi + x * pas, -demi + (x + 1) * pas, demi - (y + 1) * pas, demi - y * pas)
+    terra::crs(h) <- "EPSG:3857"
+    morceaux[[length(morceaux) + 1L]] <- h
+  }
+  manquantes <- total - length(morceaux)
+  if (manquantes > 0) msg("  %d tuile(s) manquante(s) ou non essayee(s)%s", manquantes,
+                          if (!is.null(mnt_etat$premiere)) paste0(" ; premiere erreur : ", mnt_etat$premiere) else "")
+  if (!length(morceaux) || manquantes > 0.1 * total) stop("trop de tuiles manquantes", call. = FALSE)
+  terra::merge(terra::sprc(morceaux))
+}
+
+# Altitude moyenne par maille (Lambert-93), a la resolution de la grille.
+mnt_moyen <- function() {
+  brut <- mnt_brut()
+  brut <- terra::ifel(brut < 0, 0, brut)                     # mer (bathymetrie) : altitude nulle
+  bb <- unname(sf::st_bbox(grille))
+  modele_r <- terra::rast(xmin = bb[1] - RESOLUTION_M, xmax = bb[3] + RESOLUTION_M,
+                          ymin = bb[2] - RESOLUTION_M, ymax = bb[4] + RESOLUTION_M,
+                          resolution = RESOLUTION_M, crs = "EPSG:2154")
+  terra::project(brut, modele_r, method = "average")
+}
+valeurs_en <- function(r, coord) { v <- terra::extract(r, coord); as.numeric(v[[ncol(v)]]) }
+
+alt_mailles <- NULL
+if (MNT) {
+  moy <- tryCatch(mnt_moyen(), error = function(e) { msg("MNT indisponible : %s", conditionMessage(e)); NULL })
+  if (!is.null(moy)) {
+    alt_mailles  <- valeurs_en(moy, sf::st_coordinates(grille))
+    alt_stations <- valeurs_en(moy, xy)
+    bon <- is.finite(alt_stations) & is.finite(pts$alt)
+    r_ctrl <- if (sum(bon) > 30) stats::cor(alt_stations[bon], pts$alt[bon]) else NA_real_
+    msg("MNT : altitude moyenne des mailles de %.0f a %.0f m. Controle aux stations (MNT / altitude declaree) : r = %.3f, ecart median %.0f m.",
+        min(alt_mailles, na.rm = TRUE), max(alt_mailles, na.rm = TRUE), r_ctrl,
+        stats::median(abs(alt_stations[bon] - pts$alt[bon])))
+    if (!is.finite(r_ctrl) || r_ctrl < 0.7) {
+      msg("MNT incoherent avec l'altitude des stations : krigeage ordinaire, sans MNT.")
+      MNT <- FALSE
+    }
+  } else {
+    msg("Krigeage ordinaire, sans MNT.")
+    MNT <- FALSE
+  }
+}
+if (MNT) {
+  sans_alt <- !is.finite(pts$alt)
+  if (any(sans_alt)) msg("%d station(s) sans altitude ecartee(s) du krigeage avec MNT.", sum(sans_alt))
+  pts <- pts[!sans_alt, ]
+  xy  <- sf::st_coordinates(pts)
+  pts$alt_km <- pts$alt / 1000
+}
+
+# -- Variogramme (des residus de la tendance) et validation croisee -------------------
+# Validation : un bloc de stations est retire, predit, puis compare (le variogramme reste
+# celui ajuste sur toutes les stations). Memes blocs pour les deux formules (graine fixe).
+etendue <- sqrt(diff(range(xy[, 1]))^2 + diff(range(xy[, 2]))^2)
+cutoff  <- min(400000, etendue / 3)
+nfold   <- if (is.null(NFOLD_CV)) nrow(pts) else min(NFOLD_CV, nrow(pts))
+
+evaluer <- function(formule, etiquette) {
+  v  <- gstat::variogram(formule, pts, cutoff = cutoff, width = cutoff / 30)
+  s2 <- stats::var(stats::residuals(stats::lm(formule, data = sf::st_drop_geometry(pts))))
+  essais <- list()
+  for (m in c("Exp", "Sph", "Mat")) {
+    ini <- gstat::vgm(psill = 0.8 * s2, model = m, range = cutoff / 3, nugget = 0.2 * s2,
+                      kappa = if (m == "Mat") 1 else 0.5)
+    aj <- tryCatch(suppressWarnings(gstat::fit.variogram(v, ini)), error = function(e) NULL)
+    # on refuse les ajustements absurdes (palier ou portee sans rapport avec les donnees)
+    if (!is.null(aj) && !isTRUE(attr(aj, "singular")) && all(aj$psill >= 0) && all(aj$range >= 0) &&
+        sum(aj$psill) <= 20 * s2 && max(aj$range) <= 10 * cutoff) {
+      essais[[m]] <- list(modele = aj, sserr = attr(aj, "SSErr"))
+    }
+  }
+  if (!length(essais)) {
+    msg("Ajustement du variogramme impossible : modele exponentiel par defaut.")
+    modele <- gstat::vgm(0.8 * s2, "Exp", cutoff / 3, 0.2 * s2); choix <- "Exp (defaut)"
+  } else {
+    best <- names(essais)[which.min(vapply(essais, function(e) e$sserr, 0))]
+    modele <- essais[[best]]$modele; choix <- best
+  }
+  msg("\nVariogramme retenu (%s) : %s | pepite %.0f, palier partiel %.0f, portee %.0f km (variance : %.0f)",
+      etiquette, choix, modele$psill[1], sum(modele$psill[-1]), max(modele$range) / 1000, s2)
+  set.seed(2026)
+  cv <- gstat::krige.cv(formule, pts, model = modele, nmax = NMAX, nfold = nfold, verbose = FALSE)
+  res <- cv$observed - cv$var1.pred
+  bon <- is.finite(res)
+  if (!all(bon)) msg("  %d station(s) sans prediction en validation croisee, ignoree(s).", sum(!bon))
+  rmse  <- sqrt(mean(res[bon]^2)); biais <- mean(-res[bon]); mae <- mean(abs(res[bon]))
+  nse   <- 1 - sum(res[bon]^2) / sum((cv$observed[bon] - mean(cv$observed[bon]))^2)
+  msg("Validation croisee (%s ; %d stations, %s) : RMSE %.0f mm | ecart absolu moyen %.0f mm | biais %+.1f mm | efficacite (Nash) %.2f",
+      etiquette, sum(bon), if (nfold == nrow(pts)) "un a un" else sprintf("%d blocs", nfold), rmse, mae, biais, nse)
+  list(modele = modele, choix = choix, v = v, s2 = s2, cv = cv, rmse = rmse, biais = biais, nse = nse)
+}
+
+ref <- if (MNT) evaluer(bilan_mm ~ 1, "sans altitude") else NULL
+formule <- if (MNT) bilan_mm ~ alt_km else bilan_mm ~ 1
+ev <- evaluer(formule, if (MNT) "avec altitude" else "krigeage ordinaire")
+if (MNT && !(ev$rmse < ref$rmse)) {     # l'altitude doit prouver son utilite
+  msg("L'altitude n'ameliore pas la validation croisee (RMSE %.0f contre %.0f mm) : krigeage ordinaire retenu.",
+      ev$rmse, ref$rmse)
+  MNT <- FALSE; ev <- ref; formule <- bilan_mm ~ 1
+}
+v <- ev$v; s2 <- ev$s2; modele <- ev$modele; choix <- ev$choix
+cv <- ev$cv; rmse <- ev$rmse; biais <- ev$biais; nse <- ev$nse
+if (MNT) msg("Gain de l'altitude : RMSE %.0f -> %.0f mm (%+.0f %%), Nash %.2f -> %.2f.",
+             ref$rmse, rmse, 100 * (rmse / ref$rmse - 1), ref$nse, nse)
+
+# -- Prediction -------------------------------------------------------------------------
+nouv <- if (MNT) sf::st_sf(alt_km = alt_mailles / 1000, geometry = grille) else sf::st_sf(geometry = grille)
+if (MNT) nouv <- nouv[is.finite(nouv$alt_km), ]
+msg("\nPrediction sur %d mailles de %g km...", nrow(nouv), RESOLUTION_M / 1000)
+pred <- gstat::krige(formule, pts, newdata = nouv, model = modele, nmax = NMAX, debug.level = 0)
 g <- as.data.frame(sf::st_coordinates(pred))
 g$bilan <- pred$var1.pred
 g$ecart_type <- sqrt(pmax(pred$var1.var, 0))
+if (any(!is.finite(g$bilan))) {
+  msg("%d maille(s) sans prediction, ecartee(s).", sum(!is.finite(g$bilan)))
+  g <- g[is.finite(g$bilan), , drop = FALSE]
+}
+msg("Surface krigee : de %.0f a %.0f mm (stations : de %.0f a %.0f mm).",
+    min(g$bilan), max(g$bilan), min(pts$bilan_mm), max(pts$bilan_mm))
 
 
 # ==============================================================================
@@ -399,8 +544,11 @@ echelle <- ggplot2::scale_fill_gradientn(
 couche_dep <- if (!is.null(deps)) ggplot2::geom_sf(data = deps, fill = NA, colour = "grey35", linewidth = 0.12, inherit.aes = FALSE)
 pts_df <- data.frame(xy, bilan = pts$bilan_mm)
 tit_per <- sprintf("juin \u00e0 ao\u00fbt %d", ANNEE)
-pied <- sprintf("%d stations M\u00e9t\u00e9o-France ; ETP Hargreaves-Samani ; krigeage ordinaire (%s). Validation crois\u00e9e (%s) : RMSE %.0f mm, biais %+.1f mm.",
-                nrow(pts), choix, if (nfold == nrow(pts)) "un \u00e0 un" else sprintf("%d blocs", nfold), rmse, biais)
+SUF <- if (MNT) "_mnt" else ""
+lib_methode <- if (MNT) "krigeage \u00e0 d\u00e9rive externe sur l'altitude (MNT)" else "krigeage ordinaire"
+pied <- sprintf("%d stations M\u00e9t\u00e9o-France ; ETP Hargreaves-Samani ; %s, variogramme %s.\nValidation crois\u00e9e (%s) : RMSE %.0f mm, biais %+.1f mm%s.",
+                nrow(pts), lib_methode, choix, if (nfold == nrow(pts)) "un \u00e0 un" else sprintf("%d blocs", nfold),
+                rmse, biais, if (MNT) sprintf(" ; sans l'altitude : RMSE %.0f mm", ref$rmse) else "")
 theme_c <- ggplot2::theme_void(base_size = 11) +
   ggplot2::theme(plot.title = ggplot2::element_text(face = "bold", size = 14),
                  plot.caption = ggplot2::element_text(size = 8, colour = "grey30", hjust = 0),
@@ -414,9 +562,10 @@ carte <- ggplot2::ggplot() +
   echelle +
   ggplot2::coord_sf(crs = 2154, datum = NA) +
   ggplot2::labs(title = sprintf("P \u2212 ETP estival, %s", tit_per),
-                subtitle = "Surface krig\u00e9e ; les points sont les stations (m\u00eame \u00e9chelle de couleur)",
+                subtitle = sprintf("Surface krig\u00e9e%s ; les points sont les stations (m\u00eame \u00e9chelle de couleur)",
+                                   if (MNT) " avec l'altitude" else ""),
                 caption = pied) + theme_c
-ggplot2::ggsave(file.path(DOSSIER, "sorties", sprintf("carte_p_etp_jja_%d.png", ANNEE)), carte,
+ggplot2::ggsave(file.path(DOSSIER, "sorties", sprintf("carte_p_etp_jja_%d%s.png", ANNEE, SUF)), carte,
                 width = 9, height = 8.5, dpi = 200, bg = "white")
 
 carte_inc <- ggplot2::ggplot() +
@@ -428,23 +577,32 @@ carte_inc <- ggplot2::ggplot() +
   ggplot2::labs(title = "Incertitude du krigeage (\u00e9cart-type de pr\u00e9diction)",
                 subtitle = "Faible pr\u00e8s des stations, forte l\u00e0 o\u00f9 le r\u00e9seau est lointain",
                 caption = pied) + theme_c
-ggplot2::ggsave(file.path(DOSSIER, "sorties", sprintf("incertitude_krigeage_%d.png", ANNEE)), carte_inc,
+ggplot2::ggsave(file.path(DOSSIER, "sorties", sprintf("incertitude_krigeage_%d%s.png", ANNEE, SUF)), carte_inc,
                 width = 9, height = 8.5, dpi = 200, bg = "white")
 
 # Diagnostic : variogramme (points + modele) et validation croisee (observe / predit)
-grDevices::png(file.path(DOSSIER, "sorties", sprintf("diagnostic_krigeage_%d.png", ANNEE)),
-               width = 2000, height = 950, res = 200)
-op <- graphics::par(mfrow = c(1, 2), mar = c(4.5, 4.8, 3, 1), cex.main = 0.95)
+grDevices::png(file.path(DOSSIER, "sorties", sprintf("diagnostic_krigeage_%d%s.png", ANNEE, SUF)),
+               width = if (MNT) 3000 else 2000, height = 950, res = 200)
+op <- graphics::par(mfrow = c(1, if (MNT) 3 else 2), mar = c(4.5, 4.8, 3, 1), cex.main = 0.95)
 graphics::plot(v$dist / 1000, v$gamma, pch = 16, col = "grey25", xlab = "Distance (km)",
                ylab = "Semi-variance (mm\u00b2)", ylim = c(0, max(v$gamma) * 1.1),
-               main = sprintf("Variogramme (%s)", choix))
+               main = sprintf("Variogramme%s (%s)", if (MNT) " des r\u00e9sidus" else "", choix))
 vl <- gstat::variogramLine(modele, maxdist = cutoff)
 graphics::lines(vl$dist / 1000, vl$gamma, col = "#b2182b", lwd = 2)
 graphics::abline(h = s2, lty = 3, col = "grey50")
 graphics::plot(cv$var1.pred, cv$observed, pch = 16, cex = 0.5, col = grDevices::rgb(0.1, 0.3, 0.5, 0.45),
                xlab = "Pr\u00e9dit (validation crois\u00e9e, mm)", ylab = "Observ\u00e9 (mm)",
-               main = sprintf("Validation crois\u00e9e : RMSE %.0f mm, Nash %.2f", rmse, nse))
+               main = if (MNT) sprintf("Validation crois\u00e9e : RMSE %.0f mm, Nash %.2f\n(sans altitude : RMSE %.0f mm, Nash %.2f)", rmse, nse, ref$rmse, ref$nse)
+                      else sprintf("Validation crois\u00e9e : RMSE %.0f mm, Nash %.2f", rmse, nse))
 graphics::abline(0, 1, col = "grey30")
+if (MNT) {
+  tend <- stats::lm(bilan_mm ~ alt_km, data = sf::st_drop_geometry(pts))
+  graphics::plot(pts$alt, pts$bilan_mm, pch = 16, cex = 0.5, col = grDevices::rgb(0.1, 0.3, 0.5, 0.45),
+                 xlab = "Altitude de la station (m)", ylab = "P \u2212 ETP (mm)",
+                 main = sprintf("P \u2212 ETP selon l'altitude\n(tendance globale : %+.0f mm par km, R\u00b2 = %.2f)",
+                                stats::coef(tend)[2], summary(tend)$r.squared))
+  graphics::abline(a = stats::coef(tend)[1], b = stats::coef(tend)[2] / 1000, col = "#b2182b", lwd = 2)   # km -> m
+}
 graphics::par(op)
 invisible(grDevices::dev.off())
 

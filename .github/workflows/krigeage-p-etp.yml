@@ -25,6 +25,9 @@ on:
       departements:
         description: "Departements, ex. 31,09,2A (vide = parametres.env)"
         default: ""
+      mnt:
+        description: "Altitude (MNT) comme tendance : oui ou non (vide = parametres.env)"
+        default: ""
 
 permissions:
   contents: write
@@ -54,6 +57,7 @@ jobs:
         env:
           IN_ANNEE: ${{ inputs.annee }}
           IN_DEPARTEMENTS: ${{ inputs.departements }}
+          IN_MNT: ${{ inputs.mnt }}
         run: |
           set -euo pipefail
           # Seules les lignes KRIGEAGE_NOM=valeur sobres passent dans l'environnement.
@@ -63,6 +67,9 @@ jobs:
           fi
           if printf '%s' "$IN_DEPARTEMENTS" | grep -Eq '^[A-Za-z0-9,; ]+$'; then
             echo "KRIGEAGE_DEPARTEMENTS=$IN_DEPARTEMENTS" >> "$GITHUB_ENV"
+          fi
+          if printf '%s' "$IN_MNT" | grep -Eq '^(oui|non)$'; then
+            echo "KRIGEAGE_MNT=$IN_MNT" >> "$GITHUB_ENV"
           fi
 
       - name: Calculer et cartographier
