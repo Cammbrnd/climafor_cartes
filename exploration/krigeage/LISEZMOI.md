@@ -32,10 +32,12 @@ n'a pas de sens pour des résultats générés.
 `resultats/<année>/` : `carte_p_etp_jja_<année>.png`, `incertitude_krigeage_<année>.png`,
 `diagnostic_krigeage_<année>.png` (variogramme et validation croisée), `stations_p_etp_jja_<année>.csv`.
 Avec MNT, les trois images portent le suffixe `_mnt` (le diagnostic ajoute P − ETP selon l'altitude).
+`p_etp_jja_<année>[_mnt].tif` : la surface krigée (Lambert-93, 2 bandes : P − ETP et écart-type de prédiction), à ouvrir dans QGIS.
 Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
 
 ## Limites à garder en tête
 
+- La tendance n'est pas extrapolée au-delà de la plus haute station (altitude plafonnée dans les mailles plus hautes).
 - Le MNT est moyenné sur la maille (5 km par défaut) : le relief plus fin que la maille n'apparaît pas.
 - ETP de Hargreaves : ignore vent et humidité.
 - La validation croisée garde le variogramme ajusté sur toutes les stations.

@@ -513,8 +513,17 @@ if (MNT) msg("Gain de l'altitude : RMSE %.0f -> %.0f mm (%+.0f %%), Nash %.2f ->
              ref$rmse, rmse, 100 * (rmse / ref$rmse - 1), ref$nse, nse)
 
 # -- Prediction -------------------------------------------------------------------------
-nouv <- if (MNT) sf::st_sf(alt_km = alt_mailles / 1000, geometry = grille) else sf::st_sf(geometry = grille)
-if (MNT) nouv <- nouv[is.finite(nouv$alt_km), ]
+SUF <- if (MNT) "_mnt" else ""
+if (MNT) {
+  # la tendance n'est pas extrapolee au-dela de la plus haute station
+  alt_max <- max(pts$alt)
+  n_haut <- sum(alt_mailles > alt_max, na.rm = TRUE)
+  if (n_haut) msg("%d maille(s) plus haute(s) que la plus haute station (%.0f m) : altitude plafonnee a cette valeur.", n_haut, alt_max)
+  nouv <- sf::st_sf(alt_km = pmin(alt_mailles, alt_max) / 1000, geometry = grille)
+  nouv <- nouv[is.finite(nouv$alt_km), ]
+} else {
+  nouv <- sf::st_sf(geometry = grille)
+}
 msg("\nPrediction sur %d mailles de %g km...", nrow(nouv), RESOLUTION_M / 1000)
 pred <- gstat::krige(formule, pts, newdata = nouv, model = modele, nmax = NMAX, debug.level = 0)
 g <- as.data.frame(sf::st_coordinates(pred))
@@ -526,6 +535,14 @@ if (any(!is.finite(g$bilan))) {
 }
 msg("Surface krigee : de %.0f a %.0f mm (stations : de %.0f a %.0f mm).",
     min(g$bilan), max(g$bilan), min(pts$bilan_mm), max(pts$bilan_mm))
+# Surface en GeoTIFF (Lambert-93, 2 bandes : P - ETP et ecart-type), pour QGIS
+if (requireNamespace("terra", quietly = TRUE)) {
+  tryCatch({
+    rr <- terra::rast(g[, c("X", "Y", "bilan", "ecart_type")], type = "xyz", crs = "EPSG:2154")
+    names(rr) <- c("p_etp_mm", "ecart_type_mm")
+    terra::writeRaster(rr, file.path(DOSSIER, "sorties", sprintf("p_etp_jja_%d%s.tif", ANNEE, SUF)), overwrite = TRUE)
+  }, error = function(e) msg("GeoTIFF non ecrit : %s", conditionMessage(e)))
+}
 
 
 # ==============================================================================
@@ -544,7 +561,6 @@ echelle <- ggplot2::scale_fill_gradientn(
 couche_dep <- if (!is.null(deps)) ggplot2::geom_sf(data = deps, fill = NA, colour = "grey35", linewidth = 0.12, inherit.aes = FALSE)
 pts_df <- data.frame(xy, bilan = pts$bilan_mm)
 tit_per <- sprintf("juin \u00e0 ao\u00fbt %d", ANNEE)
-SUF <- if (MNT) "_mnt" else ""
 lib_methode <- if (MNT) "krigeage \u00e0 d\u00e9rive externe sur l'altitude (MNT)" else "krigeage ordinaire"
 pied <- sprintf("%d stations M\u00e9t\u00e9o-France ; ETP Hargreaves-Samani ; %s, variogramme %s.\nValidation crois\u00e9e (%s) : RMSE %.0f mm, biais %+.1f mm%s.",
                 nrow(pts), lib_methode, choix, if (nfold == nrow(pts)) "un \u00e0 un" else sprintf("%d blocs", nfold),
