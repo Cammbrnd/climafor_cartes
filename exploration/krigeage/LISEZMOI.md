@@ -41,3 +41,19 @@ Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
 - Le MNT est moyenné sur la maille (5 km par défaut) : le relief plus fin que la maille n'apparaît pas.
 - ETP de Hargreaves : ignore vent et humidité.
 - La validation croisée garde le variogramme ajusté sur toutes les stations.
+
+## Covariables et comparaison avec Météo-France
+
+- `KRIGEAGE_COVARIABLES=expo,mer` : en plus de l'altitude, le script teste l'exposition des versants (pente orientée vers
+  le nord / l'est, calculée sur le MNT à l'échelle `KRIGEAGE_EXPO_ECHELLE_KM`, 5 km par défaut) et la proximité de la mer
+  (`exp(−distance à la mer / KRIGEAGE_MER_ECHELLE_KM)`, 50 km par défaut). Les combinaisons sont évaluées par validation
+  croisée (mêmes blocs) et la meilleure est retenue ; un gain de moins de 1 % ne justifie pas une covariable de plus.
+  Le tableau est dans le journal et dans `validation_tendances_<année>.csv`. Les covariables des stations sont dans
+  `stations_covariables_<année>.csv`.
+- Plusieurs covariables : la tendance est estimée une fois sur toutes les stations puis les résidus sont krigés
+  (krigeage de régression). La dérive locale, qui réestime la tendance dans chaque voisinage, est instable avec plusieurs
+  covariables (l'exposition est presque nulle en plaine) ; elle reste utilisée pour l'altitude seule.
+- `comparaison_etp_mf.R` compare l'ETP Hargreaves-Samani des stations à l'ETP Penman-Monteith spatialisée de Météo-France
+  (grille de 0,125°, data.gouv.fr) : `comparaison_etp_<année>.png` et `.csv`. Le format du fichier n'étant pas documenté,
+  les colonnes sont reconnues d'après leur nom et l'en-tête est affiché dans le journal. Hors GitHub, on peut fournir le
+  fichier avec `KRIGEAGE_ETP_FICHIER`.

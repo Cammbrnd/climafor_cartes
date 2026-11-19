@@ -77,6 +77,12 @@ jobs:
           LC_ALL: C.UTF-8
         run: Rscript exploration/krigeage/krigeage_p_etp_estival.R
 
+      - name: Comparer l'ETP avec Meteo-France
+        continue-on-error: true
+        env:
+          LC_ALL: C.UTF-8
+        run: Rscript exploration/krigeage/comparaison_etp_mf.R
+
       - uses: actions/upload-artifact@v4
         with:
           name: krigeage-p-etp-resultats

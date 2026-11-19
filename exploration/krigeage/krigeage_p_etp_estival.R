@@ -41,13 +41,21 @@ RESOLUTION_M <- as.numeric(env_ou("KRIGEAGE_RESOLUTION_M", "5000"))  # taille de
 MNT          <- tolower(env_ou("KRIGEAGE_MNT", "oui")) %in% c("oui", "o", "1", "true", "vrai", "yes")
 MNT_ZOOM     <- as.integer(env_ou("KRIGEAGE_MNT_ZOOM", "7"))   # finesse des tuiles : 7 ~ 0,9 km, 8 ~ 0,4 km
 MNT_FICHIER  <- env_ou("KRIGEAGE_MNT_FICHIER", "")             # GeoTIFF d'altitude (m) a utiliser a la place des tuiles
+# Covariables candidates en plus de l'altitude (separees par des virgules, vide = altitude seule) :
+#   expo = exposition des versants (pente x orientation, calculee sur le MNT)
+#   mer  = proximite de la mer, exp(-distance a la mer / MER_ECHELLE_KM)
+# Chaque combinaison est evaluee par validation croisee ; la meilleure est retenue.
+COVARIABLES     <- intersect(trimws(strsplit(tolower(env_ou("KRIGEAGE_COVARIABLES", "expo,mer")), ",")[[1]]), c("expo", "mer"))
+EXPO_ECHELLE_KM <- as.numeric(env_ou("KRIGEAGE_EXPO_ECHELLE_KM", "5"))   # echelle de la pente et de l'exposition
+MER_ECHELLE_KM  <- as.numeric(env_ou("KRIGEAGE_MER_ECHELLE_KM", "50"))   # decroissance de l'effet littoral
 NMAX         <- 40        # nombre de stations voisines utilisees par le krigeage
 NFOLD_CV     <- 10        # validation croisee en N blocs ; NULL = "un a un" (exact, ~3 min pour 1400 stations)
 DOSSIER      <- env_ou("KRIGEAGE_DOSSIER", "krigeage_p_etp")   # cache des fichiers + sorties
 
 stopifnot(is.finite(ANNEE), ANNEE >= 1950L, ANNEE <= as.integer(format(Sys.Date(), "%Y")),
           is.finite(SEUIL), SEUIL > 0, SEUIL <= 1, is.finite(RESOLUTION_M), RESOLUTION_M >= 500,
-          is.finite(MNT_ZOOM), MNT_ZOOM >= 5L, MNT_ZOOM <= 9L)
+          is.finite(MNT_ZOOM), MNT_ZOOM >= 5L, MNT_ZOOM <= 9L,
+          is.finite(EXPO_ECHELLE_KM), EXPO_ECHELLE_KM >= 1, is.finite(MER_ECHELLE_KM), MER_ECHELLE_KM > 0)
 if (!is.null(DEPARTEMENTS) && !all(grepl("^([0-9]{2}|2[AB])$", DEPARTEMENTS))) {
   stop("KRIGEAGE_DEPARTEMENTS : codes attendus sur deux caracteres (31, 09, 2A...).", call. = FALSE)
 }
@@ -418,8 +426,7 @@ mnt_brut <- function() {
 }
 
 # Altitude moyenne par maille (Lambert-93), a la resolution de la grille.
-mnt_moyen <- function() {
-  brut <- mnt_brut()
+mnt_moyen <- function(brut) {
   brut <- terra::ifel(brut < 0, 0, brut)                     # mer (bathymetrie) : altitude nulle
   bb <- unname(sf::st_bbox(grille))
   modele_r <- terra::rast(xmin = bb[1] - RESOLUTION_M, xmax = bb[3] + RESOLUTION_M,
@@ -427,11 +434,49 @@ mnt_moyen <- function() {
                           resolution = RESOLUTION_M, crs = "EPSG:2154")
   terra::project(brut, modele_r, method = "average")
 }
-valeurs_en <- function(r, coord) { v <- terra::extract(r, coord); as.numeric(v[[ncol(v)]]) }
+valeurs_en <- function(r, coord, interp = "simple") {
+  v <- terra::extract(r, coord, method = interp)
+  as.numeric(v[[ncol(v)]])
+}
+
+# Covariables derivees du MNT, sur des rasters grossiers (Lambert-93) ; valeurs lues par interpolation.
+#  expo_n, expo_e : pente (%) orientee vers le nord / vers l'est (la pente "regarde" dans la direction du versant)
+#  littoral       : exp(-distance a la mer / MER_ECHELLE_KM) ; dist_mer_km : distance a la mer (km)
+couches_covariables <- function(brut) {
+  bb <- unname(sf::st_bbox(masque)); marge <- 100000
+  modele_r <- function(res) terra::rast(xmin = bb[1] - marge, xmax = bb[3] + marge, ymin = bb[2] - marge,
+                                        ymax = bb[4] + marge, resolution = res, crs = "EPSG:2154")
+  sortie <- list()
+  if ("expo" %in% COVARIABLES) {
+    dem   <- terra::project(terra::ifel(brut < 0, 0, brut), modele_r(EXPO_ECHELLE_KM * 1000), method = "average")
+    pente <- terra::terrain(dem, "slope", unit = "radians")
+    asp   <- terra::terrain(dem, "aspect", unit = "radians")
+    sortie$expo_n <- terra::cover(100 * tan(pente) * cos(asp), pente * 0)    # replat : 0
+    sortie$expo_e <- terra::cover(100 * tan(pente) * sin(asp), pente * 0)
+  }
+  if ("mer" %in% COVARIABLES) {
+    mini <- terra::project(brut, modele_r(2000), method = "min")
+    mer  <- terra::ifel(mini <= 0, 1, NA)
+    pa   <- terra::patches(mer, directions = 8)
+    fr   <- terra::freq(pa)
+    grands <- fr$value[fr$count >= 500]                      # >= 2000 km2 : la mer, pas une depression a l'interieur des terres
+    if (!length(grands)) {
+      msg("Covariable mer : aucune etendue de mer dans le MNT.")
+    } else {
+      d <- terra::distance(terra::subst(pa, from = grands, to = 1, others = NA)) / 1000
+      sortie$dist_mer_km <- d
+      sortie$littoral    <- exp(-d / MER_ECHELLE_KM)
+    }
+  }
+  sortie
+}
 
 alt_mailles <- NULL
+couches <- list(); cov_mailles <- list()
+cov_utilisees <- c(expo = FALSE, mer = FALSE)
 if (MNT) {
-  moy <- tryCatch(mnt_moyen(), error = function(e) { msg("MNT indisponible : %s", conditionMessage(e)); NULL })
+  brut_mnt <- tryCatch(mnt_brut(), error = function(e) { msg("MNT indisponible : %s", conditionMessage(e)); NULL })
+  moy <- if (is.null(brut_mnt)) NULL else tryCatch(mnt_moyen(brut_mnt), error = function(e) { msg("MNT inutilisable : %s", conditionMessage(e)); NULL })
   if (!is.null(moy)) {
     alt_mailles  <- valeurs_en(moy, sf::st_coordinates(grille))
     alt_stations <- valeurs_en(moy, xy)
@@ -449,12 +494,27 @@ if (MNT) {
     MNT <- FALSE
   }
 }
+if (MNT && length(COVARIABLES)) {
+  couches <- tryCatch(couches_covariables(brut_mnt), error = function(e) { msg("Covariables indisponibles : %s", conditionMessage(e)); list() })
+  if (length(couches)) msg("Covariables calculees : %s.", paste(setdiff(names(couches), "dist_mer_km"), collapse = ", "))
+}
 if (MNT) {
   sans_alt <- !is.finite(pts$alt)
   if (any(sans_alt)) msg("%d station(s) sans altitude ecartee(s) du krigeage avec MNT.", sum(sans_alt))
   pts <- pts[!sans_alt, ]
   xy  <- sf::st_coordinates(pts)
   pts$alt_km <- pts$alt / 1000
+  coord_grille <- sf::st_coordinates(grille)
+  for (nm in names(couches)) {
+    v <- valeurs_en(couches[[nm]], xy, "bilinear")
+    if (any(!is.finite(v))) { msg("%d station(s) hors de la couche %s : valeur neutre.", sum(!is.finite(v)), nm); v[!is.finite(v)] <- 0 }
+    pts[[nm]] <- v
+    cov_mailles[[nm]] <- valeurs_en(couches[[nm]], coord_grille, "bilinear")
+  }
+  if (length(couches)) {
+    utils::write.csv(sf::st_drop_geometry(pts)[, intersect(c("id", "nom", "alt", "expo_n", "expo_e", "dist_mer_km", "littoral", "bilan_mm"), names(pts))],
+                     file.path(DOSSIER, "sorties", sprintf("stations_covariables_%d.csv", ANNEE)), row.names = FALSE, fileEncoding = "UTF-8")
+  }
 }
 
 # -- Variogramme (des residus de la tendance) et validation croisee -------------------
@@ -464,7 +524,14 @@ etendue <- sqrt(diff(range(xy[, 1]))^2 + diff(range(xy[, 2]))^2)
 cutoff  <- min(400000, etendue / 3)
 nfold   <- if (is.null(NFOLD_CV)) nrow(pts) else min(NFOLD_CV, nrow(pts))
 
-evaluer <- function(formule, etiquette) {
+# Blocs de validation croisee : les memes pour toutes les tendances (graine fixe)
+set.seed(2026)
+blocs <- if (is.null(NFOLD_CV)) seq_len(nrow(pts)) else sample(rep(seq_len(nfold), length.out = nrow(pts)))
+
+# globale = FALSE : krigeage a derive externe (la tendance est reestimee dans chaque voisinage)
+# globale = TRUE  : krigeage de regression (tendance estimee une fois sur toutes les stations,
+#                   puis krigeage des residus) ; plus stable quand il y a plusieurs covariables
+evaluer <- function(formule, etiquette, globale = FALSE) {
   v  <- gstat::variogram(formule, pts, cutoff = cutoff, width = cutoff / 30)
   s2 <- stats::var(stats::residuals(stats::lm(formule, data = sf::st_drop_geometry(pts))))
   essais <- list()
@@ -487,8 +554,19 @@ evaluer <- function(formule, etiquette) {
   }
   msg("\nVariogramme retenu (%s) : %s | pepite %.0f, palier partiel %.0f, portee %.0f km (variance : %.0f)",
       etiquette, choix, modele$psill[1], sum(modele$psill[-1]), max(modele$range) / 1000, s2)
-  set.seed(2026)
-  cv <- gstat::krige.cv(formule, pts, model = modele, nmax = NMAX, nfold = nfold, verbose = FALSE)
+  if (!globale) {
+    cv <- gstat::krige.cv(formule, pts, model = modele, nmax = NMAX, nfold = blocs, verbose = FALSE)
+  } else {
+    pr <- rep(NA_real_, nrow(pts))
+    for (k in sort(unique(blocs))) {
+      ap <- pts[blocs != k, ]; te <- pts[blocs == k, ]
+      reg <- suppressWarnings(stats::lm(formule, data = sf::st_drop_geometry(ap)))
+      ap$res <- stats::residuals(reg)
+      kr <- gstat::krige(res ~ 1, ap, te, model = modele, nmax = NMAX, debug.level = 0)
+      pr[blocs == k] <- suppressWarnings(stats::predict(reg, sf::st_drop_geometry(te))) + kr$var1.pred
+    }
+    cv <- data.frame(observed = pts$bilan_mm, var1.pred = pr)
+  }
   res <- cv$observed - cv$var1.pred
   bon <- is.finite(res)
   if (!all(bon)) msg("  %d station(s) sans prediction en validation croisee, ignoree(s).", sum(!bon))
@@ -496,37 +574,101 @@ evaluer <- function(formule, etiquette) {
   nse   <- 1 - sum(res[bon]^2) / sum((cv$observed[bon] - mean(cv$observed[bon]))^2)
   msg("Validation croisee (%s ; %d stations, %s) : RMSE %.0f mm | ecart absolu moyen %.0f mm | biais %+.1f mm | efficacite (Nash) %.2f",
       etiquette, sum(bon), if (nfold == nrow(pts)) "un a un" else sprintf("%d blocs", nfold), rmse, mae, biais, nse)
-  list(modele = modele, choix = choix, v = v, s2 = s2, cv = cv, rmse = rmse, biais = biais, nse = nse)
+  list(modele = modele, choix = choix, v = v, s2 = s2, cv = cv, rmse = rmse, mae = mae, biais = biais, nse = nse,
+       n_na = sum(!bon), globale = globale)
 }
 
 ref <- if (MNT) evaluer(bilan_mm ~ 1, "sans altitude") else NULL
-formule <- if (MNT) bilan_mm ~ alt_km else bilan_mm ~ 1
-ev <- evaluer(formule, if (MNT) "avec altitude" else "krigeage ordinaire")
-if (MNT && !(ev$rmse < ref$rmse)) {     # l'altitude doit prouver son utilite
-  msg("L'altitude n'ameliore pas la validation croisee (RMSE %.0f contre %.0f mm) : krigeage ordinaire retenu.",
-      ev$rmse, ref$rmse)
-  MNT <- FALSE; ev <- ref; formule <- bilan_mm ~ 1
+tendance_globale <- FALSE
+if (!MNT) {
+  formule <- bilan_mm ~ 1
+  ev <- evaluer(formule, "krigeage ordinaire")
+} else {
+  # (formule, globale) : "derive locale" = krigeage a derive externe ; "tendance globale" = krigeage de regression
+  candidats <- list("altitude (derive locale)" = list(f = bilan_mm ~ alt_km, globale = FALSE),
+                    "altitude (tendance globale)" = list(f = bilan_mm ~ alt_km, globale = TRUE))
+  a_expo <- all(c("expo_n", "expo_e") %in% names(pts)); a_mer <- "littoral" %in% names(pts)
+  if (a_expo) candidats[["altitude + exposition"]] <- list(f = bilan_mm ~ alt_km + expo_n + expo_e, globale = TRUE)
+  if (a_mer)  candidats[["altitude + distance a la mer"]] <- list(f = bilan_mm ~ alt_km + littoral, globale = TRUE)
+  if (a_expo && a_mer) candidats[["altitude + exposition + distance a la mer"]] <-
+    list(f = bilan_mm ~ alt_km + expo_n + expo_e + littoral, globale = TRUE)
+  evals <- lapply(names(candidats), function(n) evaluer(candidats[[n]]$f, n, candidats[[n]]$globale))
+  names(evals) <- names(candidats)
+  rm_ <- vapply(evals, function(e) e$rmse, 0)
+  valides <- vapply(evals, function(e) e$n_na <= 0.005 * nrow(pts), TRUE)
+  meilleur <- names(which.min(ifelse(valides, rm_, Inf)))
+  # parcimonie : un gain de moins de 1 % ne justifie pas une covariable de plus (ni une tendance globale
+  # plutot que la derive locale)
+  if (!(meilleur %in% c("altitude (derive locale)", "altitude (tendance globale)")) &&
+      rm_[[meilleur]] > 0.99 * rm_[["altitude (tendance globale)"]]) meilleur <- "altitude (tendance globale)"
+  if (rm_[[meilleur]] > 0.99 * rm_[["altitude (derive locale)"]]) meilleur <- "altitude (derive locale)"
+
+  msg("\nComparaison des tendances (validation croisee, memes blocs) :")
+  msg("  %-46s RMSE %5.1f mm | ecart absolu %5.1f mm | Nash %.3f", "aucune (krigeage ordinaire)", ref$rmse, ref$mae, ref$nse)
+  for (n in names(evals)) msg("  %-46s RMSE %5.1f mm | ecart absolu %5.1f mm | Nash %.3f%s%s", n, evals[[n]]$rmse, evals[[n]]$mae,
+                              evals[[n]]$nse, if (!valides[[n]]) "  (predictions manquantes : ecartee)" else "",
+                              if (n == meilleur) "  <- retenue" else "")
+  utils::write.csv(data.frame(tendance = c("aucune (krigeage ordinaire)", names(evals)),
+                              RMSE_mm = c(ref$rmse, rm_), ecart_absolu_mm = c(ref$mae, vapply(evals, function(e) e$mae, 0)),
+                              biais_mm = c(ref$biais, vapply(evals, function(e) e$biais, 0)),
+                              Nash = c(ref$nse, vapply(evals, function(e) e$nse, 0)),
+                              retenue = c(FALSE, names(evals) == meilleur), row.names = NULL),
+                   file.path(DOSSIER, "sorties", sprintf("validation_tendances_%d.csv", ANNEE)), row.names = FALSE, fileEncoding = "UTF-8")
+
+  # Poids des covariables dans le modele le plus complet (moindres carres globaux, a titre indicatif)
+  plein <- candidats[[length(candidats)]]$f
+  if (length(candidats) > 1L) {
+    cf <- summary(stats::lm(plein, data = sf::st_drop_geometry(pts)))
+    msg("\nTendance globale du modele le plus complet (R2 = %.2f) :", cf$r.squared)
+    unites <- c(alt_km = "mm par km d'altitude", expo_n = "mm par % de pente orientee vers le nord",
+                expo_e = "mm par % de pente orientee vers l'est", littoral = "mm entre le littoral (1) et l'interieur (0)")
+    for (k in rownames(cf$coefficients)[-1]) msg("  %-9s %+8.1f %s (t = %+.1f)", k, cf$coefficients[k, 1], unites[[k]], cf$coefficients[k, 3])
+  }
+
+  formule <- candidats[[meilleur]]$f
+  tendance_globale <- candidats[[meilleur]]$globale
+  ev <- evals[[meilleur]]
+  if (!(valides[[meilleur]] && ev$rmse < ref$rmse)) {    # la tendance doit prouver son utilite
+    msg("La tendance n'ameliore pas la validation croisee (RMSE %.0f contre %.0f mm) : krigeage ordinaire retenu.", ev$rmse, ref$rmse)
+    MNT <- FALSE; ev <- ref; formule <- bilan_mm ~ 1; tendance_globale <- FALSE
+  } else {
+    cov_utilisees <- c(expo = grepl("exposition", meilleur), mer = grepl("la mer", meilleur))
+  }
 }
 v <- ev$v; s2 <- ev$s2; modele <- ev$modele; choix <- ev$choix
 cv <- ev$cv; rmse <- ev$rmse; biais <- ev$biais; nse <- ev$nse
-if (MNT) msg("Gain de l'altitude : RMSE %.0f -> %.0f mm (%+.0f %%), Nash %.2f -> %.2f.",
+if (MNT) msg("Gain de la tendance retenue : RMSE %.0f -> %.0f mm (%+.0f %%), Nash %.2f -> %.2f.",
              ref$rmse, rmse, 100 * (rmse / ref$rmse - 1), ref$nse, nse)
 
 # -- Prediction -------------------------------------------------------------------------
-# suffixe des fichiers : _mnt si l'altitude est utilisee, _<n>km si la maille n'est pas celle par defaut (5 km)
-SUF <- paste0(if (MNT) "_mnt" else "", if (RESOLUTION_M != 5000) sprintf("_%gkm", RESOLUTION_M / 1000) else "")
+# suffixe des fichiers : _mnt (+ _expo, _mer selon la tendance retenue), puis _<n>km si la maille n'est pas celle par defaut (5 km)
+SUF <- paste0(if (MNT) "_mnt" else "", if (cov_utilisees[["expo"]]) "_expo" else "", if (cov_utilisees[["mer"]]) "_mer" else "",
+              if (RESOLUTION_M != 5000) sprintf("_%gkm", RESOLUTION_M / 1000) else "")
 if (MNT) {
-  # la tendance n'est pas extrapolee au-dela de la plus haute station
-  alt_max <- max(pts$alt)
-  n_haut <- sum(alt_mailles > alt_max, na.rm = TRUE)
-  if (n_haut) msg("%d maille(s) plus haute(s) que la plus haute station (%.0f m) : altitude plafonnee a cette valeur.", n_haut, alt_max)
-  nouv <- sf::st_sf(alt_km = pmin(alt_mailles, alt_max) / 1000, geometry = grille)
+  nouv <- sf::st_sf(alt_km = alt_mailles / 1000, geometry = grille)
+  for (nm in names(cov_mailles)) nouv[[nm]] <- cov_mailles[[nm]]
+  for (nm in setdiff(names(cov_mailles), "dist_mer_km")) nouv[[nm]][!is.finite(nouv[[nm]])] <- 0
+  # la tendance n'est jamais extrapolee au-dela de la plage observee aux stations
+  for (nm in all.vars(formule)[-1]) {
+    lo <- min(pts[[nm]]); hi <- max(pts[[nm]]); x <- nouv[[nm]]
+    n_hors <- sum(x < lo | x > hi, na.rm = TRUE)
+    if (n_hors) msg("%d maille(s) hors de la plage des stations pour %s : valeur ramenee a la plage [%.2f ; %.2f].", n_hors, nm, lo, hi)
+    nouv[[nm]] <- pmin(pmax(x, lo), hi)
+  }
   nouv <- nouv[is.finite(nouv$alt_km), ]
 } else {
   nouv <- sf::st_sf(geometry = grille)
 }
 msg("\nPrediction sur %d mailles de %g km...", nrow(nouv), RESOLUTION_M / 1000)
-pred <- gstat::krige(formule, pts, newdata = nouv, model = modele, nmax = NMAX, debug.level = 0)
+if (tendance_globale) {
+  # krigeage de regression : tendance (moindres carres) + krigeage des residus
+  reg <- stats::lm(formule, data = sf::st_drop_geometry(pts))
+  pts$res <- stats::residuals(reg)
+  pred <- gstat::krige(res ~ 1, pts, newdata = nouv, model = modele, nmax = NMAX, debug.level = 0)
+  pred$var1.pred <- pred$var1.pred + as.numeric(stats::predict(reg, sf::st_drop_geometry(nouv)))
+} else {
+  pred <- gstat::krige(formule, pts, newdata = nouv, model = modele, nmax = NMAX, debug.level = 0)
+}
 g <- as.data.frame(sf::st_coordinates(pred))
 g$bilan <- pred$var1.pred
 g$ecart_type <- sqrt(pmax(pred$var1.var, 0))
@@ -562,7 +704,11 @@ echelle <- ggplot2::scale_fill_gradientn(
 couche_dep <- if (!is.null(deps)) ggplot2::geom_sf(data = deps, fill = NA, colour = "grey35", linewidth = 0.12, inherit.aes = FALSE)
 pts_df <- data.frame(xy, bilan = pts$bilan_mm)
 tit_per <- sprintf("juin \u00e0 ao\u00fbt %d", ANNEE)
-lib_methode <- if (MNT) "krigeage \u00e0 d\u00e9rive externe sur l'altitude (MNT)" else "krigeage ordinaire"
+liste_fr <- function(x) if (length(x) <= 1L) x else paste(paste(x[-length(x)], collapse = ", "), "et", x[length(x)])
+tendance_txt <- liste_fr(c("l'altitude", if (cov_utilisees[["expo"]]) "l'exposition",
+                           if (cov_utilisees[["mer"]]) "la distance \u00e0 la mer"))
+lib_methode <- if (!MNT) "krigeage ordinaire" else if (tendance_globale) paste0("krigeage de r\u00e9gression sur ", tendance_txt, " (MNT)") else
+  paste0("krigeage \u00e0 d\u00e9rive externe sur ", tendance_txt, " (MNT)")
 pied <- sprintf("%d stations M\u00e9t\u00e9o-France ; ETP Hargreaves-Samani ; %s, variogramme %s.\nValidation crois\u00e9e (%s) : RMSE %.0f mm, biais %+.1f mm%s.",
                 nrow(pts), lib_methode, choix, if (nfold == nrow(pts)) "un \u00e0 un" else sprintf("%d blocs", nfold),
                 rmse, biais, if (MNT) sprintf(" ; sans l'altitude : RMSE %.0f mm", ref$rmse) else "")
@@ -580,7 +726,7 @@ carte <- ggplot2::ggplot() +
   ggplot2::coord_sf(crs = 2154, datum = NA) +
   ggplot2::labs(title = sprintf("P \u2212 ETP estival, %s", tit_per),
                 subtitle = sprintf("Surface krig\u00e9e%s ; les points sont les stations (m\u00eame \u00e9chelle de couleur)",
-                                   if (MNT) " avec l'altitude" else ""),
+                                   if (MNT) paste0(" avec ", tendance_txt) else ""),
                 caption = pied) + theme_c
 ggplot2::ggsave(file.path(DOSSIER, "sorties", sprintf("carte_p_etp_jja_%d%s.png", ANNEE, SUF)), carte,
                 width = 9, height = 8.5, dpi = 200, bg = "white")
