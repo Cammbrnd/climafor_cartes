@@ -31,7 +31,7 @@ n'a pas de sens pour des résultats générés.
 
 `resultats/<année>/` : `carte_p_etp_jja_<année>.png`, `incertitude_krigeage_<année>.png`,
 `diagnostic_krigeage_<année>.png` (variogramme et validation croisée), `stations_p_etp_jja_<année>.csv`.
-Avec MNT, les trois images portent le suffixe `_mnt` (le diagnostic ajoute P − ETP selon l'altitude).
+Avec MNT, les fichiers portent le suffixe `_mnt` (et `_1km`, `_2km`… si la maille n'est pas celle par défaut de 5 km) (le diagnostic ajoute P − ETP selon l'altitude).
 `p_etp_jja_<année>[_mnt].tif` : la surface krigée (Lambert-93, 2 bandes : P − ETP et écart-type de prédiction), à ouvrir dans QGIS.
 Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
 

@@ -513,7 +513,8 @@ if (MNT) msg("Gain de l'altitude : RMSE %.0f -> %.0f mm (%+.0f %%), Nash %.2f ->
              ref$rmse, rmse, 100 * (rmse / ref$rmse - 1), ref$nse, nse)
 
 # -- Prediction -------------------------------------------------------------------------
-SUF <- if (MNT) "_mnt" else ""
+# suffixe des fichiers : _mnt si l'altitude est utilisee, _<n>km si la maille n'est pas celle par defaut (5 km)
+SUF <- paste0(if (MNT) "_mnt" else "", if (RESOLUTION_M != 5000) sprintf("_%gkm", RESOLUTION_M / 1000) else "")
 if (MNT) {
   # la tendance n'est pas extrapolee au-dela de la plus haute station
   alt_max <- max(pts$alt)
