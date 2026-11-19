@@ -8,5 +8,78 @@ Valeurs par station, annee 2025 (1706 stations publiees ; altitude connue pour 1
   vagj     1313 stations | de     0.00 a    41.00 | part de zeros   9 % | Jours en vague de chaleur
   dry      1660 stations | de    11.00 a    99.00 | part de zeros   0 % | Plus longue séquence sèche
   vent      648 stations | de     0.88 a     9.83 | part de zeros   0 % | Vent moyen annuel (10 m)
+Contour : https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson
+Grille : 2193778 mailles de 500 m.
+MNT : 30155 tuiles d'altitude (zoom 12).
+  MNT : 30155 tuile(s) a telecharger (passe 1, 20 connexions en parallele)...
+  MNT : passe 1 terminee en 198 s.
+MNT : 30155 tuiles decodees et moyennees par blocs de 8 x 8 pixels en 147 s.
+MNT : altitude moyenne des mailles de 0 a 4239 m. Controle aux stations (MNT / altitude declaree) : r = 0.998, ecart median 5 m.
 
-Lecture seule : arret avant le calcul.
+==== chaud1 ====
+  1653 stations ; valeurs de 79 a 221 (moyenne 123.1) ; part de zeros 0 % ; correlation avec l'altitude +0.73
+  sans altitude          variogramme Sph          | RMSE 14.13 | ecart absolu 10.1 | biais -0.0697 | Nash 0.434
+  altitude (locale)      variogramme Exp          | RMSE 10.57 | ecart absolu 7.563 | biais -0.162 | Nash 0.684
+  altitude (globale)     variogramme Exp          | RMSE 11.01 | ecart absolu 7.876 | biais -0.108 | Nash 0.657
+  -> retenue : derive externe sur l'altitude | RMSE 10.57 (-25.2 % par rapport a l'ordinaire) | Nash 0.684 | pepite 70 % de la variance residuelle
+  32765 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.03] km.
+  Surface de 90.55 a 205.2 sur 2193778 mailles (stations : de 79 a 221) ; ecart-type median de prediction 11.4.
+
+==== chaud2 ====
+  1624 stations ; valeurs de 119 a 228 (moyenne 157.1) ; part de zeros 0 % ; correlation avec l'altitude +0.57
+  sans altitude          variogramme Mat          | RMSE 10.65 | ecart absolu 5.838 | biais -0.0594 | Nash 0.316
+  Ajustement du variogramme impossible (altitude (locale)) : modele exponentiel par defaut.
+  altitude (locale)      variogramme Exp (defaut) | RMSE 7.238 | ecart absolu 4.215 | biais -0.0357 | Nash 0.684
+  Ajustement du variogramme impossible (altitude (globale)) : modele exponentiel par defaut.
+  altitude (globale)     variogramme Exp (defaut) | RMSE 8.365 | ecart absolu 4.578 | biais -0.0327 | Nash 0.578
+  -> retenue : derive externe sur l'altitude | RMSE 7.238 (-32.0 % par rapport a l'ordinaire) | Nash 0.684 | pepite 20 % de la variance residuelle
+  34848 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 1.99] km.
+  Surface de 129.4 a 241.8 sur 2193778 mailles (stations : de 119 a 228) ; ecart-type median de prediction 5.89.
+
+==== vag ====
+  1313 stations ; valeurs de 0 a 5 (moyenne 2.253) ; part de zeros 9 % ; correlation avec l'altitude +0.33
+  sans altitude          variogramme Exp          | RMSE 0.7427 | ecart absolu 0.5779 | biais +0.00133 | Nash 0.637
+  altitude (locale)      variogramme Exp          | RMSE 0.7472 | ecart absolu 0.5821 | biais -0.000857 | Nash 0.633
+  altitude (globale)     variogramme Exp          | RMSE 0.7603 | ecart absolu 0.5847 | biais +0.00292 | Nash 0.620
+  -> retenue : krigeage ordinaire (sans altitude) | RMSE 0.7427 (+0.0 % par rapport a l'ordinaire) | Nash 0.637 | pepite 20 % de la variance residuelle
+  2904 maille(s) ramenee(s) dans les bornes physiques [0 ; -].
+  Surface de 0 a 4.118 sur 2193778 mailles (stations : de 0 a 5) ; ecart-type median de prediction 0.78.
+
+==== vagj ====
+  1313 stations ; valeurs de 0 a 41 (moyenne 15.44) ; part de zeros 9 % ; correlation avec l'altitude +0.38
+  sans altitude          variogramme Sph          | RMSE 5.153 | ecart absolu 3.877 | biais -0.00183 | Nash 0.683
+  altitude (locale)      variogramme Exp          | RMSE 5.13 | ecart absolu 3.871 | biais -0.0287 | Nash 0.686
+  altitude (globale)     variogramme Exp          | RMSE 5.384 | ecart absolu 3.982 | biais +0.0146 | Nash 0.654
+  -> retenue : derive externe sur l'altitude | RMSE 5.13 (-0.5 % par rapport a l'ordinaire) | Nash 0.686 | pepite 35 % de la variance residuelle
+  13874 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  12852 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 45.02 sur 2193778 mailles (stations : de 0 a 41) ; ecart-type median de prediction 6.03.
+
+==== dry ====
+  1660 stations ; valeurs de 11 a 99 (moyenne 23.05) ; part de zeros 0 % ; correlation avec l'altitude -0.10
+  sans altitude          variogramme Sph          | RMSE 5.108 | ecart absolu 3.488 | biais -0.0244 | Nash 0.667
+  altitude (locale)      variogramme Sph          | RMSE 4.991 | ecart absolu 3.461 | biais +0.0037 | Nash 0.682
+  altitude (globale)     variogramme Sph          | RMSE 5.054 | ecart absolu 3.463 | biais -0.0247 | Nash 0.674
+  -> retenue : derive externe sur l'altitude | RMSE 4.991 (-2.3 % par rapport a l'ordinaire) | Nash 0.682 | pepite 36 % de la variance residuelle
+  2811 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.88] km.
+  51 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 68.86 sur 2193778 mailles (stations : de 11 a 99) ; ecart-type median de prediction 5.19.
+
+==== vent ====
+  648 stations ; valeurs de 0.88 a 9.83 (moyenne 3.142) ; part de zeros 0 % ; correlation avec l'altitude -0.12
+  sans altitude          variogramme Sph          | RMSE 0.9566 | ecart absolu 0.6795 | biais -0.0272 | Nash 0.247
+  altitude (locale)      variogramme Sph          | RMSE 0.9267 | ecart absolu 0.6652 | biais -0.0236 | Nash 0.294
+  altitude (globale)     variogramme Sph          | RMSE 0.9841 | ecart absolu 0.6987 | biais -0.0306 | Nash 0.204
+  -> retenue : derive externe sur l'altitude | RMSE 0.9267 (-3.1 % par rapport a l'ordinaire) | Nash 0.294 | pepite 78 % de la variance residuelle
+  13874 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  Surface de 1.56 a 5.659 sur 2193778 mailles (stations : de 0.88 a 9.83) ; ecart-type median de prediction 1.03.
+
+==== Bilan (annee 2025, maille 500 m) ====
+  chaud1   1653 stations | RMSE     10.6 (sans altitude     14.1) | Nash   0.68 | derive externe sur l'altitude
+  chaud2   1624 stations | RMSE     7.24 (sans altitude     10.6) | Nash   0.68 | derive externe sur l'altitude
+  vag      1313 stations | RMSE    0.743 (sans altitude    0.743) | Nash   0.64 | krigeage ordinaire (sans altitude)
+  vagj     1313 stations | RMSE     5.13 (sans altitude     5.15) | Nash   0.69 | derive externe sur l'altitude
+  dry      1660 stations | RMSE     4.99 (sans altitude     5.11) | Nash   0.68 | derive externe sur l'altitude
+  vent      648 stations | RMSE    0.927 (sans altitude    0.957) | Nash   0.29 | derive externe sur l'altitude
+
+Termine. Fichiers dans : /home/runner/work/climafor_cartes/climafor_cartes/krigeage_couches/sorties
