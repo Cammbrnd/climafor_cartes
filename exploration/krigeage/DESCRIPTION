@@ -13,4 +13,5 @@ Imports:
     scales,
     httr2,
     ragg,
-    terra
+    terra,
+    png

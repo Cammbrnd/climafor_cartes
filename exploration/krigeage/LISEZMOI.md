@@ -17,7 +17,8 @@ n'a pas de sens pour des résultats générés.
 3. Krigeage (`gstat`), voisinage de 40 stations, variogramme Exp / Sph / Mat (le meilleur est retenu),
    validation croisée en 10 blocs.
 4. **Avec MNT** (`KRIGEAGE_MNT=oui`, par défaut) : krigeage à dérive externe, l'altitude moyenne de chaque maille est la
-   tendance. Le MNT vient des tuiles ouvertes « terrarium » (AWS, altitude en mètres), moyennées sur chaque maille ; on peut
+   tendance. Le MNT vient des tuiles ouvertes « terrarium » (AWS, altitude en mètres ; zoom 12 = environ 27 m, la finesse de la donnée source
+   SRTM / EU-DEM ; au-delà du zoom 9 les tuiles sont moyennées par blocs avant l'assemblage), moyennées sur chaque maille ; on peut
    fournir son propre GeoTIFF avec `KRIGEAGE_MNT_FICHIER` (sur un poste). Le script calcule aussi le krigeage ordinaire
    pour comparer : si l'altitude n'améliore pas la validation croisée, il garde le krigeage ordinaire et le dit.
 

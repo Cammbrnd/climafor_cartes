@@ -44,7 +44,8 @@ SEUIL        <- as.numeric(env_ou("KRIGEAGE_SEUIL", "0.95"))      # part minimal
 RESOLUTION_M <- as.numeric(env_ou("KRIGEAGE_RESOLUTION_M", "5000"))  # taille de maille de la carte, en metres
 # MNT : "oui" = l'altitude sert de tendance (derive externe), "non" = krigeage ordinaire.
 MNT          <- tolower(env_ou("KRIGEAGE_MNT", "oui")) %in% c("oui", "o", "1", "true", "vrai", "yes")
-MNT_ZOOM     <- as.integer(env_ou("KRIGEAGE_MNT_ZOOM", "7"))   # finesse des tuiles : 7 ~ 0,9 km, 8 ~ 0,4 km
+MNT_ZOOM     <- as.integer(env_ou("KRIGEAGE_MNT_ZOOM", "7"))   # finesse des tuiles : 7 ~ 0,9 km, 8 ~ 0,4 km, 9 ~ 0,2 km, 10 a 12 jusqu'a ~ 30 m
+MNT_URL      <- env_ou("KRIGEAGE_MNT_URL", "https://s3.amazonaws.com/elevation-tiles-prod/terrarium")   # serveur des tuiles
 MNT_FICHIER  <- env_ou("KRIGEAGE_MNT_FICHIER", "")             # GeoTIFF d'altitude (m) a utiliser a la place des tuiles
 # Covariables candidates en plus de l'altitude (separees par des virgules, vide = altitude seule) :
 #   expo = exposition des versants (pente x orientation, calculee sur le MNT)
@@ -64,7 +65,7 @@ VARIABLE     <- tolower(env_ou("KRIGEAGE_VARIABLE", "p_etp"))
 
 stopifnot(is.finite(ANNEE), ANNEE >= 1950L, ANNEE <= as.integer(format(Sys.Date(), "%Y")),
           is.finite(SEUIL), SEUIL > 0, SEUIL <= 1, is.finite(RESOLUTION_M), RESOLUTION_M >= 500,
-          is.finite(MNT_ZOOM), MNT_ZOOM >= 5L, MNT_ZOOM <= 9L,
+          is.finite(MNT_ZOOM), MNT_ZOOM >= 5L, MNT_ZOOM <= 12L,
           length(EXPO_ECHELLES_KM) >= 1L, all(is.finite(EXPO_ECHELLES_KM)), all(EXPO_ECHELLES_KM >= 1),
           is.finite(MER_ECHELLE_KM), MER_ECHELLE_KM > 0)
 stopifnot(VARIABLE %in% c("p_etp", "pluie", "temperature"))
@@ -401,7 +402,7 @@ tuile_mnt <- function(z, x, y) {
   if (file.exists(dest) && file.size(dest) > 0) return(dest)
   dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
   tmp <- paste0(dest, ".part")
-  url <- sprintf("https://s3.amazonaws.com/elevation-tiles-prod/terrarium/%d/%d/%d.png", z, x, y)
+  url <- sprintf("%s/%d/%d/%d.png", MNT_URL, z, x, y)
   ok <- tryCatch({ httr2::req_perform(requete(url), path = tmp); TRUE }, error = function(e) {
     mnt_etat$echecs <- mnt_etat$echecs + 1L
     if (is.null(mnt_etat$premiere)) {
@@ -419,6 +420,93 @@ tuile_mnt <- function(z, x, y) {
   dest
 }
 
+# Tuiles de zoom > 9 (jusqu'a 12 : ~ 28 000 tuiles de 256 x 256 pixels pour la France) : trop nombreuses pour etre
+# assemblees pixel par pixel. Elles sont telechargees en parallele, puis chaque tuile est moyennee par blocs de
+# fact x fact pixels (la mer, sous le niveau 0, est ramenee a 0 avant la moyenne), ce qui donne un raster d'environ
+# 200 m dont les moyennes par maille de 1 km sont celles du MNT d'origine (30 m environ au zoom 12).
+prefetch_tuiles <- function(z, xs, ys) {
+  tu   <- expand.grid(x = xs, y = ys)
+  dest <- file.path(DOSSIER, "mnt", z, tu$x, paste0(tu$y, ".png"))
+  present <- function(d) file.exists(d) & !is.na(file.size(d)) & file.size(d) > 0
+  for (passe in 1:3) {
+    a_faire <- which(!present(dest))
+    if (!length(a_faire)) break
+    msg("  MNT : %d tuile(s) a telecharger (passe %d, 20 connexions en parallele)...", length(a_faire), passe)
+    t0 <- Sys.time()
+    for (lot in split(a_faire, ceiling(seq_along(a_faire) / 400))) {
+      for (d in unique(dirname(dest[lot]))) dir.create(d, recursive = TRUE, showWarnings = FALSE)
+      tmp  <- paste0(dest[lot], ".part")
+      reqs <- lapply(sprintf("%s/%d/%d/%d.png", MNT_URL, z, tu$x[lot], tu$y[lot]), requete)
+      # httr2 recent : max_active ; httr2 1.0.0 : pool curl
+      args <- list(reqs, paths = tmp, on_error = "continue", progress = FALSE)
+      if ("max_active" %in% names(formals(httr2::req_perform_parallel))) args$max_active <- 20L
+      else args$pool <- curl::new_pool(total_con = 20L, host_con = 20L)
+      tryCatch(do.call(httr2::req_perform_parallel, args),
+               error = function(e) if (is.null(mnt_etat$premiere)) mnt_etat$premiere <- conditionMessage(e))
+      for (k in seq_along(lot)) {
+        ok <- file.exists(tmp[k]) && identical(readBin(tmp[k], "raw", 4L), as.raw(c(0x89, 0x50, 0x4e, 0x47)))   # signature PNG
+        if (ok) file.rename(tmp[k], dest[lot[k]]) else unlink(tmp[k])
+      }
+    }
+    msg("  MNT : passe %d terminee en %.0f s.", passe, as.numeric(difftime(Sys.time(), t0, units = "secs")))
+  }
+  invisible(sum(!present(dest)))
+}
+
+# moyenne d'une matrice par blocs de fact x fact (les dimensions doivent etre des multiples de fact)
+bloc_moy <- function(h, fact) {
+  n <- nrow(h) %/% fact
+  a <- array(h, c(fact, n, fact, n))        # [ligne dans le bloc, bloc-ligne, colonne dans le bloc, bloc-colonne]
+  a <- colMeans(a, dims = 1L)               # moyenne sur les lignes du bloc    -> [bloc-ligne, colonne dans le bloc, bloc-colonne]
+  colMeans(aperm(a, c(2L, 1L, 3L)), dims = 1L)    # moyenne sur les colonnes du bloc -> [bloc-ligne, bloc-colonne]
+}
+
+# Altitudes (m) d'une tuile terrarium, matrice 256 x 256 (NULL si illisible). Le paquet png est ~30 fois plus rapide
+# que terra pour ce decodage ; terra sert de repli.
+lire_tuile <- function(f) {
+  if (requireNamespace("png", quietly = TRUE)) {
+    a <- tryCatch(png::readPNG(f), error = function(e) NULL)
+    if (is.null(a) || length(dim(a)) != 3L || dim(a)[3L] < 3L || dim(a)[1L] != 256L || dim(a)[2L] != 256L) return(NULL)
+    return(round(a[, , 1L] * 255) * 256 + round(a[, , 2L] * 255) + round(a[, , 3L] * 255) / 256 - 32768)
+  }
+  r <- tryCatch(terra::rast(f), error = function(e) NULL)
+  if (is.null(r) || terra::nlyr(r) < 3L || terra::nrow(r) != 256L || terra::ncol(r) != 256L) return(NULL)
+  v <- terra::values(r, mat = TRUE)                                      # une ligne par pixel (de gauche a droite, de haut en bas)
+  matrix(v[, 1L] * 256 + v[, 2L] + v[, 3L] / 256 - 32768, 256L, 256L, byrow = TRUE)
+}
+
+mnt_brut_agrege <- function(z, xs, ys, demi, pas) {
+  fact <- 2L^(z - 9L); nb <- 256L %/% fact
+  cache <- file.path(DOSSIER, "mnt", sprintf("agrege_z%d_x%d-%d_y%d-%d.tif", z, xs[1], xs[length(xs)], ys[1], ys[length(ys)]))
+  if (file.exists(cache)) {
+    msg("MNT : mosaique agregee deja calculee, reutilisee (%s).", basename(cache))
+    return(terra::rast(cache))
+  }
+  prefetch_tuiles(z, xs, ys)
+  M <- matrix(NA_real_, nrow = length(ys) * nb, ncol = length(xs) * nb)
+  manquantes <- 0L
+  t0 <- Sys.time()
+  for (i in seq_along(xs)) for (j in seq_along(ys)) {
+    f <- file.path(DOSSIER, "mnt", z, xs[i], paste0(ys[j], ".png"))
+    h <- if (file.exists(f) && file.size(f) > 0) lire_tuile(f) else NULL
+    if (is.null(h)) { manquantes <- manquantes + 1L; next }
+    M[(j - 1L) * nb + seq_len(nb), (i - 1L) * nb + seq_len(nb)] <- bloc_moy(pmax(h, 0), fact)      # mer (< 0) -> 0
+  }
+  total <- length(xs) * length(ys)
+  msg("MNT : %d tuiles decodees et moyennees par blocs de %d x %d pixels en %.0f s.", total - manquantes, fact, fact,
+      as.numeric(difftime(Sys.time(), t0, units = "secs")))
+  if (manquantes > 0) msg("  %d tuile(s) manquante(s) ou illisible(s)%s", manquantes,
+                          if (!is.null(mnt_etat$premiere)) paste0(" ; premiere erreur : ", mnt_etat$premiere) else "")
+  if (manquantes > 0.1 * total) stop("trop de tuiles manquantes", call. = FALSE)
+  r <- terra::rast(M)
+  terra::ext(r) <- c(-demi + xs[1] * pas, -demi + (xs[length(xs)] + 1) * pas, demi - (ys[length(ys)] + 1) * pas, demi - ys[1] * pas)
+  terra::crs(r) <- "EPSG:3857"
+  if (manquantes == 0L) {       # la mosaique complete est gardee pour les calculs suivants (pluie, temperature)
+    tryCatch(terra::writeRaster(r, cache, overwrite = TRUE), error = function(e) msg("MNT : mosaique non conservee (%s).", conditionMessage(e)))
+  }
+  r
+}
+
 mnt_brut <- function() {
   if (nzchar(MNT_FICHIER)) {
     if (!file.exists(MNT_FICHIER)) stop("fichier introuvable : ", MNT_FICHIER, call. = FALSE)
@@ -434,6 +522,7 @@ mnt_brut <- function() {
   total <- length(xs) * length(ys)
   msg("MNT : %d tuiles d'altitude (zoom %d).", total, z)
   demi <- 20037508.342789244; pas <- 2 * demi / n
+  if (z > 9L) return(mnt_brut_agrege(z, xs, ys, demi, pas))
   morceaux <- list()
   for (x in xs) for (y in ys) {
     if (!length(morceaux) && mnt_etat$echecs >= 5L) break      # rien ne passe : inutile d'insister
