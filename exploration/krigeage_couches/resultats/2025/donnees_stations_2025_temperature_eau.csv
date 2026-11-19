@@ -1,0 +1,9 @@
+"cle","titre","unite","publiee","n_stations_valeur","min","max","moyenne","part_zero"
+"tmp","Température moyenne annuelle","°C",TRUE,1665,-0.63,19,12.6646546546547,0
+"jja_t","Température estivale (juin à août)","°C",TRUE,1647,9.73,27,20.88372191864,0
+"gdd","Degrés-jours de croissance","°C·j",TRUE,1665,229,5109,2964.10570570571,0
+"pre","Précipitations annuelles","mm",TRUE,1660,441,3196,916.442168674699,0
+"jja_p","Précipitations estivales (juin à août)","mm",TRUE,1647,6,537,180.861566484517,0
+"petp","Bilan P − ETP de la saison de végétation","mm",TRUE,1646,-854,926,-312.275212636695,0.000607533414337789
+"veg","Durée de la saison de végétation","jours",TRUE,1334,92,329,280.812593703148,0
+"mart","Indice d'aridité de De Martonne","",TRUE,1646,16.3,148.6,41.0266707168894,0
