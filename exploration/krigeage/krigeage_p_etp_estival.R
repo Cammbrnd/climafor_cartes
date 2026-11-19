@@ -514,7 +514,9 @@ mnt_brut <- function() {
     return(terra::rast(MNT_FICHIER)[[1L]])
   }
   z <- MNT_ZOOM; n <- 2^z
-  bb <- unname(sf::st_bbox(sf::st_transform(sf::st_as_sfc(sf::st_bbox(masque)), 4326)))   # lon/lat
+  # emprise en lon/lat : les bords de la boite Lambert-93 sont courbes en lon/lat (le point le plus au nord est au milieu du
+  # bord nord, pas aux coins) ; on les densifie avant de les transformer, sinon la pointe nord de la France serait coupee
+  bb <- unname(sf::st_bbox(sf::st_transform(sf::st_segmentize(sf::st_as_sfc(sf::st_bbox(masque)), 20000), 4326)))   # lon/lat
   colonne <- function(lon) floor((lon + 180) / 360 * n)
   ligne   <- function(lat) floor((1 - asinh(tan(lat * pi / 180)) / pi) / 2 * n)
   xs <- colonne(bb[1]):colonne(bb[3])
