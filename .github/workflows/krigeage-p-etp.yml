@@ -2,8 +2,9 @@
 # « krigeage-p-etp-estival » et ne doit pas etre fusionne dans main tel quel.
 #
 # Telecharge les fichiers quotidiens Meteo-France (RR-T-Vent, un par departement), calcule
-# P - ETP sur juin-aout (ETP de Hargreaves-Samani), krige les stations (gstat) et produit une
-# carte, une carte d'incertitude, un diagnostic et un tableau par station. Les resultats sont
+# P - ETP sur juin-aout (ETP de Hargreaves-Samani), la pluie cumulee et la temperature moyenne,
+# krige les stations (gstat) et produit, pour chacune, une carte, une carte d'incertitude, un
+# diagnostic et un tableau par station. Les resultats sont
 # deposes dans la branche (exploration/krigeage/resultats/<annee>/) ET gardes en artefact.
 #
 # Se lance tout seul quand on envoie un changement dans exploration/krigeage/ sur la branche
@@ -72,9 +73,25 @@ jobs:
             echo "KRIGEAGE_MNT=$IN_MNT" >> "$GITHUB_ENV"
           fi
 
-      - name: Calculer et cartographier
+      - name: Calculer et cartographier (P - ETP)
         env:
           LC_ALL: C.UTF-8
+        run: Rscript exploration/krigeage/krigeage_p_etp_estival.R
+
+      # Meme methode (altitude, MNT, maille de parametres.env) pour la pluie et la temperature ; les fichiers
+      # telecharges (stations, tuiles d'altitude) sont reutilises. Une erreur ici n'empeche pas de deposer P - ETP.
+      - name: Calculer et cartographier (pluie)
+        continue-on-error: true
+        env:
+          LC_ALL: C.UTF-8
+          KRIGEAGE_VARIABLE: pluie
+        run: Rscript exploration/krigeage/krigeage_p_etp_estival.R
+
+      - name: Calculer et cartographier (temperature)
+        continue-on-error: true
+        env:
+          LC_ALL: C.UTF-8
+          KRIGEAGE_VARIABLE: temperature
         run: Rscript exploration/krigeage/krigeage_p_etp_estival.R
 
       - name: Comparer l'ETP avec Meteo-France

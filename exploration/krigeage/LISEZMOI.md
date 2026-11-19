@@ -42,6 +42,22 @@ Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
 - ETP de Hargreaves : ignore vent et humidité.
 - La validation croisée garde le variogramme ajusté sur toutes les stations.
 
+## Pluie et température estivales
+
+Le script cartographie trois variables (`KRIGEAGE_VARIABLE` = `p_etp` par défaut, `pluie` ou `temperature`) avec la même
+méthode : krigeage à dérive externe sur l'altitude moyenne de la maille (MNT), choix par validation croisée. Le workflow
+enchaîne les trois calculs (les fichiers téléchargés sont réutilisés). Fichiers : `carte_<variable>_jja_<année>_mnt_1km.png`,
+`<variable>_jja_<année>_mnt_1km.tif` (2 bandes : valeur et écart-type), `incertitude_krigeage_<variable>_…`,
+`diagnostic_krigeage_<variable>_…`, `validation_tendances_<variable>_…csv`, `stations_<variable>_jja_<année>.csv`
+(pour P − ETP, les noms n'ont pas de mot « variable » : `carte_p_etp_jja_…`, `incertitude_krigeage_…`).
+
+- `pluie` : cumul des RR de juin à août. Une station est gardée si RR est renseigné au moins `KRIGEAGE_SEUIL` du temps ;
+  les jours manquants sont compensés au prorata (somme des jours renseignés × 92 / jours renseignés). Les valeurs
+  prédites négatives sont ramenées à 0.
+- `temperature` : moyenne de (TN + TX) / 2 sur juin–août, comme dans l'ETP (les fichiers n'ont pas la moyenne horaire,
+  qui est un peu plus basse). Station gardée si TN et TX sont renseignés au moins `KRIGEAGE_SEUIL` du temps. Contrairement
+  à la pluie, l'altitude n'est pas bornée à celle de la station la plus haute : le gradient thermique est quasi linéaire.
+
 ## Covariables et comparaison avec Météo-France
 
 - `KRIGEAGE_COVARIABLES` (vide par défaut = altitude seule ; `expo,mer` pour les tester) : en plus de l'altitude, le script teste l'exposition des versants (pente orientée vers
