@@ -32,7 +32,7 @@ n'a pas de sens pour des résultats générés.
 
 `resultats/<année>/` : `carte_p_etp_jja_<année>.png`, `incertitude_krigeage_<année>.png`,
 `diagnostic_krigeage_<année>.png` (variogramme et validation croisée), `stations_p_etp_jja_<année>.csv`.
-Avec MNT, les fichiers portent le suffixe `_mnt` (et `_1km`, `_2km`… si la maille n'est pas celle par défaut de 5 km) (le diagnostic ajoute P − ETP selon l'altitude).
+Avec MNT, les fichiers portent le suffixe `_mnt` (et `_1km`, `_0.5km`… si la maille n'est pas celle par défaut de 5 km) (le diagnostic ajoute P − ETP selon l'altitude).
 `p_etp_jja_<année>[_mnt].tif` : la surface krigée (Lambert-93, 2 bandes : P − ETP et écart-type de prédiction), à ouvrir dans QGIS.
 Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
 
@@ -43,12 +43,20 @@ Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
 - ETP de Hargreaves : ignore vent et humidité.
 - La validation croisée garde le variogramme ajusté sur toutes les stations.
 
+## Maille de 500 m
+
+`KRIGEAGE_RESOLUTION_M=500` (minimum accepté) donne ≈ 2,2 millions de mailles (548 000 à 1 km). Le krigeage reste local
+(40 stations voisines) et ne demande que ≈ 3 minutes et ≈ 3 Go de mémoire par variable ; le GeoTIFF est compressé
+(DEFLATE) pour rester sous 20 Mo. Le MNT du zoom 12 est moyenné par blocs de ≈ 217 m puis ramené à la maille de 500 m
+(≈ 2 blocs par maille) : la moyenne par maille est très proche de celle du MNT d'origine. La validation croisée ne dépend
+pas de la maille (elle compare aux stations), donc les RMSE sont ceux de la maille de 1 km.
+
 ## Pluie et température estivales
 
 Le script cartographie trois variables (`KRIGEAGE_VARIABLE` = `p_etp` par défaut, `pluie` ou `temperature`) avec la même
 méthode : krigeage à dérive externe sur l'altitude moyenne de la maille (MNT), choix par validation croisée. Le workflow
-enchaîne les trois calculs (les fichiers téléchargés sont réutilisés). Fichiers : `carte_<variable>_jja_<année>_mnt_1km.png`,
-`<variable>_jja_<année>_mnt_1km.tif` (2 bandes : valeur et écart-type), `incertitude_krigeage_<variable>_…`,
+enchaîne les trois calculs (les fichiers téléchargés sont réutilisés). Fichiers : `carte_<variable>_jja_<année>_mnt_0.5km.png`,
+`<variable>_jja_<année>_mnt_0.5km.tif` (2 bandes : valeur et écart-type ; compressé), `incertitude_krigeage_<variable>_…`,
 `diagnostic_krigeage_<variable>_…`, `validation_tendances_<variable>_…csv`, `stations_<variable>_jja_<année>.csv`
 (pour P − ETP, les noms n'ont pas de mot « variable » : `carte_p_etp_jja_…`, `incertitude_krigeage_…`).
 

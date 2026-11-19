@@ -869,7 +869,8 @@ if (requireNamespace("terra", quietly = TRUE)) {
   tryCatch({
     rr <- terra::rast(g[, c("X", "Y", "bilan", "ecart_type")], type = "xyz", crs = "EPSG:2154")
     names(rr) <- c(paste0(VARIABLE, "_", VAR$u_col), paste0("ecart_type_", VAR$u_col))
-    terra::writeRaster(rr, file.path(DOSSIER, "sorties", sprintf("%s_jja_%d%s.tif", VARIABLE, ANNEE, SUF)), overwrite = TRUE)
+    terra::writeRaster(rr, file.path(DOSSIER, "sorties", sprintf("%s_jja_%d%s.tif", VARIABLE, ANNEE, SUF)), overwrite = TRUE,
+                       gdal = c("COMPRESS=DEFLATE", "PREDICTOR=3"))    # compresse : les fichiers restent legers meme a 500 m
   }, error = function(e) msg("GeoTIFF non ecrit : %s", conditionMessage(e)))
 }
 
@@ -911,6 +912,7 @@ theme_c <- ggplot2::theme_void(base_size = 11) +
                  plot.caption = ggplot2::element_text(size = 8, colour = "grey30", hjust = 0),
                  plot.margin = ggplot2::margin(10, 10, 8, 10), legend.position = "right")
 
+dpi_carte <- if (RESOLUTION_M < 1000) 300 else 200    # une maille de 500 m demande une image plus fine pour rester visible
 carte <- ggplot2::ggplot() +
   ggplot2::geom_raster(data = g, ggplot2::aes(X, Y, fill = bilan)) +
   couche_dep +
@@ -923,7 +925,7 @@ carte <- ggplot2::ggplot() +
                                    if (MNT) paste0(" avec ", tendance_txt) else ""),
                 caption = pied) + theme_c
 ggplot2::ggsave(file.path(DOSSIER, "sorties", sprintf("carte_%s_jja_%d%s.png", VARIABLE, ANNEE, SUF)), carte,
-                width = 9, height = 8.5, dpi = 200, bg = "white")
+                width = 9, height = 8.5, dpi = dpi_carte, bg = "white")
 
 carte_inc <- ggplot2::ggplot() +
   ggplot2::geom_raster(data = g, ggplot2::aes(X, Y, fill = ecart_type)) +
@@ -935,7 +937,7 @@ carte_inc <- ggplot2::ggplot() +
                 subtitle = "Faible pr\u00e8s des stations, forte l\u00e0 o\u00f9 le r\u00e9seau est lointain",
                 caption = pied) + theme_c
 ggplot2::ggsave(file.path(DOSSIER, "sorties", sprintf("incertitude_krigeage%s_%d%s.png", VAR$etiq, ANNEE, SUF)), carte_inc,
-                width = 9, height = 8.5, dpi = 200, bg = "white")
+                width = 9, height = 8.5, dpi = dpi_carte, bg = "white")
 
 # Diagnostic : variogramme (points + modele) et validation croisee (observe / predit)
 grDevices::png(file.path(DOSSIER, "sorties", sprintf("diagnostic_krigeage%s_%d%s.png", VAR$etiq, ANNEE, SUF)),
