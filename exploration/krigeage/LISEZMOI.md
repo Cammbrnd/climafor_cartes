@@ -52,8 +52,8 @@ Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
   Le tableau est dans le journal et dans `validation_tendances_<année>.csv` (un candidat instable y est marqué
   `valide = FALSE`). Les covariables des stations sont dans `stations_covariables_<année>.csv`.
 - `exposition_echelles_<année>.csv` : pour chaque échelle, ce qu'il reste d'exposition dans les résidus de la validation
-  croisée de l'altitude seule (corrélations, R²) et le gain de RMSE des formules avec exposition, en tendance globale
-  et en dérive locale (NA si la dérive locale diverge).
+  croisée de l'altitude seule (corrélations, R²) et la variation de RMSE (en %, négative = meilleure) des formules avec
+  exposition par rapport à l'altitude seule, en tendance globale et en dérive locale (NA si la dérive locale diverge).
 - Plusieurs covariables : la tendance est estimée une fois sur toutes les stations puis les résidus sont krigés
   (krigeage de régression). La dérive locale, qui réestime la tendance dans chaque voisinage, est instable avec plusieurs
   covariables (l'exposition est presque nulle en plaine) ; elle reste utilisée pour l'altitude seule.

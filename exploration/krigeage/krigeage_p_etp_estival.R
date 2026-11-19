@@ -640,13 +640,13 @@ if (!MNT) {
                  RMSE_locale_altitude = rm_[["altitude (derive locale)"]],
                  RMSE_locale_expo = if (l %in% names(rm_) && valides[[l]]) rm_[[l]] else NA_real_)
     }))
-    tab_ech$gain_globale_pct <- 100 * (tab_ech$RMSE_globale_expo / tab_ech$RMSE_globale_altitude - 1)
-    tab_ech$gain_locale_pct  <- 100 * (tab_ech$RMSE_locale_expo / tab_ech$RMSE_locale_altitude - 1)
+    tab_ech$variation_rmse_globale_pct <- 100 * (tab_ech$RMSE_globale_expo / tab_ech$RMSE_globale_altitude - 1)
+    tab_ech$variation_rmse_locale_pct  <- 100 * (tab_ech$RMSE_locale_expo / tab_ech$RMSE_locale_altitude - 1)
     msg("\nExposition par echelle (residus = validation croisee de l'altitude seule en derive locale ; t = regression globale) :")
     for (i in seq_len(nrow(tab_ech))) with(tab_ech[i, ], msg(
       "  %4g km : r(residus, expo_n) %+.3f, r(residus, expo_e) %+.3f, R2 des residus %.3f | t(expo_n) %+.1f, t(expo_e) %+.1f | RMSE globale %.1f -> %.1f mm (%+.1f %%), locale %.1f -> %.1f mm (%+.1f %%)",
       echelle_km, r_residus_expo_n, r_residus_expo_e, R2_residus, t_expo_n, t_expo_e,
-      RMSE_globale_altitude, RMSE_globale_expo, gain_globale_pct, RMSE_locale_altitude, RMSE_locale_expo, gain_locale_pct))
+      RMSE_globale_altitude, RMSE_globale_expo, variation_rmse_globale_pct, RMSE_locale_altitude, RMSE_locale_expo, variation_rmse_locale_pct))
     utils::write.csv(tab_ech, file.path(DOSSIER, "sorties", sprintf("exposition_echelles_%d.csv", ANNEE)), row.names = FALSE, fileEncoding = "UTF-8")
   }
   meilleur <- names(which.min(ifelse(valides, rm_, Inf)))
