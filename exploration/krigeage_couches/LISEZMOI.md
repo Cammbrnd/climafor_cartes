@@ -33,6 +33,7 @@ Calcul exploratoire, **hors application** : il vit sur la branche `krigeage-p-et
 
 | Fichier | Contenu |
 |---|---|
+| `validation_couches_<annee>.csv` | les 22 couches réunies, avec `verdict_nash` (tient : Nash ≥ 0,80 ; reserve : 0,60 à 0,80 ; fragile : < 0,60), calculé après coup sur la validation croisée |
 | `validation_couches_<annee>_<groupe>.csv` | une ligne par couche : nombre de stations, corrélation avec l'altitude, RMSE / écart absolu / Nash des trois formules, formule retenue, variogramme (pépite, palier, portée), gain, prédiction min/max, écart-type médian |
 | `carte_<couche>_<annee>_0.5km.png` | la carte (stations en points, même échelle de couleur) |
 | `diagnostic_<couche>_<annee>.png` | variogramme, validation croisée, valeur selon l'altitude |
