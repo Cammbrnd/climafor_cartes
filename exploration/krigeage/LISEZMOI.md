@@ -44,13 +44,15 @@ Les mêmes fichiers sont gardés 30 jours en artefact du calcul.
 
 ## Covariables et comparaison avec Météo-France
 
-- `KRIGEAGE_COVARIABLES=expo,mer` : en plus de l'altitude, le script teste l'exposition des versants (pente orientée vers
+- `KRIGEAGE_COVARIABLES` (vide par défaut = altitude seule ; `expo,mer` pour les tester) : en plus de l'altitude, le script teste l'exposition des versants (pente orientée vers
   le nord / l'est, calculée sur le MNT à une ou plusieurs échelles, `KRIGEAGE_EXPO_ECHELLE_KM=1,2,5` : 1 à 2 km = versant
   de vallée, 5 km = relief régional ; au moins 1 km) et la proximité de la mer
   (`exp(−distance à la mer / KRIGEAGE_MER_ECHELLE_KM)`, 50 km par défaut). Les combinaisons sont évaluées par validation
   croisée (mêmes blocs) et la meilleure est retenue ; un gain de moins de 1 % ne justifie pas une covariable de plus.
   Le tableau est dans le journal et dans `validation_tendances_<année>.csv` (un candidat instable y est marqué
   `valide = FALSE`). Les covariables des stations sont dans `stations_covariables_<année>.csv`.
+- Essais de 2026 : aucune covariable n'a été retenue (exposition à 1, 2 et 5 km : erreur plus grande que l'altitude seule ;
+  distance à la mer : gain trop faible). Le tableau complet est gardé dans `validation_tendances_covariables_2026.csv`.
 - `exposition_echelles_<année>.csv` : pour chaque échelle, ce qu'il reste d'exposition dans les résidus de la validation
   croisée de l'altitude seule (corrélations, R²) et la variation de RMSE (en %, négative = meilleure) des formules avec
   exposition par rapport à l'altitude seule, en tendance globale et en dérive locale (NA si la dérive locale diverge).

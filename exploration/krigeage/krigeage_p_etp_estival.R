@@ -45,7 +45,8 @@ MNT_FICHIER  <- env_ou("KRIGEAGE_MNT_FICHIER", "")             # GeoTIFF d'altit
 #   expo = exposition des versants (pente x orientation, calculee sur le MNT)
 #   mer  = proximite de la mer, exp(-distance a la mer / MER_ECHELLE_KM)
 # Chaque combinaison est evaluee par validation croisee ; la meilleure est retenue.
-COVARIABLES     <- intersect(trimws(strsplit(tolower(env_ou("KRIGEAGE_COVARIABLES", "expo,mer")), ",")[[1]]), c("expo", "mer"))
+# Defaut : aucune (altitude seule). Les essais de 2026 (exposition a 1, 2 et 5 km, distance a la mer) n'ont pas ete retenus.
+COVARIABLES     <- intersect(trimws(strsplit(tolower(env_ou("KRIGEAGE_COVARIABLES", "")), ",")[[1]]), c("expo", "mer"))
 # echelles testees pour la pente et l'exposition (km, separees par des virgules) : 1-2 km = versant de vallee, 5 km = relief regional
 EXPO_ECHELLES_KM <- sort(unique(as.numeric(strsplit(env_ou("KRIGEAGE_EXPO_ECHELLE_KM", "1,2,5"), "[,; ]+")[[1]])))
 cle_ech <- function(e) gsub("[.]", "p", sprintf("%g", e))    # 1.5 -> "1p5" (nom de colonne valide)
