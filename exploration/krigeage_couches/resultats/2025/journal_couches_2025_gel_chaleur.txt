@@ -10,5 +10,102 @@ Valeurs par station, annee 2025 (1706 stations publiees ; altitude connue pour 1
   can      1665 stations | de     0.00 a    96.00 | part de zeros   2 % | Jours de forte chaleur (au-dessus de 30 °C)
   can3     1665 stations | de     0.00 a    42.00 | part de zeros  20 % | Jours de chaleur extrême (au-dessus de 35 °C)
   can4     1665 stations | de     0.00 a    11.00 | part de zeros  81 % | Jours de chaleur très extrême (au-dessus de 40 °C)
+Contour : https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson
+Grille : 2193778 mailles de 500 m.
+MNT : 30155 tuiles d'altitude (zoom 12).
+  MNT : 30155 tuile(s) a telecharger (passe 1, 20 connexions en parallele)...
+  MNT : passe 1 terminee en 156 s.
+MNT : 30155 tuiles decodees et moyennees par blocs de 8 x 8 pixels en 199 s.
+MNT : altitude moyenne des mailles de 0 a 4239 m. Controle aux stations (MNT / altitude declaree) : r = 0.998, ecart median 5 m.
 
-Lecture seule : arret avant le calcul.
+==== gel ====
+  1665 stations ; valeurs de 0 a 255 (moyenne 47.07) ; part de zeros 2 % ; correlation avec l'altitude +0.74
+  sans altitude          variogramme Sph          | RMSE 16.41 | ecart absolu 10.1 | biais +0.0235 | Nash 0.722
+  altitude (locale)      variogramme Mat          | RMSE 13.05 | ecart absolu 9.204 | biais +0.141 | Nash 0.824
+  altitude (globale)     variogramme Mat          | RMSE 14.04 | ecart absolu 10.39 | biais -0.0118 | Nash 0.796
+  -> retenue : derive externe sur l'altitude | RMSE 13.05 (-20.5 % par rapport a l'ordinaire) | Nash 0.824 | pepite 63 % de la variance residuelle
+  1813 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  11540 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 278.3 sur 2193778 mailles (stations : de 0 a 255) ; ecart-type median de prediction 16.
+
+==== gel5 ====
+  1665 stations ; valeurs de 0 a 155 (moyenne 7.457) ; part de zeros 26 % ; correlation avec l'altitude +0.73
+  sans altitude          variogramme Exp          | RMSE 8.92 | ecart absolu 4.004 | biais -0.0312 | Nash 0.534
+  altitude (locale)      variogramme Sph          | RMSE 6.726 | ecart absolu 3.654 | biais +0.0164 | Nash 0.735
+  altitude (globale)     variogramme Sph          | RMSE 7.346 | ecart absolu 4.255 | biais -0.14 | Nash 0.684
+  -> retenue : derive externe sur l'altitude | RMSE 6.726 (-24.6 % par rapport a l'ordinaire) | Nash 0.735 | pepite 45 % de la variance residuelle
+  1813 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  47618 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 142.5 sur 2193778 mailles (stations : de 0 a 155) ; ecart-type median de prediction 8.11.
+
+==== gel10 ====
+  1665 stations ; valeurs de 0 a 45 (moyenne 0.5736) ; part de zeros 88 % ; correlation avec l'altitude +0.54
+  sans altitude          variogramme Mat          | RMSE 2.286 | ecart absolu 0.6129 | biais +0.00182 | Nash 0.392
+  altitude (locale)      variogramme Mat          | RMSE 2.008 | ecart absolu 0.6009 | biais +0.0148 | Nash 0.531
+  altitude (globale)     variogramme Mat          | RMSE 2.083 | ecart absolu 0.7802 | biais -0.0278 | Nash 0.495
+  -> retenue : derive externe sur l'altitude | RMSE 2.008 (-12.2 % par rapport a l'ordinaire) | Nash 0.531 | pepite 2 % de la variance residuelle
+  1813 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  186707 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 52.23 sur 2193778 mailles (stations : de 0 a 45) ; ecart-type median de prediction 2.36.
+
+==== geltd ====
+  1665 stations ; valeurs de 0 a 10 (moyenne 0.9159) ; part de zeros 62 % ; correlation avec l'altitude -0.21
+  sans altitude          variogramme Exp          | RMSE 1.264 | ecart absolu 0.8304 | biais -0.00135 | Nash 0.356
+  altitude (locale)      variogramme Exp          | RMSE 1.171 | ecart absolu 0.7687 | biais +0.00358 | Nash 0.447
+  altitude (globale)     variogramme Exp          | RMSE 1.242 | ecart absolu 0.8273 | biais -0.000226 | Nash 0.379
+  -> retenue : derive externe sur l'altitude | RMSE 1.171 (-7.3 % par rapport a l'ordinaire) | Nash 0.447 | pepite 42 % de la variance residuelle
+  1813 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  160156 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 7.195 sur 2193778 mailles (stations : de 0 a 10) ; ecart-type median de prediction 1.15.
+
+==== can1 ====
+  1665 stations ; valeurs de 0 a 148 (moyenne 72.88) ; part de zeros 1 % ; correlation avec l'altitude -0.44
+  sans altitude          variogramme Sph          | RMSE 15.41 | ecart absolu 10.71 | biais -0.0785 | Nash 0.696
+  altitude (locale)      variogramme Mat          | RMSE 7.505 | ecart absolu 5.549 | biais -0.00137 | Nash 0.928
+  altitude (globale)     variogramme Mat          | RMSE 10.68 | ecart absolu 7.858 | biais -0.0767 | Nash 0.854
+  -> retenue : derive externe sur l'altitude | RMSE 7.505 (-51.3 % par rapport a l'ordinaire) | Nash 0.928 | pepite 32 % de la variance residuelle
+  1813 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  19344 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 143.4 sur 2193778 mailles (stations : de 0 a 148) ; ecart-type median de prediction 12.5.
+
+==== can ====
+  1665 stations ; valeurs de 0 a 96 (moyenne 31.13) ; part de zeros 2 % ; correlation avec l'altitude -0.38
+  sans altitude          variogramme Sph          | RMSE 10.87 | ecart absolu 7.539 | biais -0.0556 | Nash 0.668
+  altitude (locale)      variogramme Exp          | RMSE 6.892 | ecart absolu 4.556 | biais -0.0325 | Nash 0.866
+  altitude (globale)     variogramme Exp          | RMSE 8.578 | ecart absolu 6.02 | biais -0.0309 | Nash 0.793
+  -> retenue : derive externe sur l'altitude | RMSE 6.892 (-36.6 % par rapport a l'ordinaire) | Nash 0.866 | pepite 31 % de la variance residuelle
+  1813 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  46697 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 82.83 sur 2193778 mailles (stations : de 0 a 96) ; ecart-type median de prediction 9.96.
+
+==== can3 ====
+  1665 stations ; valeurs de 0 a 42 (moyenne 7.736) ; part de zeros 20 % ; correlation avec l'altitude -0.34
+  sans altitude          variogramme Sph          | RMSE 4.489 | ecart absolu 2.96 | biais +0.000116 | Nash 0.675
+  altitude (locale)      variogramme Exp          | RMSE 3.55 | ecart absolu 2.304 | biais +0.0185 | Nash 0.797
+  altitude (globale)     variogramme Exp          | RMSE 3.985 | ecart absolu 2.616 | biais +0.0161 | Nash 0.744
+  -> retenue : derive externe sur l'altitude | RMSE 3.55 (-20.9 % par rapport a l'ordinaire) | Nash 0.797 | pepite 37 % de la variance residuelle
+  1813 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  130878 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 33.69 sur 2193778 mailles (stations : de 0 a 42) ; ecart-type median de prediction 4.53.
+
+==== can4 ====
+  1665 stations ; valeurs de 0 a 11 (moyenne 0.3892) ; part de zeros 81 % ; correlation avec l'altitude -0.20
+  sans altitude          variogramme Mat          | RMSE 0.7985 | ecart absolu 0.3526 | biais +0.0013 | Nash 0.404
+  altitude (locale)      variogramme Mat          | RMSE 0.7522 | ecart absolu 0.3383 | biais +0.00976 | Nash 0.471
+  altitude (globale)     variogramme Mat          | RMSE 0.7926 | ecart absolu 0.3803 | biais +0.00266 | Nash 0.413
+  -> retenue : derive externe sur l'altitude | RMSE 0.7522 (-5.8 % par rapport a l'ordinaire) | Nash 0.471 | pepite 69 % de la variance residuelle
+  1813 maille(s) hors de la plage d'altitude des stations : ramenee a [0.00 ; 2.99] km.
+  156969 maille(s) ramenee(s) dans les bornes physiques [0 ; 366].
+  Surface de 0 a 5.061 sur 2193778 mailles (stations : de 0 a 11) ; ecart-type median de prediction 0.895.
+
+==== Bilan (annee 2025, maille 500 m) ====
+  gel      1665 stations | RMSE     13.1 (sans altitude     16.4) | Nash   0.82 | derive externe sur l'altitude
+  gel5     1665 stations | RMSE     6.73 (sans altitude     8.92) | Nash   0.74 | derive externe sur l'altitude
+  gel10    1665 stations | RMSE     2.01 (sans altitude     2.29) | Nash   0.53 | derive externe sur l'altitude
+  geltd    1665 stations | RMSE     1.17 (sans altitude     1.26) | Nash   0.45 | derive externe sur l'altitude
+  can1     1665 stations | RMSE      7.5 (sans altitude     15.4) | Nash   0.93 | derive externe sur l'altitude
+  can      1665 stations | RMSE     6.89 (sans altitude     10.9) | Nash   0.87 | derive externe sur l'altitude
+  can3     1665 stations | RMSE     3.55 (sans altitude     4.49) | Nash   0.80 | derive externe sur l'altitude
+  can4     1665 stations | RMSE    0.752 (sans altitude    0.799) | Nash   0.47 | derive externe sur l'altitude
+
+Termine. Fichiers dans : /home/runner/work/climafor_cartes/climafor_cartes/krigeage_couches/sorties
