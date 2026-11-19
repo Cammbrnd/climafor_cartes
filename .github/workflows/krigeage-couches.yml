@@ -1,0 +1,120 @@
+# Krigeage des couches de l'onglet Carte — calcul EXPLORATOIRE, hors application. Il vit sur la
+# branche « krigeage-p-etp-estival » et ne doit pas etre fusionne dans main tel quel.
+#
+# Lit les valeurs par station que ClimaFor publie deja (stations.json et s_<grandeur>.bin.gz sur
+# GitHub Pages), puis, pour chacune des 22 couches faisables depuis des stations, evalue par
+# validation croisee le krigeage ordinaire, le krigeage a derive externe sur l'altitude et le
+# krigeage de regression, retient le meilleur et produit une surface a 500 m (carte, GeoTIFF,
+# diagnostic). Les couches sont reparties en 3 jobs. Les cartes et les tableaux sont deposes dans
+# la branche (exploration/krigeage_couches/resultats/<annee>/) ; les GeoTIFF (environ 10 Mo chacun)
+# restent en artefact, 30 jours.
+#
+# Se lance quand parametres.env change sur la branche, ou a la main. Ne modifie ni main, ni le site
+# publie : le site n'est que lu.
+name: Krigeage des couches de la carte
+
+on:
+  push:
+    branches: [krigeage-p-etp-estival]
+    paths:
+      - "exploration/krigeage_couches/parametres.env"
+      - ".github/workflows/krigeage-couches.yml"
+  workflow_dispatch:
+    inputs:
+      annee:
+        description: "Annee cartographiee (vide = parametres.env)"
+        default: ""
+      lecture_seule:
+        description: "oui = lire et resumer les valeurs publiees sans calculer (vide = parametres.env)"
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: krigeage-couches-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calculer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - groupe: temperature_eau
+            couches: tmp,jja_t,gdd,pre,jja_p,petp,veg,mart
+          - groupe: gel_chaleur
+            couches: gel,gel5,gel10,geltd,can1,can,can3,can4
+          - groupe: evenements
+            couches: chaud1,chaud2,vag,vagj,dry,vent
+    steps:
+      - uses: actions/checkout@v4
+
+      # setup-r reste parfois bloque : mieux vaut echouer vite (relancer ensuite les jobs en echec)
+      - uses: r-lib/actions/setup-r@v2
+        timeout-minutes: 10
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        timeout-minutes: 25
+        with:
+          working-directory: exploration/krigeage_couches
+
+      - name: Lire les parametres
+        env:
+          IN_ANNEE: ${{ inputs.annee }}
+          IN_LECTURE: ${{ inputs.lecture_seule }}
+          GROUPE: ${{ matrix.groupe }}
+          COUCHES: ${{ matrix.couches }}
+        run: |
+          set -euo pipefail
+          # Seules les lignes KRIGEAGE_NOM=valeur sobres passent dans l'environnement.
+          grep -E '^KRIGEAGE_[A-Z_]+=[A-Za-z0-9,; .]*$' exploration/krigeage_couches/parametres.env >> "$GITHUB_ENV" || true
+          if printf '%s' "$IN_ANNEE" | grep -Eq '^[0-9]{4}$'; then
+            echo "KRIGEAGE_ANNEE=$IN_ANNEE" >> "$GITHUB_ENV"
+          fi
+          if printf '%s' "$IN_LECTURE" | grep -Eq '^(oui|non)$'; then
+            echo "KRIGEAGE_LECTURE_SEULE=$IN_LECTURE" >> "$GITHUB_ENV"
+          fi
+          echo "KRIGEAGE_GROUPE=$GROUPE" >> "$GITHUB_ENV"
+          echo "KRIGEAGE_COUCHES=$COUCHES" >> "$GITHUB_ENV"
+
+      - name: Krige les couches du groupe
+        env:
+          LC_ALL: C.UTF-8
+        run: Rscript exploration/krigeage_couches/krigeage_couches.R
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: krigeage-couches-${{ matrix.groupe }}
+          path: krigeage_couches/sorties/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Deposer les cartes et les tableaux dans la branche (sans les GeoTIFF)
+        run: |
+          set -euo pipefail
+          ANNEE="${KRIGEAGE_ANNEE:-2025}"
+          DEST="exploration/krigeage_couches/resultats/${ANNEE}"
+          mkdir -p "$DEST"
+          find krigeage_couches/sorties -maxdepth 1 -type f ! -name '*.tif' -exec cp {} "$DEST/" \;
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          if git diff --cached --quiet; then
+            echo "Resultats identiques : rien a deposer."
+            exit 0
+          fi
+          git commit -q -m "Krigeage des couches ${ANNEE} (${{ matrix.groupe }}) : resultats du calcul"
+          # trois jobs deposent dans la meme branche : on reessaie apres chaque rebase
+          for i in 1 2 3 4 5 6; do
+            if git pull -q --rebase origin "$GITHUB_REF_NAME" && git push -q origin "HEAD:$GITHUB_REF_NAME"; then
+              exit 0
+            fi
+            sleep $((RANDOM % 15 + 5))
+          done
+          echo "Depot impossible apres 6 essais (les resultats restent dans l'artefact)."
+          exit 1

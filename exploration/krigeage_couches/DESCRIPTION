@@ -1,0 +1,19 @@
+Package: krigeagecouches
+Title: Krigeage des couches annuelles de l'onglet Carte (exploration, hors application)
+Version: 0.1.0
+Description: Ce fichier ne sert qu'a DECLARER les paquets R du calcul
+    exploratoire (script krigeage_couches.R) pour l'installation par
+    GitHub Actions. Ce n'est pas un paquet.
+License: EUPL-1.2
+Encoding: UTF-8
+Imports:
+    jsonlite,
+    sf,
+    gstat,
+    ggplot2,
+    scales,
+    httr2,
+    ragg,
+    terra,
+    png,
+    curl
