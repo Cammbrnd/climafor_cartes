@@ -1,0 +1,9 @@
+"cle","titre","unite","publiee","n_stations_valeur","min","max","moyenne","part_zero"
+"gel","Jours de gel (T min sous 0 °C)","jours",TRUE,1665,0,255,47.0684684684685,0.024024024024024
+"gel5","Jours de gel fort (T min sous -5 °C)","jours",TRUE,1665,0,155,7.45705705705706,0.260660660660661
+"gel10","Jours de gel très fort (T min sous -10 °C)","jours",TRUE,1665,0,45,0.573573573573574,0.884684684684685
+"geltd","Jours de gel tardif (après le débourrement estimé)","jours",TRUE,1665,0,10,0.915915915915916,0.622822822822823
+"can1","Jours d'été (au-dessus de 25 °C)","jours",TRUE,1665,0,148,72.8846846846847,0.00720720720720721
+"can","Jours de forte chaleur (au-dessus de 30 °C)","jours",TRUE,1665,0,96,31.1333333333333,0.0246246246246246
+"can3","Jours de chaleur extrême (au-dessus de 35 °C)","jours",TRUE,1665,0,42,7.73573573573574,0.196996996996997
+"can4","Jours de chaleur très extrême (au-dessus de 40 °C)","jours",TRUE,1665,0,11,0.389189189189189,0.809009009009009
