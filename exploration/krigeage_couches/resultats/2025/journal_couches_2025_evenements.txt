@@ -1,0 +1,12 @@
+Annee 2025 ; couches : chaud1 chaud2 vag vagj dry vent ; maille 500 m ; groupe evenements.
+stations.json : 1706 stations, annees 1959-2025, genere le 2026-11-10.
+
+Valeurs par station, annee 2025 (1706 stations publiees ; altitude connue pour 1706) :
+  chaud1   1653 stations | de    79.00 a   221.00 | part de zeros   0 % | Premier jour à plus de 25 °C (jour de l'année)
+  chaud2   1624 stations | de   119.00 a   228.00 | part de zeros   0 % | Premier jour à plus de 30 °C (jour de l'année)
+  vag      1313 stations | de     0.00 a     5.00 | part de zeros   9 % | Vagues de chaleur (nombre par an)
+  vagj     1313 stations | de     0.00 a    41.00 | part de zeros   9 % | Jours en vague de chaleur
+  dry      1660 stations | de    11.00 a    99.00 | part de zeros   0 % | Plus longue séquence sèche
+  vent      648 stations | de     0.88 a     9.83 | part de zeros   0 % | Vent moyen annuel (10 m)
+
+Lecture seule : arret avant le calcul.

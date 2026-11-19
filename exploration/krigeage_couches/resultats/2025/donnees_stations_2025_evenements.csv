@@ -1,0 +1,7 @@
+"cle","titre","unite","publiee","n_stations_valeur","min","max","moyenne","part_zero"
+"chaud1","Premier jour à plus de 25 °C (jour de l'année)","",TRUE,1653,79,221,123.145190562613,0
+"chaud2","Premier jour à plus de 30 °C (jour de l'année)","",TRUE,1624,119,228,157.070197044335,0
+"vag","Vagues de chaleur (nombre par an)","vagues",TRUE,1313,0,5,2.25285605483625,0.0883472962680883
+"vagj","Jours en vague de chaleur","jours",TRUE,1313,0,41,15.4386900228484,0.0883472962680883
+"dry","Plus longue séquence sèche","jours",TRUE,1660,11,99,23.0475903614458,0
+"vent","Vent moyen annuel (10 m)","m/s",TRUE,648,0.88,9.83,3.14182098765432,0
